@@ -1,0 +1,24 @@
+# 운영체제가 만드는 파일
+.DS_Store
+Thumbs.db
+desktop.ini
+
+# 편집기 설정 (팀이 함께 쓰는 .vscode/settings.json만 올린다)
+.vscode/*
+!.vscode/settings.json
+.idea/
+
+# 엑셀을 열어 둔 동안 생기는 임시 파일
+~$*
+
+# 크롬의 "확장 프로그램 압축"이 만드는 파일 (.pem은 개인 키)
+*.pem
+*.crx
+*.zip
+
+# 테스트용 크롬 프로필을 저장소 안에 뒀을 때
+chrome-profile/
+
+# 올리면 안 되는 파일: 설문 원본, 실제 북마크
+*설문응답*
+private/

@@ -1,0 +1,902 @@
+[
+ {
+  "id": 1,
+  "title": "백엔드 개발자 채용 | 원티드",
+  "url": "https://www.wanted.co.kr/wd/123456",
+  "answer": "취업",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 2,
+  "title": "YES24",
+  "url": "https://www.yes24.com/",
+  "answer": "쇼핑",
+  "uncertain": "#10",
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 3,
+  "title": "example-user/bookmark-extension · GitHub",
+  "url": "https://github.com/example-user/bookmark-extension",
+  "answer": "개발",
+  "uncertain": null,
+  "location": "졸업프로젝트",
+  "target": false
+ },
+ {
+  "id": 4,
+  "title": "네이버 MYBOX",
+  "url": "https://mybox.naver.com/",
+  "answer": "문서·협업",
+  "uncertain": null,
+  "location": "가져온 북마크",
+  "target": true
+ },
+ {
+  "id": 5,
+  "title": "포트폴리오",
+  "url": "https://example.notion.site/Portfolio-abc",
+  "answer": "문서·협업",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 6,
+  "title": "더쿠",
+  "url": "https://theqoo.net/",
+  "answer": "커뮤니티",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 7,
+  "title": "에브리타임",
+  "url": "https://everytime.kr/",
+  "answer": "학교",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 8,
+  "title": "How I learned React | Medium",
+  "url": "https://medium.com/@example/how-i-learned-react-1a2b3c",
+  "answer": "블로그·글",
+  "uncertain": null,
+  "location": "가져온 북마크",
+  "target": true
+ },
+ {
+  "id": 9,
+  "title": "해커스토익",
+  "url": "https://champ.hackers.com/",
+  "answer": "온라인 강의",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 10,
+  "title": "MIT OpenCourseWare",
+  "url": "https://ocw.mit.edu/",
+  "answer": "학교",
+  "uncertain": "#13",
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 11,
+  "title": "2026 하반기 신입 채용 | OO그룹",
+  "url": "https://careers.example.com/jobs/2026",
+  "answer": "취업",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 12,
+  "title": "리액트 상태 관리 정리",
+  "url": "https://example2.tistory.com/88",
+  "answer": "블로그·글",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 13,
+  "title": "K-MOOC",
+  "url": "https://www.kmooc.kr/",
+  "answer": "온라인 강의",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 14,
+  "title": "자취 요리 레시피 : 네이버 블로그",
+  "url": "https://m.blog.naver.com/example_cook/223000000002",
+  "answer": "블로그·글",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 15,
+  "title": "TVING",
+  "url": "https://www.tving.com/",
+  "answer": "영상",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 16,
+  "title": "Instagram",
+  "url": "https://www.instagram.com/",
+  "answer": null,
+  "uncertain": "#4",
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 17,
+  "title": "네이버 지도",
+  "url": "https://map.naver.com/",
+  "answer": null,
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 18,
+  "title": "신입 개발자 질문 - OKKY",
+  "url": "https://okky.kr/questions",
+  "answer": "커뮤니티",
+  "uncertain": "#6",
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 19,
+  "title": "컴공 취준 모임 : 네이버 카페",
+  "url": "https://cafe.naver.com/examplecafe",
+  "answer": "커뮤니티",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 20,
+  "title": "클래스101",
+  "url": "https://class101.net/",
+  "answer": "온라인 강의",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 21,
+  "title": "코딩테스트 고득점 Kit | 프로그래머스",
+  "url": "https://school.programmers.co.kr/learn/challenges",
+  "answer": "개발",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 22,
+  "title": "항공사 특가 경쟁 과열 - 네이버 뉴스",
+  "url": "https://n.news.naver.com/article/001/0000000001",
+  "answer": null,
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 23,
+  "title": "잡코리아",
+  "url": "https://www.jobkorea.co.kr/",
+  "answer": "취업",
+  "uncertain": null,
+  "location": "알바·취준",
+  "target": false
+ },
+ {
+  "id": 24,
+  "title": "에펨코리아",
+  "url": "https://www.fmkorea.com/",
+  "answer": "커뮤니티",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 25,
+  "title": "How do I undo the most recent local commits in Git? - Stack Overflow",
+  "url": "https://stackoverflow.com/questions/927358/",
+  "answer": "개발",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 26,
+  "title": "SOOP",
+  "url": "https://www.sooplive.co.kr/",
+  "answer": "영상",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 27,
+  "title": "쿠팡",
+  "url": "https://www.coupang.com/",
+  "answer": "쇼핑",
+  "uncertain": null,
+  "location": "가져온 북마크/자취템",
+  "target": false
+ },
+ {
+  "id": 28,
+  "title": "AWS Management Console",
+  "url": "https://console.aws.amazon.com/",
+  "answer": "개발",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 29,
+  "title": "신뢰를 공고히 하는 법 - 나무위키",
+  "url": "https://namu.wiki/w/example",
+  "answer": null,
+  "uncertain": null,
+  "location": "가져온 북마크",
+  "target": true
+ },
+ {
+  "id": 30,
+  "title": "김OO의 개발 블로그",
+  "url": "https://example.github.io/",
+  "answer": "블로그·글",
+  "uncertain": "#5",
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 31,
+  "title": "뽐뿌 게시판",
+  "url": "https://www.ppomppu.co.kr/zboard/zboard.php?id=ppomppu",
+  "answer": "커뮤니티",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 32,
+  "title": "r/korea - Reddit",
+  "url": "https://www.reddit.com/r/korea/",
+  "answer": "커뮤니티",
+  "uncertain": null,
+  "location": "가져온 북마크",
+  "target": true
+ },
+ {
+  "id": 33,
+  "title": "네이버 TV",
+  "url": "https://tv.naver.com/",
+  "answer": "영상",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 34,
+  "title": "주간 뉴스레터 | Substack",
+  "url": "https://example.substack.com/p/weekly",
+  "answer": "블로그·글",
+  "uncertain": null,
+  "location": "가져온 북마크",
+  "target": true
+ },
+ {
+  "id": 35,
+  "title": "한국장학재단",
+  "url": "https://www.kosaf.go.kr/",
+  "answer": "학교",
+  "uncertain": "#2",
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 36,
+  "title": "미리캔버스",
+  "url": "https://www.miricanvas.com/",
+  "answer": "문서·협업",
+  "uncertain": "#8",
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 37,
+  "title": "컴퓨터공학과 - 나무위키",
+  "url": "https://namu.wiki/w/%EC%BB%B4%ED%93%A8%ED%84%B0%EA%B3%B5%ED%95%99%EA%B3%BC",
+  "answer": null,
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 38,
+  "title": "RISS 통합검색",
+  "url": "https://www.riss.kr/",
+  "answer": null,
+  "uncertain": "#17",
+  "location": "가져온 북마크",
+  "target": true
+ },
+ {
+  "id": 39,
+  "title": "삼성 인턴 면접 후기",
+  "url": "https://example.tistory.com/12",
+  "answer": "블로그·글",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 40,
+  "title": "노트북 가격비교 - 다나와",
+  "url": "https://prod.danawa.com/list/?cate=112758",
+  "answer": "쇼핑",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 41,
+  "title": "학사일정 - 한양대학교",
+  "url": "https://www.hanyang.ac.kr/web/www/academic-calendar",
+  "answer": "학교",
+  "uncertain": null,
+  "location": "가져온 북마크",
+  "target": true
+ },
+ {
+  "id": 42,
+  "title": "무신사",
+  "url": "https://www.musinsa.com/",
+  "answer": "쇼핑",
+  "uncertain": null,
+  "location": "가져온 북마크/자취템",
+  "target": false
+ },
+ {
+  "id": 43,
+  "title": "내 드라이브 - Google Drive",
+  "url": "https://drive.google.com/drive/my-drive",
+  "answer": "문서·협업",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 44,
+  "title": "11번가",
+  "url": "https://www.11st.co.kr/",
+  "answer": "쇼핑",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 45,
+  "title": "Array.prototype.map() - JavaScript | MDN",
+  "url": "https://developer.mozilla.org/ko/docs/Web/JavaScript/Reference/Global_Objects/Array/map",
+  "answer": "개발",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 46,
+  "title": "받은편지함 - Gmail",
+  "url": "https://mail.google.com/mail/u/0/#inbox",
+  "answer": null,
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 47,
+  "title": "Two Sum - LeetCode",
+  "url": "https://leetcode.com/problems/two-sum/",
+  "answer": "개발",
+  "uncertain": null,
+  "location": "가져온 북마크",
+  "target": true
+ },
+ {
+  "id": 48,
+  "title": "졸업 프로젝트 회의록 | Notion",
+  "url": "https://www.notion.so/example/abc123",
+  "answer": "문서·협업",
+  "uncertain": null,
+  "location": "졸업프로젝트",
+  "target": false
+ },
+ {
+  "id": 49,
+  "title": "앱 시안 - Figma",
+  "url": "https://www.figma.com/design/EXAMPLE/app",
+  "answer": "문서·협업",
+  "uncertain": "#8",
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 50,
+  "title": "Slack - 졸업프로젝트",
+  "url": "https://app.slack.com/client/EXAMPLE",
+  "answer": "문서·협업",
+  "uncertain": "#9",
+  "location": "졸업프로젝트",
+  "target": false
+ },
+ {
+  "id": 51,
+  "title": "solved.ac",
+  "url": "https://solved.ac/",
+  "answer": "개발",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 52,
+  "title": "쿠팡플레이",
+  "url": "https://www.coupangplay.com/",
+  "answer": "영상",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 53,
+  "title": "고려대학교 수강신청",
+  "url": "https://sugang.korea.ac.kr/",
+  "answer": "학교",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 54,
+  "title": "치지직",
+  "url": "https://chzzk.naver.com/",
+  "answer": "영상",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 55,
+  "title": "1753번: 최단경로",
+  "url": "https://www.acmicpc.net/problem/1753",
+  "answer": "개발",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 56,
+  "title": "올리브영",
+  "url": "https://www.oliveyoung.co.kr/",
+  "answer": "쇼핑",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 57,
+  "title": "사람인 - 채용정보",
+  "url": "https://www.saramin.co.kr/",
+  "answer": "취업",
+  "uncertain": null,
+  "location": "알바·취준",
+  "target": false
+ },
+ {
+  "id": 58,
+  "title": "개발 서버",
+  "url": "http://localhost:3000/",
+  "answer": null,
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 59,
+  "title": "ChatGPT",
+  "url": "https://chatgpt.com/",
+  "answer": null,
+  "uncertain": "#17",
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 60,
+  "title": "토익 인강 무료 체험",
+  "url": "https://free-toeic.example.com/",
+  "answer": "온라인 강의",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 61,
+  "title": "chrome.bookmarks | Chrome for Developers",
+  "url": "https://developer.chrome.com/docs/extensions/reference/api/bookmarks",
+  "answer": "개발",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 62,
+  "title": "eTL - 서울대학교",
+  "url": "https://myetl.snu.ac.kr/",
+  "answer": "학교",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 63,
+  "title": "연세대학교 학술정보원",
+  "url": "https://library.yonsei.ac.kr/",
+  "answer": "학교",
+  "uncertain": null,
+  "location": "가져온 북마크",
+  "target": true
+ },
+ {
+  "id": 64,
+  "title": "부산대학교 정보컴퓨터공학부",
+  "url": "https://cse.pusan.ac.kr/",
+  "answer": "학교",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 65,
+  "title": "대외활동 - 링커리어",
+  "url": "https://linkareer.com/list/activity",
+  "answer": "취업",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 66,
+  "title": "i-Campus - 성균관대학교",
+  "url": "https://canvas.skku.edu/",
+  "answer": "학교",
+  "uncertain": "#13",
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 67,
+  "title": "Machine Learning | Coursera",
+  "url": "https://www.coursera.org/learn/machine-learning",
+  "answer": "온라인 강의",
+  "uncertain": null,
+  "location": "가져온 북마크",
+  "target": true
+ },
+ {
+  "id": 68,
+  "title": "KAIST 전산학부",
+  "url": "https://cs.kaist.ac.kr/",
+  "answer": "학교",
+  "uncertain": null,
+  "location": "가져온 북마크",
+  "target": true
+ },
+ {
+  "id": 69,
+  "title": "다익스트라 알고리즘 정리",
+  "url": "https://velog.io/@example/dijkstra",
+  "answer": "블로그·글",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 70,
+  "title": "조별과제 발표 자료 - Google Slides",
+  "url": "https://docs.google.com/presentation/d/EXAMPLE_ID/edit",
+  "answer": "문서·협업",
+  "uncertain": null,
+  "location": "졸업프로젝트",
+  "target": false
+ },
+ {
+  "id": 71,
+  "title": "프로그래밍 갤러리 - 디시인사이드",
+  "url": "https://gall.dcinside.com/board/lists?id=programming",
+  "answer": "커뮤니티",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 72,
+  "title": "생활코딩",
+  "url": "https://opentutorials.org/course/1",
+  "answer": "온라인 강의",
+  "uncertain": null,
+  "location": "가져온 북마크",
+  "target": true
+ },
+ {
+  "id": 73,
+  "title": "Titanic - Machine Learning from Disaster | Kaggle",
+  "url": "https://www.kaggle.com/competitions/titanic",
+  "answer": "개발",
+  "uncertain": null,
+  "location": "가져온 북마크",
+  "target": true
+ },
+ {
+  "id": 74,
+  "title": "설문 참여 부탁드립니다",
+  "url": "https://forms.gle/ExAmPlE123",
+  "answer": "문서·협업",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 75,
+  "title": "Udemy",
+  "url": "https://www.udemy.com/",
+  "answer": "온라인 강의",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 76,
+  "title": "웹소설 연재 | 포스타입",
+  "url": "https://example.postype.com/post/123",
+  "answer": "블로그·글",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 77,
+  "title": "공부할 때 듣는 음악 - YouTube",
+  "url": "https://youtu.be/Xy9Zq8Wv7Ut",
+  "answer": "영상",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 78,
+  "title": "TikTok",
+  "url": "https://www.tiktok.com/",
+  "answer": "영상",
+  "uncertain": "#12",
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 79,
+  "title": "TED: Ideas worth spreading",
+  "url": "https://www.ted.com/",
+  "answer": "영상",
+  "uncertain": "#12",
+  "location": "가져온 북마크",
+  "target": true
+ },
+ {
+  "id": 80,
+  "title": "잡플래닛 기업 리뷰",
+  "url": "https://www.jobplanet.co.kr/",
+  "answer": "취업",
+  "uncertain": null,
+  "location": "알바·취준",
+  "target": false
+ },
+ {
+  "id": 81,
+  "title": "YouTube Music",
+  "url": "https://music.youtube.com/",
+  "answer": "영상",
+  "uncertain": null,
+  "location": "가져온 북마크",
+  "target": true
+ },
+ {
+  "id": 82,
+  "title": "스프링 입문 - 코드로 배우는 스프링 부트 | 인프런",
+  "url": "https://www.inflearn.com/course/example-spring",
+  "answer": "온라인 강의",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 83,
+  "title": "노트북 특가 모음",
+  "url": "https://deal.example.com/notebook",
+  "answer": "쇼핑",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 84,
+  "title": "서울대학교",
+  "url": "https://www.snu.ac.kr/",
+  "answer": "학교",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 85,
+  "title": "실습3.ipynb - Colab",
+  "url": "https://colab.research.google.com/drive/EXAMPLE",
+  "answer": "개발",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 86,
+  "title": "블라인드",
+  "url": "https://www.teamblind.com/kr/",
+  "answer": "커뮤니티",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 87,
+  "title": "운영체제 강의 모음 - YouTube",
+  "url": "https://www.youtube.com/playlist?list=PLexample123",
+  "answer": "영상",
+  "uncertain": null,
+  "location": "가져온 북마크",
+  "target": true
+ },
+ {
+  "id": 88,
+  "title": "공모전 - 캠퍼스픽",
+  "url": "https://www.campuspick.com/contest",
+  "answer": "취업",
+  "uncertain": "#3",
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 89,
+  "title": "SW Expert Academy",
+  "url": "https://swexpertacademy.com/",
+  "answer": "개발",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 90,
+  "title": "넷플릭스",
+  "url": "https://www.netflix.com/browse",
+  "answer": "영상",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 91,
+  "title": "맛집 탐방 기록 : 네이버 블로그",
+  "url": "https://blog.naver.com/example_user/223000000001",
+  "answer": "블로그·글",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 92,
+  "title": "자료구조 강의 1강 - YouTube",
+  "url": "https://www.youtube.com/watch?v=a1B2c3D4e5F",
+  "answer": "영상",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 93,
+  "title": "LinkedIn",
+  "url": "https://www.linkedin.com/feed/",
+  "answer": "취업",
+  "uncertain": "#7",
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 94,
+  "title": "NAVER",
+  "url": "https://www.naver.com/",
+  "answer": null,
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 95,
+  "title": "네이버 쇼핑",
+  "url": "https://shopping.naver.com/",
+  "answer": "쇼핑",
+  "uncertain": null,
+  "location": "가져온 북마크/자취템",
+  "target": false
+ },
+ {
+  "id": 96,
+  "title": "당근",
+  "url": "https://www.daangn.com/",
+  "answer": "쇼핑",
+  "uncertain": "#10",
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 97,
+  "title": "개발자로 1년 회고 | 브런치",
+  "url": "https://brunch.co.kr/@example/15",
+  "answer": "블로그·글",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 98,
+  "title": "2026-2학기 수강신청 안내",
+  "url": "https://sugang.example.com/notice",
+  "answer": "학교",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 99,
+  "title": "동아리 회비 정리 - Google Sheets",
+  "url": "https://docs.google.com/spreadsheets/d/EXAMPLE_ID/edit",
+  "answer": "문서·협업",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ },
+ {
+  "id": 100,
+  "title": "KOCW 운영체제",
+  "url": "https://www.kocw.net/home/cview.do?cid=example",
+  "answer": "온라인 강의",
+  "uncertain": null,
+  "location": "북마크바",
+  "target": true
+ }
+]

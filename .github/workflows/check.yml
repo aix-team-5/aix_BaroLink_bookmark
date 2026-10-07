@@ -1,0 +1,21 @@
+# PR마다 자동으로 돌리는 검사. 문법 오류, 빠진 함수, 깨진 JSON을 찾는다.
+# 동작이 명세와 맞는지는 이 검사가 아니라 사람이 눌러 보고 확인한다 (docs/conventions.md 6번).
+name: check
+
+on:
+  pull_request:
+  push:
+    branches: [main]
+
+permissions:
+  contents: read
+
+jobs:
+  check:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v6
+      - uses: actions/setup-node@v6
+        with:
+          node-version: 24
+      - run: node .github/scripts/check.mjs

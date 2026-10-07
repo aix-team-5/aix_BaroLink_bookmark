@@ -1,0 +1,24 @@
+{
+  "manifest_version": 3,
+  "name": "바로링크 (BaroLink)",
+  "short_name": "바로링크",
+  "version": "0.1.0",
+  "description": "크롬 북마크를 새 탭에 앱과 앱 폴더로 보여 주고 정리해 주는 새 탭 북마크 도구",
+  "minimum_chrome_version": "134",
+  "permissions": [
+    "bookmarks",
+    "storage",
+    "favicon",
+    "search"
+  ],
+  "optional_permissions": [
+    "topSites"
+  ],
+  "chrome_url_overrides": {
+    "newtab": "newtab.html"
+  },
+  "background": {
+    "service_worker": "background.js",
+    "type": "module"
+  }
+}
