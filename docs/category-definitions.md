@@ -1,7 +1,7 @@
 # 카테고리 정의 문서
 
 > 분류 규칙(`classify.js` 이슈 #7, `categories.json` 이슈 #10, 기능 F05)의 카테고리 정의·경계 규칙과 분류표 내용(10번, 2026-10-07 추가)
-> 근거: 서비스 계획(`service-plan.md`) 2-6, 2-7, 기능명세·API명세(`spec.xlsx`) v13의 F05-01 ~ F05-08, N17 `classify`
+> 근거: 서비스 계획(`service-plan.md`) 2-6, 2-7, 기능명세·API명세(`spec.xlsx`) v14의 F05-01 ~ F05-08, N17 `classify`
 > 짝이 되는 파일: `extension/data/categories.json`(분류표, 10번을 옮겨 만든다. 한쪽을 고치면 다른 쪽도 함께 고친다), `tests/`의 정답지
 > 이 문서의 위치: `docs/category-definitions.md`
 > 표기: **제안**은 계획 문서에 없어서 이 문서에서 임시로 정한 내용이다. 9번 표에 모아 두었다. **10월 7일에 9번 표의 제안대로 진행하기로 정했다**(18번, 19번은 9번 표의 결정 열 참고).

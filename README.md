@@ -2,7 +2,7 @@
 
 크롬 북마크를 새 탭에 앱과 앱 폴더로 보여 주고, 잊고 있던 북마크를 다시 꺼내 주며, 한 번 확인으로 크롬 북마크에 실제로 정리해 주는 크롬 확장 프로그램의 저장소입니다. 서버 없이 크롬 안에서만 동작하고, 북마크의 제목과 주소를 확장 프로그램 밖으로 보내지 않습니다.
 
-서비스 이름 "바로링크 (BaroLink)"는 잠정이며, 저장소 이름은 `aix_BaroLink_bookmark`입니다.
+서비스 이름은 "바로링크 (BaroLink)"이고, 저장소 이름은 `aix_BaroLink_bookmark`입니다.
 
 ## 기술 스택
 
@@ -83,7 +83,7 @@ aix_BaroLink_bookmark
 ```text
 feat: 잊고 있던 북마크 후보 고르기 (F04-01~03)
 fix: 되돌릴 때 순서가 뒤섞이는 문제 (F13-03)
-docs: setPending 입력 형태 변경, 명세 v14
+docs: setPending 입력 형태 변경, 명세 v15
 test: 30개 샘플 세트 추가
 chore: .gitignore 추가
 ```

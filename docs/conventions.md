@@ -1,9 +1,9 @@
 # GitHub 저장소 규칙
 
 > W7 개발 준비 · GitHub 레포와 컨벤션(브랜치·커밋)
-> 근거: 서비스 계획(`service-plan.md`), 기능명세·API명세(`spec.xlsx`, v13), 파일 구조도(`file-structure.md`), 크롬 북마크 데이터 구조(`data-structure.txt`)
+> 근거: 서비스 계획(`service-plan.md`), 기능명세·API명세(`spec.xlsx`, v14), 파일 구조도(`file-structure.md`), 크롬 북마크 데이터 구조(`data-structure.txt`)
 > 작성일: 2026-10-06 (10월 7일 검토와 결정, 확정 시안 확인, 분류표 추가 반영) · 이 문서의 위치: `docs/conventions.md`
-> 저장소: `aix_BaroLink_bookmark` (공개 저장소, 10월 7일 확정) · 서비스 이름: 바로링크 (BaroLink) (10월 7일 잠정)
+> 저장소: `aix_BaroLink_bookmark` (공개 저장소, 10월 7일 확정) · 서비스 이름: 바로링크 (BaroLink) (10월 7일 확정)
 
 역할은 팀원 A·B·C·D로 적는다. 누가 어느 역할인지는 README의 담당 표에 **GitHub 아이디**로 적는다. 공개 저장소이므로 실제 이름은 쓰지 않는다(10월 7일 확정).
 
@@ -100,7 +100,7 @@ GitHub Desktop을 써도 순서는 같다. `git rebase`와 `git push --force`는
 | 기능번호 | 엑셀 명세의 기능 ID(F01~F17). 기능 번호가 없는 작업은 뺀다 | `F04` |
 | 짧은이름 | 영어 소문자와 하이픈, 두세 단어 | `forgotten` |
 
-예: `feat/F04-forgotten` · `feat/F07-apply-plan` · `fix/F13-undo-order` · `docs/spec-v14` · `test/sample-30` · `chore/setup`
+예: `feat/F04-forgotten` · `feat/F07-apply-plan` · `fix/F13-undo-order` · `docs/spec-v15` · `test/sample-30` · `chore/setup`
 
 - 공용 브랜치는 `main` 하나다. `develop` 같은 브랜치는 두지 않는다.
 - 브랜치는 항상 최신 `main`에서 만든다. 다른 사람의 브랜치에서 만들지 않는다. 아직 합쳐지지 않은 남의 작업이 필요하면, 그 사람에게 된 데까지 먼저 PR로 올려 달라고 한다.
@@ -118,7 +118,7 @@ GitHub Desktop을 써도 순서는 같다. `git rebase`와 `git push --force`는
 |---|---|---|
 | `feat` | 새 동작을 추가했다 | `feat: 첫 정리 카드 표시 (F06-01)` |
 | `fix` | 잘못된 동작을 고쳤다 | `fix: 되돌릴 때 순서가 뒤섞이는 문제 (F13-03)` |
-| `docs` | `docs/`의 문서, 엑셀 명세, README | `docs: setPending 입력 형태 변경, 명세 v14` |
+| `docs` | `docs/`의 문서, 엑셀 명세, README | `docs: setPending 입력 형태 변경, 명세 v15` |
 | `test` | `tests/`의 샘플 세트, 정답지, 검증 목록 | `test: 30개 샘플 세트 추가` |
 | `chore` | 그 밖의 것. 설정 파일, 동작이 안 바뀌는 코드 정리 | `chore: .gitignore 추가` |
 
@@ -324,7 +324,7 @@ AI 도구(Claude Code, Cursor, Copilot 등)가 지킬 규칙은 저장소 맨 �
 순서
 
 1. 팀 채팅에 알린다. 예: "명세 고칩니다. N14 setPending 입력". 엑셀 파일은 두 사람이 동시에 고치면 합칠 수 없으므로, **한 번에 한 사람만** 고친다.
-2. `docs/spec-v14` 같은 브랜치에서 해당 줄을 고치고, '개요' 시트의 판 번호를 올리고 무엇이 바뀌었는지 한 줄 적는다. 파일 이름에는 판 번호를 넣지 않는다.
+2. `docs/spec-v15` 같은 브랜치에서 해당 줄을 고치고, '개요' 시트의 판 번호를 올리고 무엇이 바뀌었는지 한 줄 적는다. 파일 이름에는 판 번호를 넣지 않는다.
 3. PR을 올린다. **그 함수를 부르는 파일의 담당**이 승인한다(누가 부르는지는 `file-structure.md` 4번 그림). 부르는 사람이 여럿이면 한 명이 승인하고, 나머지에게는 팀 채팅으로 알린다. 명세 PR은 그날 안에 합친다.
 4. 합쳐진 뒤에 코드를 바꾸는 PR을 올린다.
 5. 함수의 입력·출력을 바꿨으면 그 파일의 이슈(#1~#19)를, 요구사항 문장을 바꿨으면 확인 목록(#22~#24)을 같게 고친다.

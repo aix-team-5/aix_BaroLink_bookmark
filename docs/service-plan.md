@@ -465,7 +465,7 @@
     - 북마크바가 계정용·이 PC 전용 두 개로 보이는 경우의 동작 (개발 첫 주에 확인)
     - 북마크 검색 결과를 리스트로 보여 줄지 격자로 보여 줄지 (P2 시작 때)
     - 경쟁 도구 2개(Smart Bookmark Organizer, Neat AI Bookmark Manager) 직접 확인
-    - 서비스 이름: "바로링크 (BaroLink)"로 잠정(10월 7일). 확정되면 시안의 로고("바로")와 `manifest.json`의 이름을 맞춘다
+    - 서비스 이름: "바로링크 (BaroLink)"로 확정(10월 7일). `manifest.json`의 이름과 저장소의 시안 사본은 맞췄고, Figma 원본의 로고("바로")만 고치면 된다
 
     ---
 
@@ -514,7 +514,7 @@
 
     **🎨 화면 설계 · W5**
 
-    - **Figma 링크 :** https://www.figma.com/make/Yf9dLbok1rcVJDNdDQAWI9/Chrome-Extension-UI (Figma Make, 10월 6일 확정 시안. 시안의 로고는 "바로", 서비스 이름은 "바로링크 (BaroLink)"로 잠정)
+    - **Figma 링크 :** https://www.figma.com/make/Yf9dLbok1rcVJDNdDQAWI9/Chrome-Extension-UI (Figma Make, 10월 6일 확정 시안. Figma 원본의 로고는 아직 "바로", 서비스 이름은 "바로링크 (BaroLink)"로 확정)
     - **디자인 가이드 :** 확정 시안(10월 6일) 기준
 
         | 항목 | 내용 |
