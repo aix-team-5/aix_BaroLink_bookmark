@@ -48,7 +48,7 @@ AI 코딩 도구(Claude Code, Cursor, Copilot, Codex 등)가 이 저장소에서
 이슈는 이렇게 읽는다. `gh`가 없으면 사용자에게 이슈 내용을 붙여 달라고 한다.
 
 ```bash
-gh issue view 8 --repo parkhyun0701-oss/aix_BaroLink_bookmark
+gh issue view 8 --repo aix-team-5/aix_BaroLink_bookmark
 ```
 
 명세의 원본은 `docs/spec.xlsx`(엑셀)이고, 이슈는 그 내용을 글로 옮긴 것이다. 엑셀을 직접 읽을 수 없으면 이슈를 따른다. 이슈와 코드의 주석, 문서가 서로 다르면 추측하지 말고 사용자에게 알린다.

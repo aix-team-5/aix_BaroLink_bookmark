@@ -572,7 +572,7 @@
 
     **🚀 개발 준비 · W7**
 
-    - **GitHub 레포 :** https://github.com/parkhyun0701-oss/aix_BaroLink_bookmark (공개 저장소, 10월 7일)
+    - **GitHub 레포 :** https://github.com/aix-team-5/aix_BaroLink_bookmark (공개 저장소, 10월 7일)
         - 폴더: `extension/`(크롬에 올리는 코드) · `docs/`(계획·명세·구조도·규칙) · `tests/`(샘플 세트·정답지·검증 목록). 빌드 없이 `extension/` 폴더를 그대로 크롬에 올린다.
         - 공용 브랜치는 `main` 하나다. 직접 올리지 않고 풀 리퀘스트(PR)로만 합친다(승인 1명). `main`은 언제 받아도 크롬에 오류 없이 올라가야 한다.
         - 들어 있는 것: 명세의 함수 55개가 빈 함수로 들어 있는 뼈대, 확정 시안의 참고용 코드, 분류표, 샘플 100개와 정답지, PR 양식, PR 자동 검사(GitHub Actions), CodeRabbit 설정, VS Code 공통 설정

@@ -38,7 +38,7 @@ git config --global pull.rebase false
 ## 3. 저장소 받기
 
 ```bash
-git clone https://github.com/parkhyun0701-oss/aix_BaroLink_bookmark.git
+git clone https://github.com/aix-team-5/aix_BaroLink_bookmark.git
 cd aix_BaroLink_bookmark
 ```
 
