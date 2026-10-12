@@ -465,7 +465,7 @@
     - 북마크바가 계정용·이 PC 전용 두 개로 보이는 경우의 동작 (개발 첫 주에 확인)
     - 북마크 검색 결과를 리스트로 보여 줄지 격자로 보여 줄지 (P2 시작 때)
     - 경쟁 도구 2개(Smart Bookmark Organizer, Neat AI Bookmark Manager) 직접 확인
-    - 서비스 이름: "바로링크 (BaroLink)"로 잠정(10월 7일). 확정되면 시안의 로고("바로")와 `manifest.json`의 이름을 맞춘다
+    - 서비스 이름: "바로링크 (BaroLink)"로 확정(10월 7일). `manifest.json`의 이름과 저장소의 시안 사본은 맞췄고, Figma 원본의 로고("바로")만 고치면 된다
 
     ---
 
@@ -514,7 +514,7 @@
 
     **🎨 화면 설계 · W5**
 
-    - **Figma 링크 :** https://www.figma.com/make/Yf9dLbok1rcVJDNdDQAWI9/Chrome-Extension-UI (Figma Make, 10월 6일 확정 시안. 시안의 로고는 "바로", 서비스 이름은 "바로링크 (BaroLink)"로 잠정)
+    - **Figma 링크 :** https://www.figma.com/make/Yf9dLbok1rcVJDNdDQAWI9/Chrome-Extension-UI (Figma Make, 10월 6일 확정 시안. Figma 원본의 로고는 아직 "바로", 서비스 이름은 "바로링크 (BaroLink)"로 확정)
     - **디자인 가이드 :** 확정 시안(10월 6일) 기준
 
         | 항목 | 내용 |
@@ -572,7 +572,7 @@
 
     **🚀 개발 준비 · W7**
 
-    - **GitHub 레포 :** https://github.com/parkhyun0701-oss/aix_BaroLink_bookmark (공개 저장소, 10월 7일)
+    - **GitHub 레포 :** https://github.com/aix-team-5/aix_BaroLink_bookmark (공개 저장소, 10월 7일)
         - 폴더: `extension/`(크롬에 올리는 코드) · `docs/`(계획·명세·구조도·규칙) · `tests/`(샘플 세트·정답지·검증 목록). 빌드 없이 `extension/` 폴더를 그대로 크롬에 올린다.
         - 공용 브랜치는 `main` 하나다. 직접 올리지 않고 풀 리퀘스트(PR)로만 합친다(승인 1명). `main`은 언제 받아도 크롬에 오류 없이 올라가야 한다.
         - 들어 있는 것: 명세의 함수 55개가 빈 함수로 들어 있는 뼈대, 확정 시안의 참고용 코드, 분류표, 샘플 100개와 정답지, PR 양식, PR 자동 검사(GitHub Actions), CodeRabbit 설정, VS Code 공통 설정

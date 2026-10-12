@@ -11,7 +11,7 @@ const errors = [];
 const fail = (where, message) => errors.push(`${where}: ${message}`);
 const read = (path) => readFileSync(path, "utf8");
 
-// 명세 'API_내부 함수' 시트(v13)의 함수. 함수를 추가하거나 이름을 바꾸면 명세와 함께 이 목록도 고친다.
+// 명세 'API_내부 함수' 시트(v14)의 함수. 함수를 추가하거나 이름을 바꾸면 명세와 함께 이 목록도 고친다.
 const EXPECTED = {
   "js/bookmarks.js": ["loadTree", "createFolder", "moveBookmark", "renameFolder", "deleteFolderKeepChildren", "openBookmark", "faviconUrl", "hasFavicon"],
   "js/store.js": ["load", "update", "recordOpened", "pin", "unpin", "dismiss", "undismiss", "markManualMove", "setPending", "isPending", "addHistory", "markUndone", "cleanupMissing", "setFirstCard", "markHandledNew", "addNew", "removeNew", "purgeWorkerKeys"],

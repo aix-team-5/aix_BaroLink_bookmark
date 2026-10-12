@@ -15,8 +15,9 @@ export function measure(samples, answers, categories) {
   return { coverage: 0, accuracy: 0, wrong: [] };
 }
 
-// N24: 새 북마크마다 추천 폴더를 정한다
-// 출력: [{ bookmarkId, folderId 또는 null }]
+// N24: 새 북마크마다 분류해, 분류된 카테고리와 이름이 같은 폴더를 추천 폴더로 정한다
+// 출력: [{ bookmarkId, folderId }]. 분류되지 않았거나 같은 이름의 폴더가 없으면 folderId는 null(그대로 두기)
+// 새 폴더를 만들자는 제안은 이 함수가 아니라 plan.js의 suggestNewFolders가 맡는다 (명세 v14)
 export function suggestForNew(newBookmarks, folders, categories) {
   return [];
 }
