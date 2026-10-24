@@ -74,6 +74,7 @@ function withDefault(key, stored) {
 }
 
 // N08: 저장 항목 전체를 읽는다 (없는 키는 기본값)
+// 같은 쪽에서 update를 await 하지 않고 곧바로 load()를 부르면 고치기 전 값을 읽을 수 있다. update를 await 한 뒤에 부른다.
 export async function load() {
   const keys = Object.keys(DEFAULTS);
   const stored = await chrome.storage.local.get(keys);
