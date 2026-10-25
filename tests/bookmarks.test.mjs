@@ -561,34 +561,71 @@ function fakeFetch(icons) {
 let caseNo = 0;
 const freshModule = () => import(`../extension/js/bookmarks.js?case=${++caseNo}`);
 
-test("hasFavicon: 페이지 주소에 파비콘이 있으면 true (첫 페이지는 보지 않음)", async () => {
+test("hasFavicon: 페이지 주소에 파비콘이 있으면 그 주소의 faviconUrl (첫 페이지는 보지 않음)", async () => {
   const fetched = fakeFetch({ "https://a.com/page": [9, 9, 9] });
   const m = await freshModule();
-  assert.equal(await m.hasFavicon("https://a.com/page"), true);
+  assert.equal(await m.hasFavicon("https://a.com/page"), m.faviconUrl("https://a.com/page", 32));
   assert.deepEqual(fetched, ["https://no-favicon.invalid/", "https://a.com/page"]);
 });
 
-test("hasFavicon: 페이지에 없으면 첫 페이지 주소로 한 번 더 확인", async () => {
+test("hasFavicon: 페이지에 없으면 첫 페이지 주소로 한 번 더 확인하고, 첫 페이지의 faviconUrl", async () => {
   const fetched = fakeFetch({ "https://a.com/": [7, 7] });
   const m = await freshModule();
-  assert.equal(await m.hasFavicon("https://a.com/deep/page"), true);
+  const result = await m.hasFavicon("https://a.com/deep/page");
+  assert.equal(result, m.faviconUrl("https://a.com/", 32));
+  assert.notEqual(result, m.faviconUrl("https://a.com/deep/page", 32));
   assert.deepEqual(fetched, ["https://no-favicon.invalid/", "https://a.com/deep/page", "https://a.com/"]);
 });
 
-test("hasFavicon: 둘 다 기본 그림이면 false. 같은 길이의 다른 바이트는 다른 그림", async () => {
+test("hasFavicon: 둘 다 기본 그림이면 null. 같은 길이의 다른 바이트는 다른 그림", async () => {
   fakeFetch({ "https://c.com/": [1, 2, 3, 5] });
   const m = await freshModule();
-  assert.equal(await m.hasFavicon("https://b.com/x"), false);
-  assert.equal(await m.hasFavicon("https://c.com/"), true);
+  assert.equal(await m.hasFavicon("https://b.com/x"), null);
+  assert.equal(await m.hasFavicon("https://c.com/"), m.faviconUrl("https://c.com/", 32));
 });
 
-test("hasFavicon: 첫 페이지 주소면 다시 받지 않고, chrome://·file://은 첫 페이지를 보지 않는다", async () => {
+test("hasFavicon: 첫 페이지 주소면 한 번만 확인하고, chrome://·file://·잘못된 주소는 첫 페이지로 다시 찾지 않는다 (아이콘이 없으면 null)", async () => {
   const fetched = fakeFetch({});
   const m = await freshModule();
-  assert.equal(await m.hasFavicon("https://a.com/"), false);
-  assert.equal(await m.hasFavicon("chrome://settings/"), false);
-  assert.equal(await m.hasFavicon("file:///C:/memo.txt"), false);
-  assert.deepEqual(fetched, ["https://no-favicon.invalid/", "https://a.com/", "chrome://settings/", "file:///C:/memo.txt"]);
+  assert.equal(await m.hasFavicon("https://a.com/"), null);
+  assert.equal(await m.hasFavicon("chrome://settings/"), null);
+  assert.equal(await m.hasFavicon("file:///C:/memo.txt"), null);
+  assert.equal(await m.hasFavicon("주소 아님"), null);
+  assert.equal(await m.hasFavicon(undefined), null);
+  assert.deepEqual(fetched, ["https://no-favicon.invalid/", "https://a.com/", "chrome://settings/", "file:///C:/memo.txt", "주소 아님"]);
+});
+
+test("hasFavicon: chrome://·file://은 첫 페이지로 다시 찾지 않는다(원래 주소에 아이콘이 있으면 그 주소)", async () => {
+  const fetched = fakeFetch({ "chrome://settings/": [6, 6], "file:///C:/memo.txt": [4, 4] });
+  const m = await freshModule();
+  assert.equal(await m.hasFavicon("chrome://settings/"), m.faviconUrl("chrome://settings/", 32));
+  assert.equal(await m.hasFavicon("file:///C:/memo.txt"), m.faviconUrl("file:///C:/memo.txt", 32));
+  assert.deepEqual(fetched, ["https://no-favicon.invalid/", "chrome://settings/", "file:///C:/memo.txt"]);
+});
+
+test("hasFavicon: 돌려준 값은 참/거짓으로도 쓸 수 있다 (주소는 truthy, null은 falsy)", async () => {
+  fakeFetch({ "https://a.com/": [8] });
+  const m = await freshModule();
+  assert.equal(Boolean(await m.hasFavicon("https://a.com/x")), true);
+  assert.equal(Boolean(await m.hasFavicon("https://b.com/x")), false);
+});
+
+test("hasFavicon: 페이지 그림을 받지 못하면 warn을 남기고 null", async () => {
+  const warn = console.warn;
+  const warned = [];
+  console.warn = (...args) => warned.push(args);
+  try {
+    globalThis.fetch = async (url) => {
+      const pageUrl = new URL(url).searchParams.get("pageUrl");
+      if (pageUrl === "https://a.com/x") return { ok: false, status: 500, arrayBuffer: async () => new ArrayBuffer(0) };
+      return { ok: true, status: 200, arrayBuffer: async () => new Uint8Array(DEFAULT_BYTES).buffer };
+    };
+    const m = await freshModule();
+    assert.equal(await m.hasFavicon("https://a.com/x"), null);
+    assert.equal(warned.length, 1);
+  } finally {
+    console.warn = warn;
+  }
 });
 
 test("hasFavicon: 기본 그림은 한 번만 받는다", async () => {
@@ -599,7 +636,7 @@ test("hasFavicon: 기본 그림은 한 번만 받는다", async () => {
   assert.equal(fetched.filter((url) => url === "https://no-favicon.invalid/").length, 1);
 });
 
-test("hasFavicon: 기본 그림을 못 받으면 false, 다음에 다시 받는다", async () => {
+test("hasFavicon: 기본 그림을 못 받으면 null, 다음에 다시 받는다", async () => {
   const warn = console.warn;
   console.warn = () => {};
   try {
@@ -613,9 +650,9 @@ test("hasFavicon: 기본 그림을 못 받으면 false, 다음에 다시 받는�
       return { ok: true, status: 200, arrayBuffer: async () => bytes.buffer };
     };
     const m = await freshModule();
-    assert.equal(await m.hasFavicon("https://a.com/"), false);
+    assert.equal(await m.hasFavicon("https://a.com/"), null);
     fail = false;
-    assert.equal(await m.hasFavicon("https://a.com/"), true);
+    assert.equal(await m.hasFavicon("https://a.com/"), m.faviconUrl("https://a.com/", 32));
     assert.equal(fetched.filter((url) => url === "https://no-favicon.invalid/").length, 2);
   } finally {
     console.warn = warn;

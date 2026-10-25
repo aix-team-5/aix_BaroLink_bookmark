@@ -210,19 +210,19 @@ export function faviconUrl(url, size = 32) {
   return chrome.runtime.getURL("/_favicon/") + "?pageUrl=" + encodeURIComponent(url) + "&size=" + size;
 }
 
-// N07: 받은 그림이 기본 그림과 다른지(파비콘이 있는지)
-// 파비콘은 페이지 주소 단위로 저장되므로, 없으면 사이트 첫 페이지 주소로 한 번 더 확인한다
+// N07: 쓸 파비콘 주소를 돌려준다. 원래 주소에 없으면 첫 페이지 주소로 다시 찾고, 둘 다 없으면 null
+// 파비콘은 페이지 주소 단위로 저장되므로, 받은 그림이 기본 그림과 다른지로 있는지를 본다
 export async function hasFavicon(url) {
-  if (typeof url !== "string") return false;
+  if (typeof url !== "string") return null;
   try {
     const blank = await loadDefaultIcon();
-    if (!sameBytes(await readIcon(url), blank)) return true;
+    if (!sameBytes(await readIcon(url), blank)) return faviconUrl(url, FAVICON_SIZE);
     const home = homePage(url);
-    if (!home || home === url) return false;
-    return !sameBytes(await readIcon(home), blank);
+    if (!home || home === url) return null;
+    return sameBytes(await readIcon(home), blank) ? null : faviconUrl(home, FAVICON_SIZE);
   } catch (error) {
     console.warn("파비콘을 확인하지 못했어요", error);
-    return false;
+    return null;
   }
 }
 
