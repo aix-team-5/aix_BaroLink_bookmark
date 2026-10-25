@@ -47,6 +47,7 @@ function view(id, deep) {
   if (node.url !== undefined) out.url = node.url;
   if (node.dateLastUsed !== undefined) out.dateLastUsed = node.dateLastUsed;
   if (node.folderType !== undefined) out.folderType = node.folderType;
+  if (node.unmodifiable !== undefined) out.unmodifiable = node.unmodifiable;
   if (node.children && deep) out.children = node.children.map((child) => view(child, true));
   return out;
 }
@@ -265,6 +266,17 @@ test("loadTree: folders에는 최상위 폴더가 없고, 상위 폴더와 child
   assert.deepEqual(folders.find((folder) => folder.id === "12").childIds, []);
 });
 
+test("loadTree: path는 항목마다 따로다 (한 항목을 고쳐도 다른 항목은 그대로)", async () => {
+  const { bookmarks, folders } = await b.loadTree();
+  const naver = bookmarks.find((item) => item.id === "10");
+  naver.path.push("바꿈");
+  assert.deepEqual(bookmarks.find((item) => item.id === "13").path, []);
+  assert.deepEqual(folders.find((folder) => folder.id === "11").path, []);
+  const lecture = folders.find((folder) => folder.id === "110");
+  lecture.path.push("바꿈");
+  assert.deepEqual(bookmarks.find((item) => item.id === "111").path, ["공부"]);
+});
+
 test("loadTree: 모바일 폴더가 있으면 roots.mobile, managed는 bookmarks에만", async () => {
   build([
     { id: "1", title: "북마크바", folderType: "bookmarks-bar", syncing: true, kids: [] },
@@ -324,6 +336,13 @@ test("createFolder: 같은 이름이 여럿이면 index가 작은 것", async ()
   assert.equal((await b.createFolder("겹침", "1")).id, firstId);
 });
 
+test("createFolder: 최상위(루트 \"0\") 아래에는 같은 이름이 있어도 오류", async () => {
+  await assert.rejects(b.createFolder("기타 북마크", "0"));
+  await assert.rejects(b.createFolder("새 폴더", "0"));
+  await assert.rejects(b.createFolder("새 폴더", 0));
+  assert.equal(calls.includes("bookmarks.create"), false);
+});
+
 test("createFolder: 빈 이름·공백뿐인 이름은 오류", async () => {
   await assert.rejects(b.createFolder("", "1"));
   await assert.rejects(b.createFolder("   ", "1"));
@@ -373,6 +392,20 @@ test("moveBookmark: 같은 폴더에서 앞쪽으로, 너무 큰 index는 맨 �
   assert.deepEqual(childIds("1"), ["13", "11", "12", "10"]);
 });
 
+test("moveBookmark: 유한한 수가 아닌 index는 맨 뒤, 음수는 0, 소수는 버림", async () => {
+  for (const index of [NaN, "abc", "", "  ", Infinity, true]) {
+    build(structuredClone(SAMPLE));
+    const moved = await b.moveBookmark("10", "2", index);
+    assert.equal(moved.index, 2, `index ${String(index)}`);
+    assert.deepEqual(childIds("2"), ["20", "21", "10"]);
+  }
+  for (const [index, expected] of [[-1, 0], [1.7, 1], ["1", 1]]) {
+    build(structuredClone(SAMPLE));
+    const moved = await b.moveBookmark("10", "2", index);
+    assert.equal(moved.index, expected, `index ${String(index)}`);
+  }
+});
+
 test("moveBookmark: 옮기는 사이 지워지면 null", async () => {
   const original = bookmarks.move;
   bookmarks.move = async (id) => {
@@ -411,6 +444,20 @@ test("deleteFolderKeepChildren: 최상위 폴더·북마크·없는 폴더는 �
   assert.equal(nodes.has("10"), true);
 });
 
+test("deleteFolderKeepChildren: 바꿀 수 없는(managed) 폴더는 꺼내기 전에 오류", async () => {
+  build([
+    { id: "1", title: "북마크바", folderType: "bookmarks-bar", syncing: true, kids: [] },
+    {
+      id: "5", title: "회사", folderType: "managed", syncing: false, unmodifiable: "managed",
+      kids: [{ id: "51", title: "팀", unmodifiable: "managed", kids: [{ id: "50", title: "사내", url: "https://intra.example.com/", unmodifiable: "managed" }] }],
+    },
+  ]);
+  await assert.rejects(b.deleteFolderKeepChildren("51"));
+  assert.equal(nodes.has("51"), true);
+  assert.deepEqual(childIds("51"), ["50"]);
+  assert.deepEqual(calls, []);
+});
+
 test("deleteFolderKeepChildren: pendingMoves 저장이 끝난 뒤 옮긴다", { skip: SKIP_STORE }, async () => {
   await b.deleteFolderKeepChildren("11");
   const firstMove = calls.indexOf("bookmarks.move");
@@ -426,6 +473,15 @@ const bm = (id) => ({ id, url: nodes.get(id).url });
 test("openBookmark: javascript: 주소는 열지 않고 기록하지 않고 false", async () => {
   assert.equal(await b.openBookmark(bm("21")), false);
   assert.equal(await b.openBookmark({ id: "x", url: "  JavaScript:void(0)" }, { newTab: true }), false);
+  assert.deepEqual(tabsLog, []);
+  assert.equal(calls.includes("storage.set"), false);
+});
+
+test("openBookmark: 탭·줄 바꿈이 끼거나 앞에 공백이 있는 javascript:도, 해석할 수 없는 주소도 열지 않고 false", async () => {
+  for (const url of ["java\tscript:alert(1)", " JavaScript:alert(1)", "javascript\n:alert(1)", "\u0001javascript:alert(1)", "주소 아님"]) {
+    assert.equal(await b.openBookmark({ id: "x", url }), false, JSON.stringify(url));
+    assert.equal(await b.openBookmark({ id: "x", url }, { newTab: true }), false, JSON.stringify(url));
+  }
   assert.deepEqual(tabsLog, []);
   assert.equal(calls.includes("storage.set"), false);
 });
@@ -452,8 +508,11 @@ test("openBookmark: 현재 탭 id를 못 얻으면 오류 (tabId 없이 부르�
   assert.deepEqual(tabsLog, []);
 });
 
-test("openBookmark: 주소가 없으면(폴더) 오류", async () => {
+test("openBookmark: 주소가 없으면(폴더)·빈 주소면 오류", async () => {
   await assert.rejects(b.openBookmark({ id: "11" }));
+  await assert.rejects(b.openBookmark({ id: "10", url: "" }));
+  await assert.rejects(b.openBookmark({ id: "10", url: "" }, { newTab: true }));
+  assert.deepEqual(tabsLog, []);
 });
 
 test("openBookmark: 연 시각 기록(storage.set)이 여는 것보다 먼저", { skip: SKIP_STORE }, async () => {

@@ -68,7 +68,8 @@ function collect(nodes, folderTitle, path, base, bookmarks, folders) {
       };
       // 한 번도 안 연 북마크에는 dateLastUsed가 없다. 크롬처럼 필드를 넣지 않는다
       if (node.dateLastUsed !== undefined) item.dateLastUsed = node.dateLastUsed;
-      bookmarks.push({ ...item, folderTitle, ...base, path });
+      // path는 항목마다 복사한다. 한 항목의 path를 고쳐도 다른 항목이 바뀌지 않게
+      bookmarks.push({ ...item, folderTitle, ...base, path: [...path] });
       continue;
     }
     const children = node.children ?? [];
@@ -79,7 +80,7 @@ function collect(nodes, folderTitle, path, base, bookmarks, folders) {
       index: node.index,
       dateAdded: node.dateAdded,
       ...base,
-      path,
+      path: [...path],
       childIds: children.map((child) => child.id),
     });
     collect(children, node.title, [...path, node.title], base, bookmarks, folders);
@@ -90,9 +91,12 @@ function collect(nodes, folderTitle, path, base, bookmarks, folders) {
 export async function createFolder(name, parentId) {
   const title = typeof name === "string" ? name.trim() : "";
   if (!title) throw new Error("폴더 이름이 비어 있어요");
+  // 최상위(루트) 바로 아래에는 만들 수 없다 (C05)
+  if (String(parentId) === "0") throw new Error("최상위에는 폴더를 만들 수 없어요");
   const children = await chrome.bookmarks.getChildren(String(parentId));
+  // 북마크바·기타 북마크 같은 최상위 폴더(folderType 있음)는 같은 이름이어도 고르지 않는다
   const same = children
-    .filter((node) => node.url === undefined && node.title === title)
+    .filter((node) => node.url === undefined && !node.folderType && node.title === title)
     .sort((a, b) => a.index - b.index)[0];
   if (same) return same;
   return chrome.bookmarks.create({ parentId: String(parentId), title });
@@ -104,9 +108,11 @@ export async function moveBookmark(id, parentId, index) {
   const node = await findNode(id);
   if (!node) return null;
   const destination = { parentId: String(parentId) };
-  if (index !== undefined && index !== null) {
+  // 유한한 수가 아니면(NaN, "abc", "" 등) index를 넘기지 않는다(맨 뒤). 음수는 0, 소수는 버린다
+  const wanted = typeof index === "number" || (typeof index === "string" && index.trim() !== "") ? Number(index) : NaN;
+  if (Number.isFinite(wanted)) {
     const count = (await chrome.bookmarks.getChildren(destination.parentId)).length;
-    let target = Math.max(0, Math.trunc(Number(index)) || 0);
+    let target = Math.max(0, Math.trunc(wanted));
     if (node.parentId === destination.parentId) {
       target = Math.min(target, count - 1);
       if (target > node.index) target += 1;
@@ -142,8 +148,11 @@ export async function renameFolder(id, name) {
 
 // N05: 안의 북마크를 상위 폴더로 꺼낸 뒤 폴더만 삭제. 꺼낸 북마크 수를 돌려준다
 // 꺼낸 것은 폴더가 있던 자리에 원래 순서대로 놓는다. 안의 폴더도 함께 꺼내지만(비어야 지울 수 있다) 세지 않는다
+// 중간에 이동이 실패하면 일부만 꺼낸 채 오류를 던진다 (이미 꺼낸 것은 상위 폴더에 남는다)
 export async function deleteFolderKeepChildren(id) {
   const [folder] = await chrome.bookmarks.get(String(id));
+  // 관리자가 정한 폴더(managed)는 바꿀 수 없다
+  if (folder.unmodifiable) throw new Error("바꿀 수 없는 폴더예요");
   if (folder.url !== undefined) throw new Error("폴더가 아니에요");
   if (folder.folderType) throw new Error("북마크바·기타 북마크·모바일 북마크는 지울 수 없어요");
 
@@ -165,12 +174,12 @@ export async function deleteFolderKeepChildren(id) {
   return moved;
 }
 
-// N06: 연 시각을 기록한 뒤 주소를 연다. javascript: 주소면 열지 않고 false를 돌려준다
+// N06: 연 시각을 기록한 뒤 주소를 연다. javascript: 주소(또는 해석할 수 없는 주소)면 열지 않고 false를 돌려준다
 // 모든 주소를 chrome.tabs로 연다. 현재 탭은 이 탭의 id로, 새 탭은 뒤에 연다
 export async function openBookmark(bookmark, { newTab = false } = {}) {
   const url = bookmark?.url;
-  if (typeof url !== "string") throw new Error("열 주소가 없어요");
-  if (/^\s*javascript:/i.test(url)) return false;
+  if (typeof url !== "string" || url === "") throw new Error("열 주소가 없어요");
+  if (!isOpenable(url)) return false;
 
   try {
     await recordOpened(bookmark.id);
@@ -185,6 +194,15 @@ export async function openBookmark(bookmark, { newTab = false } = {}) {
   const tab = await chrome.tabs.getCurrent();
   if (tab?.id === undefined) throw new Error("현재 탭을 찾지 못했어요");
   await chrome.tabs.update(tab.id, { url });
+}
+
+// 크롬과 같은 방식(URL 해석)으로 javascript: 주소를 가린다. 해석하지 못한 주소도 열지 않는다
+function isOpenable(url) {
+  try {
+    return new URL(url).protocol !== "javascript:";
+  } catch {
+    return false;
+  }
 }
 
 // N07: _favicon 주소 만들기
