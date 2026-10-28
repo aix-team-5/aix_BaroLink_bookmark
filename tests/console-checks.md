@@ -3,7 +3,7 @@
 > 새 탭의 개발자 도구 콘솔에서 우리 함수를 직접 불러, 실제 크롬 북마크와 저장 항목으로 돌린 결과가 명세와 맞는지 사람이 확인하는 문서다.
 > 근거: `docs/spec.xlsx` v15 ('기능 명세', 'API_내부 함수', '참고_저장 항목' 시트), `tests/answer-key-100.json`, `tests/answer-key-100.md`
 > 작성일: 2026-10-28 · 작성 기준 코드: `main` `309b583` (이때 `extension/`의 함수는 모두 이름과 입력만 있는 뼈대였다)
-> 이 매뉴얼의 콘솔 코드는 작성 시점에 실행해 보지 않았다. 처음 실행한 확인자는 오류가 난 항목을 PR 댓글이나 Issue로 남긴다.
+> 작성 직후, 뼈대 상태의 main 코드에 이 문서의 2장 코드와 3장 코드 조각 52개를 크롬에서 실행해 봤다. 문법 오류와 없는 함수를 부르는 오류는 없었다(판정 결과는 함수가 구현된 뒤에 의미가 있다). 처음 실행한 확인자는 오류가 난 항목을 PR 댓글이나 Issue로 남긴다.
 
 작성 시점에는 명세의 함수가 모두 뼈대(이름과 입력만 있고 빈 값을 돌려줌)였다. 그래서 3장의 항목은 명세의 이름·입력·출력으로 썼고, 항목마다 맨 위에 구현 상태를 적었다. **각 함수를 구현하는 기능 PR에서 그 함수의 항목으로 확인한다.** 구현된 코드가 항목의 코드와 맞지 않으면(인자 형태 등) 명세를 먼저 확인하고, 명세가 맞으면 코드를, 명세에 없던 것이면 명세와 이 문서를 고친다.
 
@@ -110,6 +110,7 @@ await (async () => {
   T.same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
   T.near = (t, now = Date.now(), ms = 10000) => typeof t === "number" && Math.abs(t - now) <= ms;
   T.throws = async (fn) => { try { await fn(); return false; } catch (e) { return true; } };
+  T.url = (s) => { try { return new URL(s); } catch (e) { return null; } };
 
   // categories.json을 함수가 받는 형태 그대로 돌려준다: { categories: [...], noCategorySites: [...] } (명세 N17)
   T.cats = async () => (await fetch("/data/categories.json")).json();
@@ -232,6 +233,7 @@ await (async () => {
 | `T.summary()` | 지금까지의 통과·실패 개수와 실패한 이름 |
 | `T.mk`, `T.mkFolder`, `T.cleanup()` | `[검증]` 임시 북마크·폴더 만들기, 모두 지우기 |
 | `T.rawRoots()`, `T.flat()`, `T.kids(id)` | 우리 함수 없이 크롬 북마크를 직접 읽는다 (비교 기준) |
+| `T.url(s)` | 주소가 아니면 null (오류 대신 ❌가 나오게) |
 
 ---
 
@@ -470,8 +472,8 @@ await (async () => {
     const page = "https://www.youtube.com/watch?v=a";
     const u = T.bookmarks.faviconUrl(page, 32);
     T.expect("faviconUrl은 /_favicon/ 주소다", typeof u === "string" && u.startsWith(chrome.runtime.getURL("/_favicon/")), u);
-    T.expect("pageUrl에 북마크 주소가 들어 있다", typeof u === "string" && new URL(u).searchParams.get("pageUrl") === page, u);
-    T.expect("size=32", typeof u === "string" && new URL(u).searchParams.get("size") === "32", u);
+    T.expect("pageUrl에 북마크 주소가 들어 있다", typeof u === "string" && T.url(u)?.searchParams.get("pageUrl") === page, u);
+    T.expect("size=32", typeof u === "string" && T.url(u)?.searchParams.get("size") === "32", u);
     const none = await T.bookmarks.hasFavicon("https://no-favicon.invalid/");
     T.expect("hasFavicon: 파비콘이 없는 주소면 null (명세 v15)", none === null, none);
   })();
@@ -1448,7 +1450,7 @@ await (async () => {
   - 카드 보조 문구가 "직접 만든 폴더와 북마크바에서 요즘 쓰는 북마크는 그대로 둬요"다. (F06-01 비고)
   - 정리 창이 메인 화면 위에 어둡게 겹친 팝업이다. Esc나 바깥 클릭으로 닫힌다. (F12-03, F12-04)
   - 정리 창에 폴더별 분류 근거가 보인다. (F06-03)
-  - 카드의 [나중에]를 누르면 카드가 닫히고 `(await T.stored()).state.firstCard`가 `"later"`다. 헤더의 [정리하기]를 누르면 같은 카드가 다시 열린다. (F06-06, N38)
+  - 카드의 [나중에]를 누르면 카드가 닫히고 `(await T.stored()).state?.firstCard`가 `"later"`다. 헤더의 [정리하기]를 누르면 같은 카드가 다시 열린다. (F06-06, N38)
   - (P2) `T.cards.showFirstCard({ type: "pin", reason: "" }, actions)` → "북마크들이 서로 달라서 아직 묶을 폴더가 없어요. 대신 자주 쓰는 북마크 5개를 고정할까요?"와 [고정하기]·[고르기]·[나중에]가 보인다. (F06-07, F09-01)
   - (P2) `T.cards.showPinPicker()` → "고정할 북마크 고르기" 창이 열린다(F09-05, F09-06). 이 함수의 입력은 아직 정하지 않았다(`docs/file-structure.md` 12번).
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
@@ -1487,7 +1489,7 @@ await (async () => {
   2. 다른 창에서 `chrome://bookmarks`를 열고 북마크바에 북마크를 하나 추가한다(오른쪽 위 점 3개 → 새 북마크 추가, 제목 `[검증] 워커 멈춤`).
   3. 1~2초 뒤 새 탭 콘솔에서 아래를 실행한다. 기대: `true`.
      ```js
-     (await T.stored()).newBookmarks.includes((await T.findTitle("[검증] 워커 멈춤"))?.id)
+     ((await T.stored()).newBookmarks ?? []).includes((await T.findTitle("[검증] 워커 멈춤"))?.id)
      ```
 - 기대 결과: 북마크바·기타·모바일 바로 아래에 새로 저장된 북마크만 `newBookmarks`에 들어간다. 폴더이거나 사용자 폴더 안에 저장된 것, 가져오기 중에 들어온 것은 넣지 않는다. 워커가 멈춰 있어도 알림에 깨어나 기록한다. (N32, F10-01, F10-09, F01-07)
 - 되돌리는 법: `await T.cleanup()` (지우면 C-N34대로 `newBookmarks`에서도 빠져야 한다)
