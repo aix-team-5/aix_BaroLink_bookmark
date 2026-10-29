@@ -195,19 +195,6 @@ const childIds = (id) => [...nodes.get(id).children];
 
 const b = await import("../extension/js/bookmarks.js");
 
-// store.js가 아직 뼈대(PR #29가 합쳐지기 전)면 recordOpened·setPending이 저장하지 않는다
-const storeWrites = async () => {
-  const store = await import("../extension/js/store.js");
-  const before = calls.length;
-  await store.recordOpened("probe");
-  const wrote = calls.slice(before).includes("storage.set");
-  data = {};
-  calls = [];
-  return wrote;
-};
-const STORE_READY = await storeWrites();
-const SKIP_STORE = STORE_READY ? false : "store.js가 뼈대라 저장하지 않음 (PR #29가 합쳐진 뒤 다시 돌린다)";
-
 beforeEach(() => {
   build(structuredClone(SAMPLE));
   data = {};
@@ -458,7 +445,7 @@ test("deleteFolderKeepChildren: 바꿀 수 없는(managed) 폴더는 꺼내기 �
   assert.deepEqual(calls, []);
 });
 
-test("deleteFolderKeepChildren: pendingMoves 저장이 끝난 뒤 옮긴다", { skip: SKIP_STORE }, async () => {
+test("deleteFolderKeepChildren: pendingMoves 저장이 끝난 뒤 옮긴다", async () => {
   await b.deleteFolderKeepChildren("11");
   const firstMove = calls.indexOf("bookmarks.move");
   assert.ok(calls.indexOf("storage.set") !== -1 && calls.indexOf("storage.set") < firstMove);
@@ -515,7 +502,7 @@ test("openBookmark: 주소가 없으면(폴더)·빈 주소면 오류", async ()
   assert.deepEqual(tabsLog, []);
 });
 
-test("openBookmark: 연 시각 기록(storage.set)이 여는 것보다 먼저", { skip: SKIP_STORE }, async () => {
+test("openBookmark: 연 시각 기록(storage.set)이 여는 것보다 먼저", async () => {
   await b.openBookmark(bm("10"));
   assert.deepEqual(calls, ["storage.set", "tabs.update"]);
   assert.equal(typeof data.lastOpenedByUs["10"], "number");
