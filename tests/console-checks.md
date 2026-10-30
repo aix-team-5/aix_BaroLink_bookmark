@@ -1,8 +1,9 @@
 # 콘솔 함수 검증 매뉴얼
 
 > 새 탭의 개발자 도구 콘솔에서 우리 함수를 직접 불러, 실제 크롬 북마크와 저장 항목으로 돌린 결과가 명세와 맞는지 사람이 확인하는 문서다.
-> 근거: `docs/spec.xlsx` v15 ('기능 명세', 'API_내부 함수', '참고_저장 항목' 시트), `tests/answer-key-100.json`, `tests/answer-key-100.md`
+> 근거: `docs/spec.xlsx` v16 ('기능 명세', 'API_내부 함수', '참고_저장 항목' 시트), `tests/answer-key-100.json`, `tests/answer-key-100.md`
 > 작성일: 2026-10-28 · 작성 기준 코드: `main` `309b583` (이때 `extension/`의 함수는 모두 이름과 입력만 있는 뼈대였다)
+> 2026-10-30: `main` `049b9be`(`store.js`·`bookmarks.js` 구현, 명세 v16)에 맞춰 고쳤다. v16은 v15에서 N14 `setPending`의 입력(`{ id, toParentId }`)만 바뀌었다.
 > 작성 직후, 뼈대 상태의 main 코드에 이 문서의 2장 코드와 3장 코드 조각 52개를 크롬에서 실행해 봤다. 문법 오류와 없는 함수를 부르는 오류는 없었다(판정 결과는 함수가 구현된 뒤에 의미가 있다). 처음 실행한 확인자는 오류가 난 항목을 PR 댓글이나 Issue로 남긴다.
 
 작성 시점에는 명세의 함수가 모두 뼈대(이름과 입력만 있고 빈 값을 돌려줌)였다. 그래서 3장의 항목은 명세의 이름·입력·출력으로 썼고, 항목마다 맨 위에 구현 상태를 적었다. **각 함수를 구현하는 기능 PR에서 그 함수의 항목으로 확인한다.** 구현된 코드가 항목의 코드와 맞지 않으면(인자 형태 등) 명세를 먼저 확인하고, 명세가 맞으면 코드를, 명세에 없던 것이면 명세와 이 문서를 고친다.
@@ -107,7 +108,9 @@ await (async () => {
   T.day = 86400000;
   T.prefix = "[검증] ";
   T.wait = (ms) => new Promise((r) => setTimeout(r, ms));
-  T.same = (a, b) => JSON.stringify(a) === JSON.stringify(b);
+  // 객체는 키를 이름순으로 맞춘 뒤 비교한다(chrome.storage는 키를 가나다순으로 돌려준다). 배열은 순서까지 본다
+  const sortKeys = (v) => (Array.isArray(v) ? v.map(sortKeys) : v && typeof v === "object" ? Object.fromEntries(Object.keys(v).sort().map((k) => [k, sortKeys(v[k])])) : v);
+  T.same = (a, b) => JSON.stringify(sortKeys(a)) === JSON.stringify(sortKeys(b));
   T.near = (t, now = Date.now(), ms = 10000) => typeof t === "number" && Math.abs(t - now) <= ms;
   T.throws = async (fn) => { try { await fn(); return false; } catch (e) { return true; } };
   T.url = (s) => { try { return new URL(s); } catch (e) { return null; } };
@@ -228,6 +231,7 @@ await (async () => {
 | `T.stored()` | `chrome.storage.local`에 실제로 저장된 값 전체 (`store.js`를 거치지 않음) |
 | `T.saveStore()` / `T.restoreStore(saved)` | 저장 항목을 통째로 저장해 두었다가 되돌린다 |
 | `T.snap(id?)` | 폴더별 제목 순서 문자열. `T.diff(전, 후)`로 바뀐 줄만 본다 |
+| `T.same(a, b)` | 값이 같은지. 객체의 키 순서는 보지 않고, 배열의 순서는 본다 |
 | `T.expect(이름, 조건, 실제값)` | `✅ 통과` / `❌ 실패 + 실제값`을 출력하고 센다 |
 | `T.record(이름, 값)` | 명세로 정할 수 없는 값을 `📝 기록`으로 출력한다 |
 | `T.summary()` | 지금까지의 통과·실패 개수와 실패한 이름 |
@@ -244,7 +248,7 @@ await (async () => {
 - 항목 이름은 `C-N번호`다(C는 콘솔). 'API_내부 함수' 시트의 N 번호 순서로 적었다. 예외가 많은 함수는 `-예외` 항목을 따로 두었다.
 - **안전 등급**
   - 읽기만: 크롬 북마크와 저장 항목을 바꾸지 않는다.
-  - 저장 항목을 바꿈: 코드가 처음에 저장 항목을 저장해 두고 끝에 되돌린다.
+  - 저장 항목을 바꿈: 코드가 처음에 저장 항목을 저장해 두고 끝에 되돌린다. 중간에 오류가 나도 `finally`에서 되돌린다(C-N43만 눈으로 본 뒤 손으로 되돌린다).
   - ⚠ 크롬 북마크를 바꿈: `[검증]`으로 시작하는 임시 북마크만 만들고 옮긴다. 코드 앞에서 `T.snap()`을 찍어 두고, 끝나면 "되돌리는 법"대로 정리한다.
   - 화면: 칸에 그린 결과를 눈으로 본다.
 - 코드는 그대로 붙여 넣으면 돌아가게 썼다. 마지막에 `T.summary()`로 결과를 본다.
@@ -255,7 +259,7 @@ await (async () => {
 ---
 
 #### C-N01 loadTree: 크롬 북마크 전체 읽기 · P1
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (main `049b9be`)
 - 파일·담당: bookmarks.js · 팀원 A
 - 관련 요구사항: F01-01, F01-04
 - 안전 등급: 읽기만
@@ -291,7 +295,7 @@ await (async () => {
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N02 createFolder: 폴더 만들기 · P1
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (main `049b9be`)
 - 파일·담당: bookmarks.js · 팀원 A
 - 관련 요구사항: F07-08, F03-04
 - 안전 등급: ⚠ 크롬 북마크를 바꿈
@@ -322,7 +326,7 @@ await (async () => {
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N03 moveBookmark: 북마크 하나 옮기기 · P1
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (main `049b9be`)
 - 파일·담당: bookmarks.js · 팀원 A
 - 관련 요구사항: F07-01, F07-09
 - 안전 등급: ⚠ 크롬 북마크를 바꿈
@@ -380,7 +384,7 @@ await (async () => {
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N05 deleteFolderKeepChildren: 폴더만 지우고 안의 북마크는 꺼내기 · P2
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (main `049b9be`)
 - 파일·담당: bookmarks.js · 팀원 A
 - 관련 요구사항: F03-06, F07-05
 - 안전 등급: ⚠ 크롬 북마크를 바꿈
@@ -415,7 +419,7 @@ await (async () => {
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N06 openBookmark: 북마크 열기 · P1
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (main `049b9be`)
 - 파일·담당: bookmarks.js · 팀원 A
 - 관련 요구사항: F02-02, F02-04, F02-05, F15-03
 - 안전 등급: ⚠ 크롬 북마크를 바꿈(임시 북마크) · 저장 항목을 바꿈 · 새 탭이 열린다
@@ -426,28 +430,31 @@ await (async () => {
   await (async () => {
     T.begin("C-N06");
     const saved = await T.saveStore();
-    const web = await T.mk("열기 웹", "https://example.com/");
-    const js = await T.mk("열기 북마클릿", "javascript:void(0)");
-    const ch = await T.mk("열기 크롬 주소", "chrome://version/");
-    const tabs0 = await chrome.tabs.query({});
-    await T.bookmarks.openBookmark(web, { newTab: true });
-    await T.wait(800);
-    const tabs1 = await chrome.tabs.query({});
-    T.expect("F15-03 newTab이면 새 탭이 하나 열린다", tabs1.length === tabs0.length + 1, tabs1.length - tabs0.length);
-    const s = await T.stored();
-    T.expect("F02-02 연 시각을 lastOpenedByUs에 기록했다", T.near(s.lastOpenedByUs?.[web.id]), s.lastOpenedByUs);
-    const r = await T.bookmarks.openBookmark(js, { newTab: true });
-    await T.wait(800);
-    const tabs2 = await chrome.tabs.query({});
-    T.expect("F02-05 javascript: 주소는 열지 않고 false", r === false && tabs2.length === tabs1.length, { r, opened: tabs2.length - tabs1.length });
-    T.record("javascript: 북마크의 연 시각 기록 여부(명세에 없다)", (await T.stored()).lastOpenedByUs?.[js.id] ?? "기록 안 함");
-    await T.bookmarks.openBookmark(ch, { newTab: true });
-    await T.wait(800);
-    const tabs3 = await chrome.tabs.query({});
-    T.expect("F02-04 chrome:// 주소도 탭 API로 열린다", tabs3.length === tabs2.length + 1, tabs3.length - tabs2.length);
-    const opened = tabs3.filter((t) => !tabs0.some((o) => o.id === t.id)).map((t) => t.id);
-    if (opened.length) await chrome.tabs.remove(opened);
-    await T.restoreStore(saved);
+    try {
+      const web = await T.mk("열기 웹", "https://example.com/");
+      const js = await T.mk("열기 북마클릿", "javascript:void(0)");
+      const ch = await T.mk("열기 크롬 주소", "chrome://version/");
+      const tabs0 = await chrome.tabs.query({});
+      await T.bookmarks.openBookmark(web, { newTab: true });
+      await T.wait(800);
+      const tabs1 = await chrome.tabs.query({});
+      T.expect("F15-03 newTab이면 새 탭이 하나 열린다", tabs1.length === tabs0.length + 1, tabs1.length - tabs0.length);
+      const s = await T.stored();
+      T.expect("F02-02 연 시각을 lastOpenedByUs에 기록했다", T.near(s.lastOpenedByUs?.[web.id]), s.lastOpenedByUs);
+      const r = await T.bookmarks.openBookmark(js, { newTab: true });
+      await T.wait(800);
+      const tabs2 = await chrome.tabs.query({});
+      T.expect("F02-05 javascript: 주소는 열지 않고 false", r === false && tabs2.length === tabs1.length, { r, opened: tabs2.length - tabs1.length });
+      T.record("javascript: 북마크의 연 시각 기록 여부(명세에 없다)", (await T.stored()).lastOpenedByUs?.[js.id] ?? "기록 안 함");
+      await T.bookmarks.openBookmark(ch, { newTab: true });
+      await T.wait(800);
+      const tabs3 = await chrome.tabs.query({});
+      T.expect("F02-04 chrome:// 주소도 탭 API로 열린다", tabs3.length === tabs2.length + 1, tabs3.length - tabs2.length);
+      const opened = tabs3.filter((t) => !tabs0.some((o) => o.id === t.id)).map((t) => t.id);
+      if (opened.length) await chrome.tabs.remove(opened);
+    } finally {
+      await T.restoreStore(saved);
+    }
   })();
   ```
 - 기대 결과:
@@ -459,7 +466,7 @@ await (async () => {
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N07 faviconUrl / hasFavicon: 사이트 아이콘 주소 · P1
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (main `049b9be`)
 - 파일·담당: bookmarks.js · 팀원 A
 - 관련 요구사항: F02-01, F02-03
 - 안전 등급: 읽기만
@@ -485,7 +492,7 @@ await (async () => {
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N08 load: 저장 항목 전체 읽기 · P1
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (main `049b9be`)
 - 파일·담당: store.js · 팀원 A
 - 관련 요구사항: 전체 ('참고_저장 항목' 시트)
 - 안전 등급: 저장 항목을 바꿈 (끝에 되돌림)
@@ -496,25 +503,28 @@ await (async () => {
   await (async () => {
     T.begin("C-N08");
     const saved = await T.saveStore();
-    await chrome.storage.local.clear();
-    const d = await T.store.load();
-    const keys = ["pinned", "lastOpenedByUs", "dismissed", "manualMoves", "newBookmarks", "handledNew", "pendingMoves", "history", "state"];
-    T.expect("저장 항목 9개가 모두 있다", d && keys.every((k) => k in d), d && Object.keys(d));
-    T.expect("비어 있으면 기본값('참고_저장 항목'의 형태)", T.same(d, T.emptyStored()), d);
-    T.expect("state 값이 없으면 firstCard는 pending", d?.state?.firstCard === "pending", d?.state);
-    await chrome.storage.local.set({ pinned: ["검증-1"], state: { firstCard: "later" } });
-    const d2 = await T.store.load();
-    T.expect("저장된 값을 실제로 읽는다(pinned)", T.same(d2?.pinned, ["검증-1"]), d2?.pinned);
-    T.expect("저장된 값을 실제로 읽는다(state)", d2?.state?.firstCard === "later", d2?.state);
-    T.expect("없는 키는 기본값으로 채운다", T.same(d2?.history, []) && T.same(d2?.manualMoves, {}), d2);
-    await T.restoreStore(saved);
+    try {
+      await chrome.storage.local.clear();
+      const d = await T.store.load();
+      const keys = ["pinned", "lastOpenedByUs", "dismissed", "manualMoves", "newBookmarks", "handledNew", "pendingMoves", "history", "state"];
+      T.expect("저장 항목 9개가 모두 있다", d && keys.every((k) => k in d), d && Object.keys(d));
+      T.expect("비어 있으면 기본값('참고_저장 항목'의 형태)", T.same(d, T.emptyStored()), d);
+      T.expect("state 값이 없으면 firstCard는 pending", d?.state?.firstCard === "pending", d?.state);
+      await chrome.storage.local.set({ pinned: ["검증-1"], state: { firstCard: "later" } });
+      const d2 = await T.store.load();
+      T.expect("저장된 값을 실제로 읽는다(pinned)", T.same(d2?.pinned, ["검증-1"]), d2?.pinned);
+      T.expect("저장된 값을 실제로 읽는다(state)", d2?.state?.firstCard === "later", d2?.state);
+      T.expect("없는 키는 기본값으로 채운다", T.same(d2?.history, []) && T.same(d2?.manualMoves, {}), d2);
+    } finally {
+      await T.restoreStore(saved);
+    }
   })();
   ```
 - 기대 결과: 저장 항목 9개를 한 번에 읽고, 없는 키는 '참고_저장 항목' 시트의 형태로 기본값을 채운다. `state`가 없으면 `firstCard`는 `"pending"`이다. (N08, C14)
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N09 update: 읽고 → 고치고 → 쓰기 · P1
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (main `049b9be`)
 - 파일·담당: store.js · 팀원 A
 - 관련 요구사항: C15 (같은 쪽 안에서 순서대로 처리)
 - 안전 등급: 저장 항목을 바꿈 (끝에 되돌림)
@@ -525,21 +535,24 @@ await (async () => {
   await (async () => {
     T.begin("C-N09");
     const saved = await T.saveStore();
-    await chrome.storage.local.remove(["dismissed", "pinned"]);
-    const r = await T.store.update("dismissed", (d) => ({ ...d, "검증-a": 1 }));
-    T.expect("고친 값을 돌려준다", T.same(r, { "검증-a": 1 }), r);
-    T.expect("고친 값이 저장됐다", T.same((await T.stored()).dismissed, { "검증-a": 1 }), (await T.stored()).dismissed);
-    await Promise.all(Array.from({ length: 20 }, (_, i) => T.store.update("pinned", (p) => [...(p || []), "검증-" + i])));
-    const p = (await T.stored()).pinned || [];
-    T.expect("동시에 20번 불러도 하나도 사라지지 않는다(순서대로 처리)", p.length === 20, p.length);
-    await T.restoreStore(saved);
+    try {
+      await chrome.storage.local.remove(["dismissed", "pinned"]);
+      const r = await T.store.update("dismissed", (d) => ({ ...d, "검증-a": 1 }));
+      T.expect("고친 값을 돌려준다", T.same(r, { "검증-a": 1 }), r);
+      T.expect("고친 값이 저장됐다", T.same((await T.stored()).dismissed, { "검증-a": 1 }), (await T.stored()).dismissed);
+      await Promise.all(Array.from({ length: 20 }, (_, i) => T.store.update("pinned", (p) => [...(p || []), "검증-" + i])));
+      const p = (await T.stored()).pinned || [];
+      T.expect("동시에 20번 불러도 하나도 사라지지 않는다(순서대로 처리)", p.length === 20, p.length);
+    } finally {
+      await T.restoreStore(saved);
+    }
   })();
   ```
 - 기대 결과: 읽고 → 고치고 → 쓰기를 한 번에 처리하고 고친 값을 돌려준다. 같은 키를 동시에 고쳐도 순서대로 처리돼 값이 사라지지 않는다. (N09)
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N10 recordOpened: 연 시각 기록 · P1
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (main `049b9be`)
 - 파일·담당: store.js · 팀원 A
 - 관련 요구사항: F02-02, F04-03
 - 안전 등급: 저장 항목을 바꿈 (끝에 되돌림)
@@ -550,10 +563,13 @@ await (async () => {
   await (async () => {
     T.begin("C-N10");
     const saved = await T.saveStore();
-    await T.store.recordOpened("검증-1");
-    const s = await T.stored();
-    T.expect("lastOpenedByUs[ID]에 지금 시각(ms)", T.near(s.lastOpenedByUs?.["검증-1"]), s.lastOpenedByUs);
-    await T.restoreStore(saved);
+    try {
+      await T.store.recordOpened("검증-1");
+      const s = await T.stored();
+      T.expect("lastOpenedByUs[ID]에 지금 시각(ms)", T.near(s.lastOpenedByUs?.["검증-1"]), s.lastOpenedByUs);
+    } finally {
+      await T.restoreStore(saved);
+    }
   })();
   ```
 - 기대 결과: `lastOpenedByUs`에 `{ 북마크ID: 시각(ms) }`로 기록한다. (N10)
@@ -571,29 +587,32 @@ await (async () => {
   await (async () => {
     T.begin("C-N11");
     const saved = await T.saveStore();
-    await chrome.storage.local.remove("pinned");
-    const r = [];
-    for (let i = 1; i <= 9; i++) r.push(await T.store.pin("검증-p" + i));
-    let p = (await T.stored()).pinned || [];
-    T.expect("8번째까지는 true", r.slice(0, 8).every((x) => x === true), r);
-    T.expect("F08-06 이미 8개면 넣지 않고 false", r[8] === false && p.length === 8, { r9: r[8], length: p.length });
-    T.expect("F08-02 고정한 순서대로 저장된다", T.same(p, Array.from({ length: 8 }, (_, i) => "검증-p" + (i + 1))), p);
-    const u = await T.store.unpin("검증-p3");
-    p = (await T.stored()).pinned || [];
-    T.expect("F08-04 unpin은 그 ID를 뺀 고정 목록을 돌려준다", T.same(u, p) && !p.includes("검증-p3") && p.length === 7, { u, p });
-    T.expect("나머지 순서는 그대로다", T.same(p, ["검증-p1", "검증-p2", "검증-p4", "검증-p5", "검증-p6", "검증-p7", "검증-p8"]), p);
-    const again = await T.store.pin("검증-p1");
-    p = (await T.stored()).pinned || [];
-    T.expect("이미 있으면 다시 넣지 않는다", p.filter((x) => x === "검증-p1").length === 1 && p.length === 7, p);
-    T.record("이미 있는 ID를 pin했을 때 돌려주는 값(명세에 없다)", again);
-    await T.restoreStore(saved);
+    try {
+      await chrome.storage.local.remove("pinned");
+      const r = [];
+      for (let i = 1; i <= 9; i++) r.push(await T.store.pin("검증-p" + i));
+      let p = (await T.stored()).pinned || [];
+      T.expect("8번째까지는 true", r.slice(0, 8).every((x) => x === true), r);
+      T.expect("F08-06 이미 8개면 넣지 않고 false", r[8] === false && p.length === 8, { r9: r[8], length: p.length });
+      T.expect("F08-02 고정한 순서대로 저장된다", T.same(p, Array.from({ length: 8 }, (_, i) => "검증-p" + (i + 1))), p);
+      const u = await T.store.unpin("검증-p3");
+      p = (await T.stored()).pinned || [];
+      T.expect("F08-04 unpin은 그 ID를 뺀 고정 목록을 돌려준다", T.same(u, p) && !p.includes("검증-p3") && p.length === 7, { u, p });
+      T.expect("나머지 순서는 그대로다", T.same(p, ["검증-p1", "검증-p2", "검증-p4", "검증-p5", "검증-p6", "검증-p7", "검증-p8"]), p);
+      const again = await T.store.pin("검증-p1");
+      p = (await T.stored()).pinned || [];
+      T.expect("이미 있으면 다시 넣지 않는다", p.filter((x) => x === "검증-p1").length === 1 && p.length === 7, p);
+      T.record("이미 있는 ID를 pin했을 때 돌려주는 값(명세에 없다)", again);
+    } finally {
+      await T.restoreStore(saved);
+    }
   })();
   ```
 - 기대 결과: 고정은 최대 8개이고 9번째는 `false`, 이미 있으면 다시 넣지 않는다. `unpin`은 고정 목록을 돌려준다. (N11, F08-06)
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N12 dismiss / undismiss: "이제 안 봐도 됨" 기록·취소 · P1
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (main `049b9be`)
 - 파일·담당: store.js · 팀원 A
 - 관련 요구사항: F04-09
 - 안전 등급: 저장 항목을 바꿈 (끝에 되돌림)
@@ -604,73 +623,83 @@ await (async () => {
   await (async () => {
     T.begin("C-N12");
     const saved = await T.saveStore();
-    await T.store.dismiss("검증-d1");
-    let s = await T.stored();
-    T.expect("dismissed[ID]에 지금 시각", T.near(s.dismissed?.["검증-d1"]), s.dismissed);
-    await T.store.undismiss("검증-d1");
-    s = await T.stored();
-    T.expect("undismiss 뒤에는 그 ID가 없다([되돌리기])", !("검증-d1" in (s.dismissed || {})), s.dismissed);
-    await T.restoreStore(saved);
+    try {
+      await T.store.dismiss("검증-d1");
+      let s = await T.stored();
+      T.expect("dismissed[ID]에 지금 시각", T.near(s.dismissed?.["검증-d1"]), s.dismissed);
+      await T.store.undismiss("검증-d1");
+      s = await T.stored();
+      T.expect("undismiss 뒤에는 그 ID가 없다([되돌리기])", !("검증-d1" in (s.dismissed || {})), s.dismissed);
+    } finally {
+      await T.restoreStore(saved);
+    }
   })();
   ```
 - 기대 결과: `dismissed`에 `{ 북마크ID: 시각(ms) }`로 기록하고, `undismiss`로 원래대로 돌아온다. (N12, F04-09)
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N13 markManualMove: 직접 옮김 기록 · P1·P2
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (main `049b9be`)
 - 파일·담당: store.js · 팀원 A
 - 관련 요구사항: F07-06, F07-07
-- 안전 등급: 저장 항목을 바꿈 (끝에 되돌림)
-- 사전 조건: 2장 실행. 서비스 워커만 부르는 함수다. 서비스 워커 콘솔에서는 `import()`가 막혀 있으므로, 확인할 때만 새 탭 콘솔에서 부르고 끝에 저장 항목을 되돌린다.
+- 안전 등급: ⚠ 크롬 북마크를 바꿈 (임시 북마크)
+- 사전 조건: 2장 실행. 서비스 워커만 부르는 함수라(`store.js` 주석) 새 탭에서 부르면 "서비스 워커만 쓴다" 오류가 난다. 그래서 함수를 직접 부르지 않고, C-N33처럼 새 탭 콘솔에서 북마크를 옮긴 뒤 `manualMoves`를 본다. `background.js`의 N33이 구현돼 있어야 의미가 있다.
 - 붙여 넣을 코드:
   ```js
   // C-N13
   await (async () => {
     T.begin("C-N13");
-    const saved = await T.saveStore();
-    await T.store.markManualMove("검증-m1");
+    T.before = await T.snap();
+    const f = await T.mkFolder("직접 옮김 기록 폴더");
+    const b = await T.mk("직접 옮김 기록 북마크");
+    await T.wait(1500);
+    await chrome.bookmarks.move(b.id, { parentId: f.id });
+    await T.wait(1500);
     const s = await T.stored();
-    T.expect("manualMoves[ID]에 지금 시각", T.near(s.manualMoves?.["검증-m1"]), s.manualMoves);
-    T.expect("옮긴 위치는 저장하지 않는다(값이 시각 숫자)", typeof s.manualMoves?.["검증-m1"] === "number", s.manualMoves?.["검증-m1"]);
-    await T.restoreStore(saved);
+    T.expect("manualMoves[ID]에 지금 시각", T.near(s.manualMoves?.[b.id]), s.manualMoves);
+    T.expect("옮긴 위치는 저장하지 않는다(값이 시각 숫자)", typeof s.manualMoves?.[b.id] === "number", s.manualMoves?.[b.id]);
   })();
   ```
 - 기대 결과: `manualMoves`에 `{ 북마크ID: 시각(ms) }`로 기록한다. (N13, '참고_저장 항목')
+- 되돌리는 법: `await T.cleanup()` (지우면 C-N34대로 `manualMoves`에서도 빠져야 한다)
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N14 setPending / isPending: "우리 정리가 옮기는 중" 표시 · P1
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (main `049b9be`)
 - 파일·담당: store.js · 팀원 A
 - 관련 요구사항: F07-05
 - 안전 등급: 저장 항목을 바꿈 (끝에 되돌림)
-- 사전 조건: 2장 실행. `isPending`은 서비스 워커만 부르는 함수지만 같은 이유로 새 탭 콘솔에서 부른다.
+- 사전 조건: 2장 실행. `setPending`은 새 탭만 부르는 함수다. `isPending`은 서비스 워커가 부르지만 저장 항목을 읽기만 하므로(`update`를 쓰지 않는다, `store.js` 주석) 새 탭 콘솔에서 불러도 된다.
 - 붙여 넣을 코드:
   ```js
   // C-N14
   await (async () => {
     T.begin("C-N14");
     const saved = await T.saveStore();
-    await chrome.storage.local.set({ pendingMoves: { "검증-old": { toParentId: "f1", at: Date.now() - 61000 } } });
-    // 입력 원소의 키 이름은 명세에 없어 history.moves의 이름(bookmarkId, toParentId)을 따랐다 (4장 4-3)
-    await T.store.setPending([{ bookmarkId: "검증-b1", toParentId: "f1" }, { bookmarkId: "검증-b2", toParentId: "f2" }]);
-    const pm = (await T.stored()).pendingMoves || {};
-    T.expect("pendingMoves[ID] = { toParentId, at }", pm["검증-b1"]?.toParentId === "f1" && T.near(pm["검증-b1"]?.at), pm);
-    T.expect("두 번째 북마크도 저장", pm["검증-b2"]?.toParentId === "f2", pm);
-    T.expect("setPending 때 만료된 항목(1분 지남)을 지운다", !("검증-old" in pm), pm);
-    T.expect("같은 ID·같은 목적지면 true", (await T.store.isPending("검증-b1", "f1")) === true);
-    T.expect("목적지가 다르면 false", (await T.store.isPending("검증-b1", "f9")) === false);
-    T.expect("표시가 없는 ID면 false", (await T.store.isPending("검증-none", "f1")) === false);
-    await chrome.storage.local.set({ pendingMoves: { ...pm, "검증-b3": { toParentId: "f1", at: Date.now() - 61000 } } });
-    T.expect("1분이 지난 표시는 false", (await T.store.isPending("검증-b3", "f1")) === false);
-    T.expect("isPending은 표시를 지우지 않는다", "검증-b1" in ((await T.stored()).pendingMoves || {}));
-    await T.restoreStore(saved);
+    try {
+      await chrome.storage.local.set({ pendingMoves: { "검증-old": { toParentId: "f1", at: Date.now() - 61000 } } });
+      // 입력 원소는 { id, toParentId } (명세 v16 N14)
+      await T.store.setPending([{ id: "검증-b1", toParentId: "f1" }, { id: "검증-b2", toParentId: "f2" }]);
+      const pm = (await T.stored()).pendingMoves || {};
+      T.expect("pendingMoves[ID] = { toParentId, at }", pm["검증-b1"]?.toParentId === "f1" && T.near(pm["검증-b1"]?.at), pm);
+      T.expect("두 번째 북마크도 저장", pm["검증-b2"]?.toParentId === "f2", pm);
+      T.expect("setPending 때 만료된 항목(1분 지남)을 지운다", !("검증-old" in pm), pm);
+      T.expect("같은 ID·같은 목적지면 true", (await T.store.isPending("검증-b1", "f1")) === true);
+      T.expect("목적지가 다르면 false", (await T.store.isPending("검증-b1", "f9")) === false);
+      T.expect("표시가 없는 ID면 false", (await T.store.isPending("검증-none", "f1")) === false);
+      await chrome.storage.local.set({ pendingMoves: { ...pm, "검증-b3": { toParentId: "f1", at: Date.now() - 61000 } } });
+      T.expect("1분이 지난 표시는 false", (await T.store.isPending("검증-b3", "f1")) === false);
+      T.expect("isPending은 표시를 지우지 않는다", "검증-b1" in ((await T.stored()).pendingMoves || {}));
+    } finally {
+      await T.restoreStore(saved);
+    }
   })();
   ```
 - 기대 결과: `setPending`은 북마크별 목적지와 시각을 저장하고 만료된 항목을 함께 지운다. `isPending`은 1분 안에 같은 목적지로 표시된 이동만 `true`다. 표시는 지우지 않고 시간으로 만료된다. (N14, F07-05)
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N15 addHistory / markUndone: 정리 기록 · P1
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (main `049b9be`)
 - 파일·담당: store.js · 팀원 A
 - 관련 요구사항: F07-02, F13-03
 - 안전 등급: 저장 항목을 바꿈 (끝에 되돌림)
@@ -681,23 +710,26 @@ await (async () => {
   await (async () => {
     T.begin("C-N15");
     const saved = await T.saveStore();
-    await chrome.storage.local.remove("history");
-    const entry = { id: "검증-h1", at: Date.now(), type: "first", createdFolderIds: ["f1"], moves: [{ bookmarkId: "b1", title: "가", fromParentId: "1", fromIndex: 0, toParentId: "f1" }], fromOrder: { 1: ["b1"] }, skipped: 0 };
-    await T.store.addHistory(entry);
-    let h = (await T.stored()).history || [];
-    T.expect("history에 한 건 추가", h.length === 1 && h[0].id === "검증-h1", h);
-    T.expect("넣은 내용이 그대로 저장", T.same({ ...h[0], undoneAt: undefined }, { ...entry, undoneAt: undefined }), h[0]);
-    await T.store.markUndone("검증-h1");
-    h = (await T.stored()).history || [];
-    T.expect("F13-03 되돌린 시각(undoneAt)", T.near(h[0]?.undoneAt), h[0]);
-    await T.restoreStore(saved);
+    try {
+      await chrome.storage.local.remove("history");
+      const entry = { id: "검증-h1", at: Date.now(), type: "first", createdFolderIds: ["f1"], moves: [{ bookmarkId: "b1", title: "가", fromParentId: "1", fromIndex: 0, toParentId: "f1" }], fromOrder: { 1: ["b1"] }, skipped: 0 };
+      await T.store.addHistory(entry);
+      let h = (await T.stored()).history || [];
+      T.expect("history에 한 건 추가", h.length === 1 && h[0].id === "검증-h1", h);
+      T.expect("넣은 내용이 그대로 저장", T.same({ ...h[0], undoneAt: undefined }, { ...entry, undoneAt: undefined }), h[0]);
+      await T.store.markUndone("검증-h1");
+      h = (await T.stored()).history || [];
+      T.expect("F13-03 되돌린 시각(undoneAt)", T.near(h[0]?.undoneAt), h[0]);
+    } finally {
+      await T.restoreStore(saved);
+    }
   })();
   ```
 - 기대 결과: `history`에 기록 한 건을 더하고, `markUndone`은 그 기록에 `undoneAt`(되돌린 시각)을 적는다. (N15)
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N16 cleanupMissing: 사라진 북마크 ID 정리 · P1
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (main `049b9be`)
 - 파일·담당: store.js · 팀원 A
 - 관련 요구사항: F01-06
 - 안전 등급: 저장 항목을 바꿈 (끝에 되돌림)
@@ -708,22 +740,25 @@ await (async () => {
   await (async () => {
     T.begin("C-N16");
     const saved = await T.saveStore();
-    const real = (await T.flat())[0].id;
-    const t = Date.now();
-    const hist = [{ id: "검증-h", at: t, type: "first", createdFolderIds: [], moves: [{ bookmarkId: "검증-x5", title: "가", fromParentId: "1", fromIndex: 0, toParentId: "2" }], fromOrder: {}, skipped: 0 }];
-    await chrome.storage.local.set({
-      pinned: [real, "검증-x1"], lastOpenedByUs: { [real]: t, "검증-x2": t }, dismissed: { "검증-x3": t }, handledNew: ["검증-x4"],
-      history: hist, manualMoves: { "검증-x6": t }, newBookmarks: ["검증-x7"],
-    });
-    const n = await T.store.cleanupMissing(await T.tree());
-    const s = await T.stored();
-    T.expect("지운 개수 4를 돌려준다", n === 4, n);
-    T.expect("pinned에서 없는 ID만 지웠다", T.same(s.pinned, [real]), s.pinned);
-    T.expect("lastOpenedByUs에서 없는 ID만 지웠다", T.same(Object.keys(s.lastOpenedByUs || {}), [real]), s.lastOpenedByUs);
-    T.expect("dismissed, handledNew에서 지웠다", T.same(s.dismissed, {}) && T.same(s.handledNew, []), { d: s.dismissed, h: s.handledNew });
-    T.expect("history는 지우지 않는다", T.same(s.history, hist), s.history);
-    T.expect("서비스 워커가 쓰는 키(manualMoves, newBookmarks)는 건드리지 않는다", T.same(s.manualMoves, { "검증-x6": t }) && T.same(s.newBookmarks, ["검증-x7"]), { m: s.manualMoves, n: s.newBookmarks });
-    await T.restoreStore(saved);
+    try {
+      const real = (await T.flat())[0].id;
+      const t = Date.now();
+      const hist = [{ id: "검증-h", at: t, type: "first", createdFolderIds: [], moves: [{ bookmarkId: "검증-x5", title: "가", fromParentId: "1", fromIndex: 0, toParentId: "2" }], fromOrder: {}, skipped: 0 }];
+      await chrome.storage.local.set({
+        pinned: [real, "검증-x1"], lastOpenedByUs: { [real]: t, "검증-x2": t }, dismissed: { "검증-x3": t }, handledNew: ["검증-x4"],
+        history: hist, manualMoves: { "검증-x6": t }, newBookmarks: ["검증-x7"],
+      });
+      const n = await T.store.cleanupMissing(await T.tree());
+      const s = await T.stored();
+      T.expect("지운 개수 4를 돌려준다", n === 4, n);
+      T.expect("pinned에서 없는 ID만 지웠다", T.same(s.pinned, [real]), s.pinned);
+      T.expect("lastOpenedByUs에서 없는 ID만 지웠다", T.same(Object.keys(s.lastOpenedByUs || {}), [real]), s.lastOpenedByUs);
+      T.expect("dismissed, handledNew에서 지웠다", T.same(s.dismissed, {}) && T.same(s.handledNew, []), { d: s.dismissed, h: s.handledNew });
+      T.expect("history는 지우지 않는다", T.same(s.history, hist), s.history);
+      T.expect("서비스 워커가 쓰는 키(manualMoves, newBookmarks)는 건드리지 않는다", T.same(s.manualMoves, { "검증-x6": t }) && T.same(s.newBookmarks, ["검증-x7"]), { m: s.manualMoves, n: s.newBookmarks });
+    } finally {
+      await T.restoreStore(saved);
+    }
   })();
   ```
 - 기대 결과: 크롬에 없는 북마크 ID를 새 탭이 쓰는 항목(`pinned`, `lastOpenedByUs`, `dismissed`, `handledNew`)에서만 지우고 지운 개수를 돌려준다. `history`와 서비스 워커의 키는 그대로다. (N16, F01-06)
@@ -1097,13 +1132,16 @@ await (async () => {
     T.expect("F07-04 정리로 비게 된 기존 폴더를 지우지 않는다", await T.exists(empty.id));
     // P2: 새 북마크 정리에서 '그대로 두기'로 둔 북마크는 handledNew에 기록 (keep의 원소 형태는 4장 4-3)
     const saved = await T.saveStore();
-    const stay = await T.mk("그대로 둘 새 북마크");
-    const move = await T.mk("옮길 새 북마크");
-    const e2 = await T.organize.applyPlan({ folders: [{ folderId: exist.id, items: [move] }], keep: [stay.id] }, "new");
-    T.expect("F10-05 type은 new", e2?.type === "new", e2?.type);
-    T.expect("F10-05 folderId로 준 폴더로 옮긴다", (await chrome.bookmarks.get(move.id))[0].parentId === exist.id);
-    T.expect("F10-05 '그대로 두기'는 handledNew에 기록", ((await T.stored()).handledNew || []).includes(stay.id), (await T.stored()).handledNew);
-    await T.restoreStore({ ...(await T.stored()), handledNew: saved.handledNew ?? [] });
+    try {
+      const stay = await T.mk("그대로 둘 새 북마크");
+      const move = await T.mk("옮길 새 북마크");
+      const e2 = await T.organize.applyPlan({ folders: [{ folderId: exist.id, items: [move] }], keep: [stay.id] }, "new");
+      T.expect("F10-05 type은 new", e2?.type === "new", e2?.type);
+      T.expect("F10-05 folderId로 준 폴더로 옮긴다", (await chrome.bookmarks.get(move.id))[0].parentId === exist.id);
+      T.expect("F10-05 '그대로 두기'는 handledNew에 기록", ((await T.stored()).handledNew || []).includes(stay.id), (await T.stored()).handledNew);
+    } finally {
+      await T.restoreStore({ ...(await T.stored()), handledNew: saved.handledNew ?? [] });
+    }
   })();
   ```
 - 기대 결과: 북마크바에 같은 이름의 폴더가 있으면 새로 만들지 않고 그 폴더를 쓴다(F07-08). 옮기기 전에 지워진 북마크는 건너뛰고 옮긴 것만 기록하며, 건너뛴 개수를 `skipped`에 담는다(F07-09). 정리로 비게 된 기존 폴더는 지우지 않는다(F07-04). `"new"` 정리에서 '그대로 두기'로 둔 북마크는 `handledNew`에 기록한다(N22, F10-05).
@@ -1516,7 +1554,7 @@ await (async () => {
     await T.wait(1500);
     await chrome.bookmarks.move(a.id, { parentId: f.id });
     await chrome.bookmarks.move(b.id, { parentId: bar.id, index: 0 });
-    await T.store.setPending([{ bookmarkId: p.id, toParentId: f.id }]);
+    await T.store.setPending([{ id: p.id, toParentId: f.id }]);
     await chrome.bookmarks.move(p.id, { parentId: f.id });
     const pm = (await T.stored()).pendingMoves || {};
     await chrome.storage.local.set({ pendingMoves: { ...pm, [e.id]: { toParentId: f.id, at: Date.now() - 61000 } } });
@@ -1649,7 +1687,7 @@ await (async () => {
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N38 setFirstCard: 첫 정리 카드 상태 · P1
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (main `049b9be`)
 - 파일·담당: store.js · 팀원 A
 - 관련 요구사항: F06-01, F06-06
 - 안전 등급: 저장 항목을 바꿈 (끝에 되돌림)
@@ -1660,12 +1698,15 @@ await (async () => {
   await (async () => {
     T.begin("C-N38");
     const saved = await T.saveStore();
-    for (const v of ["later", "done", "pending"]) {
-      await T.store.setFirstCard(v);
-      T.expect(`state.firstCard === "${v}"`, (await T.stored()).state?.firstCard === v, (await T.stored()).state);
+    try {
+      for (const v of ["later", "done", "pending"]) {
+        await T.store.setFirstCard(v);
+        T.expect(`state.firstCard === "${v}"`, (await T.stored()).state?.firstCard === v, (await T.stored()).state);
+      }
+      T.record("정해진 세 값이 아닌 값을 넣었을 때(명세에 없다)", await T.throws(() => T.store.setFirstCard("zzz")) ? "오류" : (await T.stored()).state);
+    } finally {
+      await T.restoreStore(saved);
     }
-    T.record("정해진 세 값이 아닌 값을 넣었을 때(명세에 없다)", await T.throws(() => T.store.setFirstCard("zzz")) ? "오류" : (await T.stored()).state);
-    await T.restoreStore(saved);
   })();
   ```
 - 기대 결과: `state`에 `{ firstCard: "pending" | "done" | "later" }`를 저장한다. (N38)
@@ -1683,44 +1724,61 @@ await (async () => {
   await (async () => {
     T.begin("C-N39");
     const saved = await T.saveStore();
-    await chrome.storage.local.remove("handledNew");
-    await T.store.markHandledNew(["검증-a", "검증-b"]);
-    T.expect("handledNew에 ID 배열을 더한다", T.same(((await T.stored()).handledNew || []).slice().sort(), ["검증-a", "검증-b"]), (await T.stored()).handledNew);
-    await T.store.markHandledNew(["검증-b", "검증-c"]);
-    const h = (await T.stored()).handledNew || [];
-    T.expect("앞의 기록을 지우지 않고 더한다", ["검증-a", "검증-b", "검증-c"].every((x) => h.includes(x)), h);
-    T.record("같은 ID를 두 번 넣었을 때 중복 여부(명세에 없다)", h.filter((x) => x === "검증-b").length);
-    await T.restoreStore(saved);
+    try {
+      await chrome.storage.local.remove("handledNew");
+      await T.store.markHandledNew(["검증-a", "검증-b"]);
+      T.expect("handledNew에 ID 배열을 더한다", T.same(((await T.stored()).handledNew || []).slice().sort(), ["검증-a", "검증-b"]), (await T.stored()).handledNew);
+      await T.store.markHandledNew(["검증-b", "검증-c"]);
+      const h = (await T.stored()).handledNew || [];
+      T.expect("앞의 기록을 지우지 않고 더한다", ["검증-a", "검증-b", "검증-c"].every((x) => h.includes(x)), h);
+      T.record("같은 ID를 두 번 넣었을 때 중복 여부(명세에 없다)", h.filter((x) => x === "검증-b").length);
+    } finally {
+      await T.restoreStore(saved);
+    }
   })();
   ```
 - 기대 결과: '그대로 두기'로 둔 새 북마크 ID를 `handledNew`에 기록한다. "새로" 표시와 버튼 개수는 `newBookmarks`에서 `handledNew`를 뺀 것이다. (N39, '참고_저장 항목')
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N40 addNew / removeNew / purgeWorkerKeys: 서비스 워커의 저장 항목 · P1·P2
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (main `049b9be`)
 - 파일·담당: store.js · 팀원 A
 - 관련 요구사항: F10-01, F10-08, F01-06
-- 안전 등급: 저장 항목을 바꿈 (끝에 되돌림)
-- 사전 조건: 2장 실행. 서비스 워커만 부르는 함수지만, 서비스 워커 콘솔에서는 `import()`가 막혀 있어 확인할 때만 새 탭 콘솔에서 부른다.
+- 안전 등급: ⚠ 크롬 북마크를 바꿈 (임시 북마크)
+- 사전 조건: 2장 실행. 서비스 워커만 부르는 함수라(`store.js` 주석) 새 탭에서 부르면 "서비스 워커만 쓴다" 오류가 난다. 그래서 함수를 직접 부르지 않고, C-N32~C-N34처럼 새 탭 콘솔에서 북마크를 만들고·옮기고·지운 뒤 `newBookmarks`·`manualMoves`를 본다. `background.js`의 N32~N34가 구현돼 있어야 의미가 있다.
 - 붙여 넣을 코드:
   ```js
   // C-N40
   await (async () => {
     T.begin("C-N40");
-    const saved = await T.saveStore();
-    await chrome.storage.local.set({ newBookmarks: [], manualMoves: {} });
-    await T.store.addNew("검증-n1");
-    await T.store.addNew("검증-n2");
-    T.expect("addNew: newBookmarks에 추가", T.same((await T.stored()).newBookmarks, ["검증-n1", "검증-n2"]), (await T.stored()).newBookmarks);
-    await T.store.removeNew("검증-n1");
-    T.expect("removeNew: newBookmarks에서 제거", T.same((await T.stored()).newBookmarks, ["검증-n2"]), (await T.stored()).newBookmarks);
-    await chrome.storage.local.set({ newBookmarks: ["검증-n2", "검증-keep"], manualMoves: { "검증-m1": 1, "검증-mkeep": 2 } });
-    await T.store.purgeWorkerKeys(["검증-n2", "검증-m1"]);
-    const s = await T.stored();
-    T.expect("purgeWorkerKeys: 두 항목에서 그 ID만 지운다", T.same(s.newBookmarks, ["검증-keep"]) && T.same(s.manualMoves, { "검증-mkeep": 2 }), s);
-    await T.restoreStore(saved);
+    T.before = await T.snap();
+    const f = await T.mkFolder("워커 항목 폴더");
+    const n1 = await T.mk("새 북마크1");     // 옮긴다 → removeNew
+    const n2 = await T.mk("새 북마크2");     // 지운다 → purgeWorkerKeys(newBookmarks)
+    const keep = await T.mk("남길 새 북마크");
+    await T.wait(1500);
+    let nb = (await T.stored()).newBookmarks || [];
+    T.expect("addNew: 북마크바에 만든 북마크가 newBookmarks에 들어간다", [n1, n2, keep].every((b) => nb.includes(b.id)), nb);
+    T.expect("addNew: 같은 ID는 한 번만 들어간다", [n1, n2, keep].every((b) => nb.filter((id) => id === b.id).length === 1), nb);
+    await chrome.bookmarks.move(n1.id, { parentId: f.id });
+    await T.wait(1500);
+    let s = await T.stored();
+    T.expect("removeNew: 다른 폴더로 옮긴 북마크는 newBookmarks에서 빠진다", !(s.newBookmarks || []).includes(n1.id), s.newBookmarks);
+    T.expect("(옮긴 북마크는 manualMoves에 들어간다)", n1.id in (s.manualMoves || {}), s.manualMoves);
+    const m2 = await T.mk("직접 옮겨 남길 북마크", undefined, f.id);
+    await T.wait(1500);
+    await chrome.bookmarks.move(m2.id, { parentId: (await T.bar()).id });
+    await T.wait(1500);
+    await chrome.bookmarks.remove(n1.id);
+    await chrome.bookmarks.remove(n2.id);
+    await T.wait(1500);
+    s = await T.stored();
+    T.expect("purgeWorkerKeys: 지운 ID가 manualMoves에서 빠진다", !(n1.id in (s.manualMoves || {})), s.manualMoves);
+    T.expect("purgeWorkerKeys: 지운 ID가 newBookmarks에서 빠진다", !(s.newBookmarks || []).includes(n2.id), s.newBookmarks);
+    T.expect("purgeWorkerKeys: 지우지 않은 ID는 그대로다", (s.newBookmarks || []).includes(keep.id) && m2.id in (s.manualMoves || {}), s);
   })();
   ```
+- 되돌리는 법: `await T.cleanup()`
 - 기대 결과: `addNew`·`removeNew`는 `newBookmarks`에 추가·제거하고, `purgeWorkerKeys`는 삭제된 북마크 ID를 서비스 워커가 쓰는 두 항목(`newBookmarks`, `manualMoves`)에서 지운다. (N40)
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
@@ -1803,7 +1861,8 @@ await (async () => {
   // C-N43
   await (async () => {
     T.begin("C-N43");
-    const saved = await T.saveStore();
+    // 눈으로 확인하는 동안 되돌리지 않는다. 중간에 오류가 나도 되돌릴 수 있게 먼저 T에 둔다
+    T.savedN43 = await T.saveStore();
     const now = Date.now();
     const mv = (i) => ({ bookmarkId: "b" + i, title: "가짜 북마크 " + i, fromParentId: "1", fromIndex: i, toParentId: "f1" });
     const entry = { id: "검증-h1", at: now, type: "first", createdFolderIds: ["f1", "f2"], moves: [0, 1, 2, 3, 4].map(mv), fromOrder: {}, skipped: 0 };
@@ -1825,7 +1884,6 @@ await (async () => {
     T.expect("F13-01 종류(첫 정리, 새 북마크 정리)가 보인다", !!dlg && dlg.textContent.includes("첫 정리") && dlg.textContent.includes("새 북마크 정리"), dlg?.textContent.slice(0, 200));
     T.expect("F13-09 이미 되돌린 내역은 \"되돌림\"", !!dlg && dlg.textContent.includes("되돌림"), dlg?.textContent.slice(0, 200));
     console.log("눈으로 확인을 마친 뒤 T.restoreStore(T.savedN43)로 저장 항목을 되돌린다");
-    T.savedN43 = saved;
   })();
   ```
 - 눈으로 확인:
@@ -1928,6 +1986,8 @@ await (async () => {
 
 export는 모두 있지만(자동 검사가 확인한다), 몸체가 비어 있거나 빈 값만 돌려준다. `store.js`의 `load()`는 기본값 객체를 돌려주지만 `chrome.storage`를 읽지 않으므로 뼈대로 본다.
 
+2026-10-30 `main` `049b9be`: `bookmarks.js`·`store.js`가 합쳐져 N01~N03, N05~N10, N12~N16, N38, N40이 구현됐다. 이 두 파일에서 아직 뼈대인 것은 N04 `renameFolder`, N11 `pin`·`unpin`, N39 `markHandledNew`다. 아래 표는 작성 시점(`309b583`) 그대로 둔다.
+
 | N | 함수 | 파일 | 담당 | 이슈 |
 |---|---|---|---|---|
 | N01 | loadTree | bookmarks.js | 팀원 A | #2 |
@@ -1985,7 +2045,7 @@ export는 모두 있지만(자동 검사가 확인한다), 몸체가 비어 있�
 
 | N | 코드 (`main` `309b583`) | 명세 (v15) |
 |---|---|---|
-| N07 `hasFavicon(url)` | 주석: "받은 그림이 기본 그림과 다른지(파비콘이 있는지)", 뼈대가 `false`를 돌려줌 | 출력: 쓸 파비콘 주소 또는 `null` (v15에서 바뀜). 이슈 #2는 아직 v13의 `true·false`다 |
+| N07 `hasFavicon(url)` | `309b583`: 뼈대가 `false`를 돌려줌 → `049b9be`: 쓸 파비콘 주소 또는 `null` (명세와 같아졌다) | 출력: 쓸 파비콘 주소 또는 `null` (v15에서 바뀜). 이슈 #2는 아직 v13의 `true·false`다 |
 
 ### 4-3. 명세에 형태가 정해지지 않아 이 문서가 고른 것
 
@@ -1993,8 +2053,8 @@ export는 모두 있지만(자동 검사가 확인한다), 몸체가 비어 있�
 
 | N | 정해지지 않은 것 | 이 문서가 넣은 것 | 항목 |
 |---|---|---|---|
-| N01 | 북마크에 붙이는 "들어 있는 폴더와 최상위 폴더 종류"의 필드 이름 | 기록만 한다 | C-N01 |
-| N14 | `setPending(moves)` 원소의 키 이름 (`[{북마크ID, 목적지 폴더}]`) | `{ bookmarkId, toParentId }` (`history.moves`의 이름) | C-N14, C-N33 |
+| N01 | 북마크에 붙이는 "들어 있는 폴더와 최상위 폴더 종류"의 필드 이름 | 기록만 한다. `main` `049b9be`의 코드는 `folderTitle`, `path`, `rootType`, `rootId`, `rootChosen` | C-N01 |
+| N14 | `setPending(moves)` 원소의 키 이름 (`[{북마크ID, 목적지 폴더}]`) | 명세 v16에서 `{ id, toParentId }`로 정해졌다(`store.js`와 같다). 처음에는 `history.moves`의 이름(`bookmarkId`)을 넣었다. `history.moves` 안의 `bookmarkId`는 그대로다 | C-N14, C-N33 |
 | N18 | `measure(samples, answers, …)`의 samples와 answers 형태 | 둘 다 `answer-key-100.json` 배열 | C-N18 |
 | N19 | options `{북마크바 제외, 포함할 사용자 폴더}`의 키 이름 | `{}`(기본값)만 확인 | C-N19 |
 | N20 | `rest`가 배열인지 개수인지, `reasons`의 형태 | 둘 다 받게 썼다 / 기록만 | C-N20 |
