@@ -1,1 +1,995 @@
-/* 담당: 팀원 D · 이슈 #14 · 명세: F12 (화면 배치 · 반응형) */
+/* =========================================================================
+   newtab.css — 새 탭 화면의 공통 값과 공통 모양 (담당: 팀원 D · 이슈 #14 · 명세: F12)
+   -------------------------------------------------------------------------
+   핵심 정책
+   - 외부 파일(CDN, 웹 글꼴)을 불러오지 않는다.
+   - 공통 값(색, 간격, 글자 크기, 둥글기)과 공통 모양(팝업 틀, 버튼, 목록 줄)은
+     이 파일에만 둔다. 다른 담당은 이 값을 쓰고, 필요한 모양이 없으면 팀원 D에게 부탁한다.
+   - 모양은 확정 시안(docs/design/App.tsx), 동작은 명세(docs/spec.xlsx F12)를 따른다.
+   - 가로 스크롤을 만들지 않는다. 최소 너비는 480px이다 (F12-02).
+   - 칸 안의 내용(폴더·북마크·목록)은 담당 .js가 채운다. 이 파일은 칸의 자리·공통 모양만 둔다.
+
+   공통 모양 이름(클래스) 정리 — 다른 담당이 자기 칸을 그릴 때 쓴다
+   - .card                : 카드 틀(둥근 모서리 + 흐린 배경)
+   - .surface             : 반투명 유리 느낌 표면
+   - .btn                 : 버튼 기본 모양
+   - .btn--primary        : 강조 버튼 (보라색)
+   - .btn--ghost          : 테두리 없는 버튼
+   - .btn--icon           : 아이콘 전용 둥근 버튼
+   - .btn--pill           : 알약 모양 버튼
+   - .list                : 목록(세로 쌓기)
+   - .list__row           : 목록 줄 하나
+   - .list__badge         : 목록 줄 왼쪽의 글자 뱃지
+   - .list__text          : 목록 줄 가운데 글자 묶음 (.title, .meta)
+   - .dialog              : 팝업 틀 (<dialog> 요소에 쓰는 공통 모양)
+   - .dialog__panel       : 팝업 안쪽 패널
+   - .dialog__header      : 팝업 머리말(제목 + 닫기)
+   - .dialog__title       : 팝업 제목
+   - .dialog__subtitle    : 팝업 부제목
+   - .dialog__body        : 팝업 본문
+   - .section-head        : 구역 제목 묶음 (.title, .desc)
+   - .folder / .folder__thumb / .folder__name / .folder__count : 폴더 타일 (folders.js)
+   - .bookmark / .bookmark__icon / .bookmark__name / .bookmark__url : 앱(북마크) 타일
+   - .badge-count         : 숫자 뱃지 (예: 정리하기 · 3)
+   - .icon / .icon--sm    : SVG 아이콘 크기
+   - .hidden              : 숨김
+   ========================================================================= */
+
+/* -------------------------------------------------------------------------
+   공통 값 — 색, 간격, 글자 크기, 둥글기 (CSS 변수)
+   ------------------------------------------------------------------------- */
+:root {
+  /* 색 */
+  --color-bg: #f6f5f1;
+  --color-surface: rgba(255, 255, 255, 0.65);
+  --color-surface-strong: #ffffff;
+  --color-border: rgba(255, 255, 255, 0.8);
+  --color-text: #1e293b;        /* slate-800 */
+  --color-text-strong: #0f172a; /* slate-900 */
+  --color-text-muted: #94a3b8;  /* slate-400 */
+  --color-text-faint: #64748b;  /* slate-500 */
+  --color-primary: #7c3aed;         /* violet-600 */
+  --color-primary-strong: #6d28d9;  /* violet-700 */
+  --color-primary-soft: #ede9fe;    /* violet-100 */
+  --color-primary-text: #6d28d9;
+  --color-accent-amber: #fbbf24;    /* amber-400 */
+  --color-accent-amber-soft: #fffbeb;
+  --color-dark: #0f172a;
+  --color-success: #10b981;         /* emerald-500 */
+  --color-shadow: rgba(15, 23, 42, 0.1);
+
+  /* 간격 */
+  --space-1: 4px;
+  --space-2: 8px;
+  --space-3: 12px;
+  --space-4: 16px;
+  --space-5: 20px;
+  --space-6: 24px;
+  --space-8: 32px;
+  --space-10: 40px;
+  --space-14: 56px;
+
+  /* 글자 크기 */
+  --font-xs: 11px;
+  --font-sm: 13px;
+  --font-base: 15px;
+  --font-md: 18px;
+  --font-lg: 24px;
+  --font-xl: 32px;
+  --font-2xl: 40px;
+
+  /* 글자 두께 */
+  --weight-medium: 500;
+  --weight-bold: 700;
+  --weight-black: 800;
+
+  /* 둥글기 */
+  --radius-sm: 8px;
+  --radius-md: 12px;
+  --radius-lg: 16px;
+  --radius-xl: 24px;
+  --radius-2xl: 32px;
+  --radius-full: 9999px;
+
+  /* 그림자 */
+  --shadow-sm: 0 1px 2px rgba(15, 23, 42, 0.08);
+  --shadow-md: 0 8px 24px rgba(15, 23, 42, 0.1);
+  --shadow-lg: 0 18px 40px rgba(15, 23, 42, 0.15);
+
+  /* 레이아웃 */
+  --layout-max: 1152px;   /* 본문 최대 너비 (max-w-6xl) */
+  --layout-min: 480px;    /* 최소 너비 (F12-02) */
+
+  color-scheme: light;
+  /* 웹 글꼴을 불러오지 않고 시스템 글꼴만 쓴다 */
+  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+    "Noto Sans KR", "Malgun Gothic", sans-serif;
+}
+
+/* -------------------------------------------------------------------------
+   밑바탕
+   ------------------------------------------------------------------------- */
+* {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  min-width: var(--layout-min);
+  min-height: 100vh;
+  background-color: var(--color-bg);
+  color: var(--color-text);
+  font-size: var(--font-base);
+  line-height: 1.5;
+  /* 가로 스크롤 금지 (F12-02) */
+  overflow-x: hidden;
+}
+
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+:focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* 뼈대 확인용 문구. render.js가 화면을 그리기 시작하면 지운다 */
+#skeleton-note {
+  position: relative;
+  z-index: 1;
+  margin: 0;
+  padding: var(--space-6);
+  text-align: center;
+  font-size: var(--font-sm);
+  color: var(--color-text-faint);
+}
+
+/* 배경 장식 (은은한 번짐) */
+.bg-decor {
+  position: fixed;
+  inset: 0;
+  z-index: 0;
+  overflow: hidden;
+  pointer-events: none;
+}
+
+.bg-decor span {
+  position: absolute;
+  border-radius: var(--radius-full);
+  filter: blur(80px);
+}
+
+.bg-decor span:nth-child(1) {
+  left: -8rem;
+  top: -10rem;
+  width: 34rem;
+  height: 34rem;
+  background: rgba(253, 230, 138, 0.3);
+}
+
+.bg-decor span:nth-child(2) {
+  right: -10rem;
+  top: 6rem;
+  width: 36rem;
+  height: 36rem;
+  background: rgba(221, 214, 254, 0.35);
+}
+
+.bg-decor span:nth-child(3) {
+  bottom: 0;
+  left: 33%;
+  width: 24rem;
+  height: 24rem;
+  background: rgba(224, 242, 254, 0.5);
+}
+
+/* =========================================================================
+   공통 모양 — 표면 / 카드
+   ========================================================================= */
+.surface {
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  backdrop-filter: blur(10px);
+}
+
+.card {
+  border-radius: var(--radius-2xl);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(10px);
+  padding: var(--space-6);
+}
+
+/* =========================================================================
+   공통 모양 — 버튼 (.btn)
+   ========================================================================= */
+.btn {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  gap: var(--space-2);
+  border: 0;
+  border-radius: var(--radius-md);
+  padding: 10px var(--space-4);
+  font: inherit;
+  font-size: var(--font-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
+  background: var(--color-surface-strong);
+  box-shadow: var(--shadow-sm);
+  cursor: pointer;
+  transition:
+    transform 0.2s ease,
+    box-shadow 0.2s ease,
+    background 0.2s ease,
+    color 0.2s ease;
+}
+
+.btn:hover {
+  box-shadow: var(--shadow-md);
+}
+
+.btn:active {
+  transform: scale(0.98);
+}
+
+.btn--primary {
+  background: var(--color-primary);
+  color: #ffffff;
+  box-shadow: var(--shadow-md);
+}
+
+.btn--primary:hover {
+  background: var(--color-primary-strong);
+}
+
+.btn--ghost {
+  background: transparent;
+  box-shadow: none;
+  color: var(--color-text-muted);
+}
+
+.btn--ghost:hover {
+  background: var(--color-surface-strong);
+  box-shadow: none;
+}
+
+.btn--icon {
+  padding: var(--space-3);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  color: var(--color-text-faint);
+}
+
+.btn--icon:hover {
+  background: var(--color-surface-strong);
+  color: var(--color-text-strong);
+}
+
+.btn--pill {
+  border-radius: var(--radius-full);
+  background: var(--color-surface-strong);
+}
+
+/* =========================================================================
+   공통 모양 — 목록 (.list / .list__row)
+   ========================================================================= */
+.list {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-2);
+}
+
+.list__row {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  width: 100%;
+  padding: var(--space-3);
+  border: 1px solid rgba(226, 232, 240, 0.9); /* slate-100 */
+  border-radius: var(--radius-lg);
+  background: transparent;
+  text-align: left;
+  cursor: pointer;
+  transition: background 0.15s ease, border-color 0.15s ease;
+}
+
+.list__row:hover {
+  background: #f8fafc; /* slate-50 */
+}
+
+.list__badge {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 44px;
+  height: 44px;
+  border-radius: var(--radius-md);
+  color: #ffffff;
+  font-weight: var(--weight-black);
+}
+
+.list__text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+.list__text .title {
+  display: block;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: var(--font-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
+}
+
+.list__text .meta {
+  display: block;
+  margin-top: 2px;
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+/* =========================================================================
+   공통 모양 — 팝업 틀 (<dialog> + .dialog)
+   ========================================================================= */
+.dialog {
+  width: min(640px, calc(100vw - var(--space-8)));
+  max-height: 85vh;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-2xl);
+  background: var(--color-surface-strong);
+  box-shadow: var(--shadow-lg);
+  overflow: hidden;
+}
+
+.dialog::backdrop {
+  background: rgba(2, 6, 23, 0.35);
+  backdrop-filter: blur(4px);
+}
+
+.dialog__panel {
+  max-height: 85vh;
+  overflow: auto;
+  padding: var(--space-6);
+}
+
+.dialog__header {
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: var(--space-4);
+}
+
+.dialog__title {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-md);
+  font-weight: var(--weight-black);
+  color: var(--color-text-strong);
+}
+
+.dialog__subtitle {
+  margin-top: var(--space-2);
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}
+
+.dialog__body {
+  margin-top: var(--space-6);
+}
+
+/* =========================================================================
+   화면 뼈대 — 칸 11개의 자리와 배치
+   #header #web-search #organize-suggestion #my-folders #forgotten-slot
+   #folder-list #all-bookmarks #dock #notice #toast #dialogs
+   ========================================================================= */
+.app {
+  position: relative;
+  z-index: 1;
+  min-height: 100vh;
+}
+
+/* #header — 상단 바 (스크롤해도 위에 고정) */
+#header {
+  position: sticky;
+  top: 0;
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: var(--space-4);
+  width: 100%;
+  max-width: var(--layout-max);
+  margin: 0 auto;
+  padding: var(--space-4) var(--space-6);
+}
+
+/* 헤더 안의 로고·버튼 모양 (render.js가 내용을 채운다) */
+#header .brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+}
+
+#header .brand__logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 40px;
+  height: 40px;
+  border-radius: var(--radius-lg);
+  background: var(--color-dark);
+  color: #ffffff;
+}
+
+#header .brand__name {
+  font-size: var(--font-md);
+  font-weight: var(--weight-black);
+}
+
+#header .header__actions {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+}
+
+/* 본문 묶음 */
+.content {
+  position: relative;
+  z-index: 1;
+  width: 100%;
+  max-width: var(--layout-max);
+  margin: 0 auto;
+  padding: var(--space-8) var(--space-6) 144px;
+}
+
+/* #web-search — 날짜 + 웹 검색창 (인사말·음성검색은 두지 않는다. service-plan.md) */
+#web-search {
+  max-width: 640px;
+  margin: 0 auto;
+  text-align: center;
+}
+
+#web-search .date {
+  font-size: var(--font-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-strong);
+}
+
+#web-search .search-box {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-top: var(--space-8);
+  padding: var(--space-4) var(--space-5);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.85);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(16px);
+}
+
+#web-search .search-box input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: var(--font-base);
+  color: var(--color-text);
+  outline: none;
+}
+
+/* #organize-suggestion — 정리 추천 띠 (cards.js가 채운다) */
+#organize-suggestion {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+  margin-top: var(--space-6);
+  padding: var(--space-6);
+  border-radius: var(--radius-2xl);
+  border: 1px solid var(--color-primary-soft);
+  background: linear-gradient(to right, #f5f3ff, #ffffff);
+  box-shadow: var(--shadow-sm);
+}
+
+#organize-suggestion:empty {
+  display: none;
+}
+
+#organize-suggestion .suggestion__text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+#organize-suggestion .suggestion__title {
+  font-weight: var(--weight-black);
+  color: var(--color-text-strong);
+}
+
+#organize-suggestion .suggestion__desc {
+  margin-top: var(--space-1);
+  font-size: var(--font-sm);
+  color: var(--color-text-faint);
+}
+
+#organize-suggestion .suggestion__note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-1);
+  margin-top: var(--space-2);
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+/* 정리 카드 안의 로고 타일 (cards.js) */
+#organize-suggestion .brand__logo {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  flex: 0 0 auto;
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-md);
+}
+
+/* =========================================================================
+   공통 모양 — 정리하기 창 안쪽 (view/cards.js의 showOrganizeDialog)
+   ========================================================================= */
+.organize__folder {
+  border-radius: var(--radius-lg);
+  padding: var(--space-4);
+  margin-bottom: var(--space-3);
+}
+
+.organize__folder-head {
+  display: flex;
+  align-items: baseline;
+  justify-content: space-between;
+  gap: var(--space-3);
+  margin-bottom: var(--space-3);
+}
+
+/* 제목 키워드로 분류돼 사람이 확인하는 게 좋은 북마크 표시 (F06-05) */
+.organize__check {
+  flex: 0 0 auto;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-accent-amber-soft);
+  border: 1px solid rgba(252, 211, 77, 0.7);
+  color: #92400e;
+  font-size: var(--font-xs);
+  font-weight: var(--weight-bold);
+}
+
+/* "나머지 N개는 그대로" 안내 */
+.organize__rest {
+  margin-top: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid #fde68a;
+  background: var(--color-accent-amber-soft);
+  padding: var(--space-4);
+  font-size: var(--font-sm);
+  color: #92400e;
+}
+
+/* 공통 구역 제목 */
+.section-head {
+  display: flex;
+  align-items: flex-end;
+  justify-content: space-between;
+  gap: var(--space-4);
+  margin-bottom: var(--space-5);
+}
+
+.section-head .title {
+  font-size: var(--font-md);
+  font-weight: var(--weight-black);
+  color: var(--color-text-strong);
+}
+
+.section-head .desc {
+  margin-top: var(--space-1);
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}
+
+/* #my-folders — 내 폴더 */
+#my-folders {
+  margin-top: var(--space-14);
+}
+
+/* #forgotten-slot 과 #folder-list 는 한 줄로 이어져 보이게 한다 (이슈 #14) */
+.folders-row {
+  display: grid;
+  grid-template-columns: 1fr;
+  gap: var(--space-5);
+  align-items: stretch;
+}
+
+/* #folder-list — 폴더 격자 (folders.js가 채운다) */
+#folder-list {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-6) var(--space-4);
+}
+
+.folder {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.folder__thumb {
+  display: grid;
+  grid-template-columns: repeat(2, 1fr);
+  gap: var(--space-2);
+  width: 100%;
+  max-width: 128px;
+  aspect-ratio: 1 / 1;
+  padding: 14px;
+  border-radius: var(--radius-xl);
+  border: 1px solid rgba(255, 255, 255, 0.9);
+  background: rgba(255, 255, 255, 0.65);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(16px);
+}
+
+.folder__thumb span {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  aspect-ratio: 1 / 1;
+  border-radius: var(--radius-md);
+  color: #ffffff;
+  font-weight: var(--weight-black);
+  font-size: var(--font-sm);
+}
+
+.folder__name {
+  margin-top: var(--space-3);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
+}
+
+.folder__count {
+  font-size: var(--font-xs);
+  color: var(--color-text-muted);
+}
+
+/* #forgotten-slot — 잊고 있던 북마크 칸 (어두운 카드. forgottenFolder.js가 채운다) */
+#forgotten-slot {
+  position: relative;
+  overflow: hidden;
+  min-height: 144px;
+  padding: var(--space-4);
+  border-radius: var(--radius-2xl);
+  background: var(--color-dark);
+  color: #ffffff;
+  text-align: left;
+  box-shadow: var(--shadow-lg);
+  cursor: pointer;
+}
+
+#forgotten-slot:empty {
+  display: none;
+}
+
+#forgotten-slot .forgotten__title {
+  margin-top: var(--space-5);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-bold);
+}
+
+#forgotten-slot .forgotten__desc {
+  margin-top: var(--space-1);
+  font-size: var(--font-xs);
+  color: #cbd5e1;
+}
+
+/* 폴더 안의 폴더(하위 폴더)로 들어가고 돌아오는 길잡이 — 시안에 없는 보완 (folders.js가 켠다) */
+.folder-breadcrumb {
+  display: none;
+  align-items: center;
+  gap: var(--space-2);
+  margin-bottom: var(--space-4);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-faint);
+}
+
+.folder-breadcrumb.is-visible {
+  display: flex;
+}
+
+.folder-breadcrumb .back {
+  display: inline-flex;
+  align-items: center;
+  gap: var(--space-1);
+}
+
+/* #all-bookmarks — 모든 북마크 (render.js + search.js가 채운다) */
+#all-bookmarks {
+  margin-top: var(--space-10);
+}
+
+#all-bookmarks .bookmark-search {
+  display: flex;
+  align-items: center;
+  gap: var(--space-3);
+  margin-bottom: var(--space-6);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-sm);
+}
+
+#all-bookmarks .bookmark-search input {
+  flex: 1 1 auto;
+  min-width: 0;
+  border: 0;
+  background: transparent;
+  font: inherit;
+  font-size: var(--font-sm);
+  outline: none;
+}
+
+#all-bookmarks .bookmark-grid {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-6) var(--space-3);
+}
+
+.bookmark {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-2);
+  border-radius: var(--radius-lg);
+  background: transparent;
+  border: 0;
+  cursor: pointer;
+  min-width: 0;
+}
+
+.bookmark:hover {
+  background: rgba(255, 255, 255, 0.7);
+}
+
+.bookmark__icon {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 56px;
+  height: 56px;
+  border-radius: var(--radius-lg);
+  color: #ffffff;
+  font-weight: var(--weight-black);
+  font-size: var(--font-md);
+  box-shadow: var(--shadow-sm);
+}
+
+.bookmark__name {
+  width: 100%;
+  text-align: center;
+  font-size: var(--font-xs);
+  font-weight: var(--weight-bold);
+  color: var(--color-text);
+  line-height: 1.3;
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.bookmark__url {
+  width: 100%;
+  text-align: center;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  font-size: 10px;
+  color: var(--color-text-muted);
+}
+
+/* #dock — 화면 아래 고정 바 (render.js가 채운다. 맨 아래에서 띄워 크롬 띠 56px를 피한다) */
+#dock {
+  position: fixed;
+  bottom: var(--space-5);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 20;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  max-width: calc(100vw - var(--space-8));
+  padding: 10px;
+  border-radius: var(--radius-2xl);
+  background: rgba(255, 255, 255, 0.75);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-lg);
+  backdrop-filter: blur(16px);
+  overflow-x: auto;
+}
+
+#dock:empty {
+  display: none;
+}
+
+#dock .dock__item {
+  flex: 0 0 auto;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 48px;
+  height: 48px;
+  border-radius: var(--radius-lg);
+  color: #ffffff;
+  font-weight: var(--weight-black);
+  border: 0;
+  cursor: pointer;
+  box-shadow: var(--shadow-sm);
+}
+
+#dock .dock__divider {
+  flex: 0 0 auto;
+  width: 1px;
+  height: 32px;
+  margin: 0 var(--space-1);
+  background: #e2e8f0;
+}
+
+/* #notice — 정리 결과 안내 (history.js가 채운다) */
+#notice {
+  position: fixed;
+  top: var(--space-6);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 40;
+  width: min(768px, calc(100vw - var(--space-8)));
+}
+
+#notice:empty {
+  display: none;
+}
+
+#notice .notice__bar {
+  display: flex;
+  align-items: center;
+  gap: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  border: 1px solid rgba(252, 211, 77, 0.7);
+  background: rgba(254, 252, 232, 0.95);
+  box-shadow: var(--shadow-md);
+}
+
+#notice .notice__text {
+  min-width: 0;
+  flex: 1 1 auto;
+}
+
+#notice .notice__title {
+  font-size: var(--font-sm);
+  font-weight: var(--weight-black);
+  color: var(--color-text);
+}
+
+#notice .notice__desc {
+  margin-top: 2px;
+  font-size: var(--font-xs);
+  color: var(--color-text-faint);
+}
+
+/* #toast — 짧은 안내 거품 (ui.js가 채우고 .is-visible로 켠다) */
+#toast {
+  position: fixed;
+  top: var(--space-6);
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 50;
+  display: none;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-3) var(--space-5);
+  border-radius: var(--radius-full);
+  background: var(--color-dark);
+  color: #ffffff;
+  font-size: var(--font-sm);
+  font-weight: var(--weight-bold);
+  box-shadow: var(--shadow-lg);
+}
+
+#toast.is-visible {
+  display: flex;
+}
+
+/* 아이콘 공통 크기 */
+.icon {
+  width: 20px;
+  height: 20px;
+  flex: 0 0 auto;
+}
+
+.icon--sm {
+  width: 16px;
+  height: 16px;
+}
+
+/* 숫자 뱃지 (예: 정리하기 · 3) */
+.badge-count {
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  min-width: 20px;
+  height: 20px;
+  padding: 0 6px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-text);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-black);
+}
+
+.hidden {
+  display: none !important;
+}
+
+/* =========================================================================
+   반응형 — 480px · 768px · 1280px (F12-02: 가로 스크롤 없음)
+   ========================================================================= */
+
+/* 480px 이상: 폴더·북마크 격자 넓히기 */
+@media (min-width: 480px) {
+  #folder-list {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+  #all-bookmarks .bookmark-grid {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+}
+
+/* 768px 이상: 폴더 줄과 잊은 칸을 한 줄로 이어 붙이기 */
+@media (min-width: 768px) {
+  .folders-row {
+    grid-template-columns: 1fr auto;
+  }
+  #folder-list {
+    grid-template-columns: repeat(5, minmax(0, 1fr));
+  }
+  #forgotten-slot {
+    width: 220px;
+  }
+  #all-bookmarks .bookmark-grid {
+    grid-template-columns: repeat(6, minmax(0, 1fr));
+  }
+}
+
+/* 1280px 이상: 북마크 격자 더 넓게 */
+@media (min-width: 1280px) {
+  #all-bookmarks .bookmark-grid {
+    grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+}
