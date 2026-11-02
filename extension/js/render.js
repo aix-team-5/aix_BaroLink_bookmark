@@ -7,7 +7,7 @@
 // - 북마크나 저장 항목이 바뀌면 renderAll을 다시 부른다. 그리기 함수는 자기 칸을 비우고 다시 그린다.
 
 import { loadTree, openBookmark } from "./bookmarks.js";
-import { load, markManualMove, cleanupMissing } from "./store.js";
+import { load, cleanupMissing } from "./store.js";
 import { getTargets, makePlan } from "./plan.js";
 import { pickForgotten } from "./forgotten.js";
 import { appIcon, icon, showToast } from "./ui.js";
@@ -15,7 +15,7 @@ import { runWebSearch, isUrlLike, searchBookmarks } from "./search.js";
 import { showFolders, openFolderPopup, showContextMenu } from "./view/folders.js";
 import { showForgotten } from "./view/forgottenFolder.js";
 import { showResultNotice, showHistory } from "./view/history.js";
-import { showFirstCard, showOrganizeDialog } from "./view/cards.js";
+import { showFirstCard } from "./view/cards.js";
 
 // 분류표는 이 파일이 읽어서 계산 파일(plan 등)에 넘긴다 (화면 파일·계산 파일은 fetch하지 않는다)
 let categories = null;
@@ -139,7 +139,8 @@ function renderHeader(stored) {
     if (!lastTree || !categories) return;
     const targets = safeCall(() => getTargets(lastTree, currentStored(), {}, Date.now()), []);
     const plan = safeCall(() => makePlan(targets, categories), null);
-    if (plan) showOrganizeDialog(plan, actions);
+    // [나중에]로 닫았던 첫 정리 카드를 다시 연다 (F06-06). 창을 바로 열지 않는다
+    if (plan) showFirstCard(plan, actions);
   });
 
   // 정리 기록 버튼
@@ -167,14 +168,21 @@ function currentStored() {
 }
 
 // ----- #web-search -----
+// 검색창은 한 번만 만든다. 북마크가 바뀌어 다시 그릴 때 검색창을 새로 만들면 입력 중이던 글자가 지워진다.
 function renderWebSearch() {
   const section = document.getElementById("web-search");
   if (!section) return;
-  section.replaceChildren();
 
-  const date = document.createElement("div");
-  date.className = "date";
+  // 날짜는 매번 갱신해도 되지만, 검색창(form)이 이미 있으면 그대로 둔다
+  let date = section.querySelector(".date");
+  if (!date) {
+    date = document.createElement("div");
+    date.className = "date";
+    section.appendChild(date);
+  }
   date.textContent = formatToday();
+
+  if (section.querySelector(".search-box")) return; // 검색창이 이미 있으면 다시 만들지 않는다
 
   const form = document.createElement("form");
   form.className = "search-box";
@@ -193,7 +201,7 @@ function renderWebSearch() {
     runWebSearch(text);
   });
 
-  section.append(date, form);
+  section.appendChild(form);
 }
 
 function formatToday() {
@@ -241,7 +249,7 @@ function renderAllBookmarks(bookmarks, stored) {
   if (bookmarks.length === 0) {
     const empty = document.createElement("p");
     empty.className = "empty-note";
-    empty.textContent = "아직 북마크가 없어요. 크롬에서 별 버튼으로 저장하면 여기에 나타나요.";
+    empty.textContent = "저장된 북마크가 없어요.";
     section.append(empty);
     return;
   }
@@ -344,28 +352,12 @@ function registerListeners() {
   });
   chrome.bookmarks.onChanged.addListener(() => scheduleRerender());
   chrome.bookmarks.onRemoved.addListener(() => scheduleRerender());
-  chrome.bookmarks.onMoved.addListener((id, info) => {
-    // 순서만 바뀌면(같은 폴더 안) 기록하지 않는다. 다른 폴더로 옮겼고 우리 정리가 아니면 '직접 옮김'으로 기록한다
-    if (info.parentId !== info.oldParentId) {
-      recordManualMoveIfNeeded(id, info.parentId);
-    }
-    scheduleRerender();
-  });
+  // 직접 옮김 기록(manualMoves)은 서비스 워커(background.js)만 한다. 새 탭은 화면만 다시 그린다
+  chrome.bookmarks.onMoved.addListener(() => scheduleRerender());
   // 서비스 워커가 저장 항목을 바꾸면(새 북마크·직접 옮김) 새 탭이 알아챈다
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === "local") scheduleRerender();
   });
-}
-
-// 우리 정리가 옮긴 게 아니면(pendingMoves에 없음) 직접 옮김으로 기록한다. isPending 판단은 store.js가 한다
-async function recordManualMoveIfNeeded(id, parentId) {
-  try {
-    const { isPending } = await import("./store.js");
-    if (await isPending(id, parentId)) return; // 우리 정리가 옮기는 중
-    await markManualMove(id);
-  } catch (error) {
-    console.warn("직접 옮김 기록 실패", error);
-  }
 }
 
 // 화면 시작
