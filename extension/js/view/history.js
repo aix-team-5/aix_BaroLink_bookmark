@@ -27,7 +27,7 @@ const TEXT = {
   resultNew: (bookmarks) => `새 북마크 ${bookmarks}개를 정리했어요`, // 시안
   resultNewNone: "새 북마크를 그대로 뒀어요", // 시안
   resultNothing: "옮긴 북마크가 없어요", // 제안, TODO(팀 결정)
-  resultSkipped: (n) => `${n}개는 이미 지워져 건너뛰었어요`, // 제안 (F07-09: 건너뛴 개수를 표시)
+  resultSkipped: (n) => `${n}개는 옮기지 못해 건너뛰었어요`, // 제안, TODO(팀 결정) (F07-09: 건너뛴 개수를 표시)
   undo: "되돌리기", // 확정 F07-03
   closeNotice: "정리 결과 안내 닫기", // 시안 (닫기 버튼의 aria-label)
 
@@ -35,7 +35,9 @@ const TEXT = {
   undone: "원래대로 되돌렸어요", // 시안
   undoFallback: "원래 폴더가 없어 기타 북마크로 되돌렸어요", // 확정 F13-07
   // TODO(팀 결정) ③: 되돌릴 때 건너뛴 북마크가 있을 때 (F13-05 직접 옮김, F13-08 삭제됨)
-  undoSkipped: (n) => `${n}개는 옮겨졌거나 지워져서 그대로 뒀어요`, // 제안
+  undoSkipped: (n) => `${n}개는 지금 위치에 그대로 뒀어요`, // 제안, TODO(팀 결정)
+  undoNone: "되돌린 북마크가 없어요", // 제안, TODO(팀 결정) ③
+  undoAlready: "이미 되돌린 정리예요", // 제안, TODO(팀 결정) ③
   undoFailed: "되돌리지 못했어요. 다시 눌러 주세요", // 제안 (명세에 없음)
   // 토스트는 한 번에 하나라서 되돌린 뒤 안내 문구를 이어 붙인다 (팀원 A 결정)
   toastJoin: " · ",
@@ -132,10 +134,20 @@ function countOf(list) {
 
 // 되돌린 뒤 토스트에 띄울 문구. r은 undo의 결과 { restored, skipped, fallback }
 function undoMessage(r) {
+  const restored = (r && Number(r.restored)) || 0;
+  const skipped = (r && Number(r.skipped)) || 0;
+  const fallback = (r && Number(r.fallback)) || 0;
+
+  // TODO(팀 결정) ③: 복원한 북마크가 없을 때의 문구. 제안 문구를 임시로 쓴다
+  if (restored === 0) {
+    if (skipped === 0) return TEXT.undoAlready;
+    return [TEXT.undoNone, TEXT.undoSkipped(skipped)].join(TEXT.toastJoin);
+  }
+
   const parts = [TEXT.undone];
-  if (r && r.fallback > 0) parts.push(TEXT.undoFallback); // F13-07
+  if (fallback > 0) parts.push(TEXT.undoFallback); // F13-07
   // TODO(팀 결정) ③: 되돌릴 때 건너뛴 북마크(F13-05 직접 옮김, F13-08 삭제됨)의 안내. 제안 문구를 임시로 쓴다
-  if (r && r.skipped > 0) parts.push(TEXT.undoSkipped(r.skipped));
+  if (skipped > 0) parts.push(TEXT.undoSkipped(skipped));
   return parts.join(TEXT.toastJoin);
 }
 
@@ -161,13 +173,24 @@ async function handleUndo(entry, button) {
   if (button.disabled) return;
   button.disabled = true; // 두 번 눌리지 않게 바로 막는다
 
+  // 되돌리는 동안 이 기록의 안내가 12초 타이머로 사라지지 않게 타이머를 멈춘다
+  if (noticeId === entry.id && noticeTimer !== null) {
+    clearTimeout(noticeTimer);
+    noticeTimer = null;
+  }
+
   let r;
   try {
     r = await undo(entry.id);
   } catch (error) {
     console.error("정리를 되돌리지 못했어요", error);
-    button.disabled = false;
+    button.disabled = false; // 다시 누를 수 있게
     showToast(TEXT.undoFailed);
+    // 이 기록의 안내가 아직 떠 있으면 타이머를 다시 시작한다 (그 사이 다른 정리의 안내가 떴으면 건드리지 않는다)
+    if (noticeId === entry.id) {
+      if (noticeTimer !== null) clearTimeout(noticeTimer);
+      noticeTimer = setTimeout(() => clearNotice(), NOTICE_MS);
+    }
     return;
   }
 
