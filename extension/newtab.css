@@ -423,11 +423,10 @@ a {
   min-height: 100vh;
 }
 
-/* #header — 상단 바 (스크롤해도 위에 고정) */
+/* #header — 상단 바. 제목(로고)은 따라오지 않고(static), 오른쪽 버튼 묶음만 화면 오른쪽 위에 떠서 따라온다.
+   (헤더 전체를 sticky로 하면 투명 배경 너머로 아래 내용이 비쳐 제목이 묻힌다. 시안과 다른 점 — docs/design/README.md 참고) */
 #header {
-  position: sticky;
-  top: 0;
-  z-index: 30;
+  position: static;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -436,6 +435,23 @@ a {
   max-width: var(--layout-max);
   margin: 0 auto;
   padding: var(--space-4) var(--space-6);
+}
+
+/* 오른쪽 버튼 묶음만 화면 오른쪽 위에 고정 (render.js가 버튼을 .header__actions 안에 넣는다) */
+#header .header__actions {
+  position: fixed;
+  top: var(--space-2);
+  right: max(var(--space-6), calc((100% - var(--layout-max)) / 2 + var(--space-6)));
+  z-index: 30;
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  padding: var(--space-1);
+  border-radius: var(--radius-full);
+  background: var(--color-surface);
+  border: 1px solid var(--color-border);
+  box-shadow: var(--shadow-md);
+  backdrop-filter: blur(12px);
 }
 
 /* 공통 로고 타일 — 헤더·정리 카드·정리 창 제목(cards.js) 등 여러 화면이 쓴다 (기본: 어두운 사각 타일) */
@@ -484,12 +500,6 @@ a {
 #header .brand__name {
   font-size: var(--font-md);
   font-weight: var(--weight-black);
-}
-
-#header .header__actions {
-  display: flex;
-  align-items: center;
-  gap: var(--space-2);
 }
 
 /* 본문 묶음 */
@@ -1083,7 +1093,19 @@ a {
   display: none;
 }
 
-/* 480px 이상: 폴더(잊은칸 포함) 4열, 북마크 4열. 640px 미만이면 독 칸을 줄인다 */
+/* 640px 미만: 고정됨 8개+[+]가 가로 스크롤 없이 들어가도록 칸·간격·여백을 줄인다 (시안 size-10, gap-1, p-2) */
+@media (max-width: 639px) {
+  #dock {
+    gap: var(--space-1);
+    padding: var(--space-2);
+  }
+  #dock .dock__item {
+    width: 40px;
+    height: 40px;
+  }
+}
+
+/* 480px 이상: 폴더(잊은칸 포함) 4열, 북마크 4열 */
 @media (min-width: 480px) {
   .folders-row {
     grid-template-columns: repeat(4, minmax(0, 1fr));
@@ -1091,22 +1113,12 @@ a {
   #all-bookmarks .bookmark-grid {
     grid-template-columns: repeat(4, minmax(0, 1fr));
   }
-  /* 640px 미만: 고정됨 칸을 40px로 줄여 8개+[+]가 가로 스크롤 없이 들어가게 한다 (시안 size-10) */
-  #dock .dock__item {
-    width: 40px;
-    height: 40px;
-  }
-  /* 640px 미만: 짧은 안내 버튼만 다시 보인다(정리하기 글자 등). md 전용은 계속 숨김 */
-  .hide-below-sm {
-    display: inline-flex;
-  }
 }
 
-/* 640px 이상: 독 칸을 원래 48px로, 숨겼던 sm 요소도 보인다 */
+/* 640px 이상: 짧은 안내 버튼(정리하기 글자 등)이 보인다 */
 @media (min-width: 640px) {
-  #dock .dock__item {
-    width: 48px;
-    height: 48px;
+  .hide-below-sm {
+    display: inline-flex;
   }
 }
 
