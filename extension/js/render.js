@@ -11,7 +11,7 @@ import { load, cleanupMissing } from "./store.js";
 import { getTargets, makePlan } from "./plan.js";
 import { pickForgotten } from "./forgotten.js";
 import { appIcon, icon, showToast } from "./ui.js";
-import { runWebSearch, isUrlLike, searchBookmarks } from "./search.js";
+import { runWebSearch } from "./search.js";
 import { showFolders, openFolderPopup, showContextMenu } from "./view/folders.js";
 import { showForgotten } from "./view/forgottenFolder.js";
 import { showResultNotice, showHistory } from "./view/history.js";
@@ -137,10 +137,15 @@ function renderHeader(stored) {
   }
   organizeBtn.addEventListener("click", () => {
     if (!lastTree || !categories) return;
+    // 첫 정리를 이미 했으면(done) P1에서는 아무것도 하지 않는다. 정리 뒤의 [정리하기]는 F10(P2)이다
+    if (currentStored()?.state?.firstCard === "done") return;
     const targets = safeCall(() => getTargets(lastTree, currentStored(), {}, Date.now()), []);
     const plan = safeCall(() => makePlan(targets, categories), null);
+    if (!plan) return;
     // [나중에]로 닫았던 첫 정리 카드를 다시 연다 (F06-06). 창을 바로 열지 않는다
-    if (plan) showFirstCard(plan, actions);
+    showFirstCard(plan, actions);
+    // 아래로 내린 상태에서 눌러도 카드가 보이게 한다
+    document.getElementById("organize-suggestion")?.scrollIntoView({ behavior: "smooth", block: "center" });
   });
 
   // 정리 기록 버튼
@@ -249,24 +254,16 @@ function renderAllBookmarks(bookmarks, stored) {
   if (bookmarks.length === 0) {
     const empty = document.createElement("p");
     empty.className = "empty-note";
-    empty.textContent = "저장된 북마크가 없어요.";
+    empty.textContent = "아직 북마크가 없어요. 주소창의 별 버튼으로 저장해 보세요";
     section.append(empty);
     return;
   }
 
-  const drawGrid = (list) => {
-    grid.replaceChildren();
-    for (const bookmark of list) {
-      grid.appendChild(renderBookmarkTile(bookmark));
-    }
-  };
-  drawGrid(bookmarks);
-
-  // 입력할 때마다 제목·주소 부분 일치로 거른다 (search.js)
-  searchInput.addEventListener("input", () => {
-    const query = searchInput.value.trim();
-    drawGrid(query === "" ? bookmarks : searchBookmarks(query, bookmarks));
-  });
+  for (const bookmark of bookmarks) {
+    grid.appendChild(renderBookmarkTile(bookmark));
+  }
+  // 북마크 검색(F14)은 P2다. 지금은 검색창만 그리고 input 연결은 하지 않는다.
+  // P2에서 search.js의 searchBookmarks가 구현되면, 웹 검색창처럼 "한 번만 만들기"로 연결한다.
 }
 
 function renderBookmarkTile(bookmark) {
