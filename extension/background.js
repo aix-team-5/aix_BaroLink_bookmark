@@ -5,10 +5,23 @@ import * as store from "./js/store.js";
 
 chrome.runtime.onInstalled.addListener(onInstalled);
 chrome.bookmarks.onCreated.addListener(onCreated);
-chrome.bookmarks.onMoved.addListener(onMoved);
-chrome.bookmarks.onRemoved.addListener(onRemoved);
+chrome.bookmarks.onMoved.addListener(inOrder(onMoved));
+chrome.bookmarks.onRemoved.addListener(inOrder(onRemoved));
 chrome.bookmarks.onImportBegan.addListener(onImportBegan);
 chrome.bookmarks.onImportEnded.addListener(onImportEnded);
+
+// 북마크 알림을 도착한 순서대로 하나씩 끝까지 처리하는 큐
+// 이동 처리가 isPending을 기다리는 사이에 같은 북마크의 삭제 처리가 먼저 끝나면, 지운 ID를 다시 기록하게 된다
+let queue = Promise.resolve();
+
+function inOrder(handler) {
+  return (...args) => {
+    const task = queue.then(() => handler(...args));
+    // 실패한 처리가 큐를 막지 않게 한다
+    queue = task.catch(() => {});
+    return task;
+  };
+}
 
 // C03: 처음 설치할 때만 manualMoves, newBookmarks의 빈 기본값을 만든다
 // update는 값이 없으면 기본값을 받으므로 그대로 돌려주면 기본값이 저장되고, 이미 있는 값은 바뀌지 않는다
