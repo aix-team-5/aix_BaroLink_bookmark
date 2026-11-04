@@ -49,26 +49,6 @@ function targetParentIds(tree, excludeBar, includeFolderIds) {
 
 // N19: 정리 대상 북마크를 고른다. options: { 북마크바 제외, 포함할 사용자 폴더 }
 // 크롬의 가져오기 폴더 바로 아래의 북마크도 대상에 넣는다. 가져오기 폴더 안의 폴더는 사용자 폴더로 본다 (F05-04, v12)
-/**
- * Select bookmarks for organization from a flattened tree returned by loadTree.
- * Candidates are direct children of the chosen roots, their "가져온 북마크"
- * import folders, or explicitly included folders; descendants are not included
- * recursively. Managed and unchosen-root bookmarks, IDs in stored.manualMoves,
- * and javascript: or chrome:// URLs (ignoring case and surrounding whitespace)
- * are excluded. Bar bookmarks with dateLastUsed less than 30 days before now,
- * including future timestamps, are excluded; exactly 30 days old is not
- * excluded by this rule.
- *
- * @param {object} tree Flattened roots, folders, and bookmarks from loadTree.
- * @param {object} stored Stored data; missing manualMoves is treated as empty.
- * @param {object} options excludeBar excludes only direct bar children;
- *   includeFolderIds adds direct children of eligible folders. Defaults are
- *   false and an empty list, respectively.
- * @param {number} now Current time in milliseconds since the Unix epoch.
- * @returns {Array} Eligible bookmarks in input order, once per ID.
- * @throws {TypeError} If inputs have invalid shapes, such as a non-iterable
- *   includeFolderIds or a truthy non-string URL on a candidate.
- */
 export function getTargets(tree, stored, options, now) {
   // 명세 v17: options는 { excludeBar: false, includeFolderIds: [] }. 빠진 값은 기본값으로 채운다
   const { excludeBar = false, includeFolderIds = [] } = options || {};
@@ -98,23 +78,6 @@ function folderLimit(count) {
 
 // N20: 폴더 계획을 세운다
 // 출력: { type: "folders", folders: [{ name, items, reasons }], rest } 또는 { type: "pin", reason }
-/**
- * Plan folders from classified targets, or return a pin suggestion reason.
- * Fewer than 10 targets yields "tooFew"; otherwise, no eligible category with
- * at least three targets yields "noGroup". Unclassified targets and "기타"
- * are not grouped. Eligible groups are ordered by size, with ties following the
- * category table order, and capped at 3, 4, 5, or 6 folders for 10–29, 30–59,
- * 60–99, or at least 100 targets, respectively.
- *
- * @param {Array} targets Bookmarks to classify, in the desired item order.
- * @param {object} categories Classification table used by classify.
- * @returns {object} A pin result with reason, or a folders result with each
- *   folder's name, items, and corresponding { bookmarkId, step, rule,
- *   needsCheck } reasons; rest counts targets not placed in those folders.
- * @throws {TypeError} Invalid target or category data can throw during
- *   classification or grouping when there are at least 10 targets. Invalid
- *   or hostless URLs are instead treated as unclassified by classify.
- */
 export function makePlan(targets, categories) {
   // 명세 v17: pin의 reason은 코드 "tooFew"(대상 10개 미만) · "noGroup"(3개 이상 모인 카테고리 없음). 화면 문구는 cards.js가 만든다
   if (targets.length < 10) return { type: "pin", reason: "tooFew" };
