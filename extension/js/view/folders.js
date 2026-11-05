@@ -7,6 +7,7 @@ import { appIcon, icon, showToast } from "../ui.js";
 const SLOT_ID = "folder-list";
 const DIALOG_HOST_ID = "dialogs";
 const POPUP_ID = "dialog-folder";
+const POPUP_TITLE_ID = "dialog-folder-title";
 const PREVIEW_COUNT = 4;
 const PREVIEW_ICON_SIZE = 40;
 const POPUP_ICON_SIZE = 48;
@@ -171,6 +172,7 @@ function fillPopup(dialog, info) {
   const title = document.createElement("div");
   title.className = "dialog__title";
   const titleText = document.createElement("span");
+  titleText.id = POPUP_TITLE_ID;
   titleText.textContent = info.title;
   title.append(icon("folder", 20), titleText);
   const subtitle = document.createElement("div");
@@ -210,6 +212,8 @@ function getPopup(host) {
   dialog = document.createElement("dialog");
   dialog.id = POPUP_ID;
   dialog.className = "dialog";
+  // 화면 낭독기가 팝업 이름으로 폴더 이름을 읽게 한다
+  dialog.setAttribute("aria-labelledby", POPUP_TITLE_ID);
   // 바깥(어두운 곳)을 누르면 닫는다 (F12-04). Esc는 <dialog>의 기본 동작
   dialog.addEventListener("click", (event) => {
     if (event.target === dialog) dialog.close();
