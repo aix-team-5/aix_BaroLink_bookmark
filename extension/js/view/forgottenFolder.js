@@ -241,7 +241,7 @@ function renderRow(bookmark, stored, now, dialog) {
 async function openItem(bookmark, newTab, dialog) {
   try {
     const opened = await openBookmark(bookmark, { newTab });
-    if (opened === false) showToast("이 북마크는 새 탭에서 열 수 없어요");
+    if (opened === false) showToast("이 북마크는 열 수 없어요");
     else if (!newTab) dialog.close();
   } catch (error) {
     console.warn("북마크를 열지 못했어요", error);
