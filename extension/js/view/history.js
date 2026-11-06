@@ -31,6 +31,7 @@ const TEXT = {
   undoSkipped: (n) => `${n}개는 되돌리지 않았어요`, // 제안, TODO(팀 결정). skipped에는 지워짐·직접 옮김·오류가 섞여 이유를 단정하지 않는다
   undoNone: "되돌린 북마크가 없어요", // 제안, TODO(팀 결정) ③
   undoAlready: "이미 되돌린 정리예요", // 제안, TODO(팀 결정) ③
+  undoFoldersOnly: "정리로 만든 빈 폴더를 지웠어요", // 제안, TODO(팀 결정) ③
   undoFailed: "되돌리지 못했어요. 다시 눌러 주세요", // 제안 (명세에 없음)
   // 토스트는 한 번에 하나라서 되돌린 뒤 안내 문구를 이어 붙인다 (팀원 A 결정)
   toastJoin: " · ",
@@ -125,15 +126,21 @@ function countOf(list) {
   return Array.isArray(list) ? list.length : 0;
 }
 
-// 되돌린 뒤 토스트에 띄울 문구. r은 undo의 결과 { restored, skipped, fallback }
-function undoMessage(r) {
+// 되돌린 뒤 토스트에 띄울 문구. r은 undo의 결과 { restored, skipped, fallback }, entry는 되돌린 정리 기록
+function undoMessage(r, entry) {
   const restored = (r && Number(r.restored)) || 0;
   const skipped = (r && Number(r.skipped)) || 0;
   const fallback = (r && Number(r.fallback)) || 0;
 
   // TODO(팀 결정) ③: 복원한 북마크가 없을 때의 문구. 제안 문구를 임시로 쓴다
   if (restored === 0) {
-    if (skipped === 0) return TEXT.undoAlready;
+    if (skipped === 0) {
+      // 옮긴 북마크 없이 폴더만 만든 정리는 되돌리면 빈 폴더만 지운다
+      if (entry && countOf(entry.moves) === 0 && countOf(entry.createdFolderIds) > 0) {
+        return TEXT.undoFoldersOnly;
+      }
+      return TEXT.undoAlready;
+    }
     return [TEXT.undoNone, TEXT.undoSkipped(skipped)].join(TEXT.toastJoin);
   }
 
@@ -189,7 +196,7 @@ async function handleUndo(entry, button) {
 
   // 그 사이에 다른 정리의 안내가 떴으면 그 안내는 지우지 않는다
   clearNotice(entry.id);
-  const message = undoMessage(r);
+  const message = undoMessage(r, entry);
   // 문구를 이어 붙였으면 읽을 시간을 조금 더 준다
   showToast(message, message === TEXT.undone ? {} : { duration: 5000 });
 }
