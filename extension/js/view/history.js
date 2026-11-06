@@ -1,16 +1,9 @@
 // 담당: 팀원 A · 이슈 #5 · 명세: N43 (F07, F13)
 // 화면 파일끼리는 서로 부르지 않는다 (공통 조각은 ui.js). 크롬은 organize.js와 store.js를 거친다.
 
-// 준비 단계: 기대는 파일 중 render.js(#15)만 아직 뼈대다.
-// - #2 bookmarks.js · #3 store.js · #4 organize.js · #16 ui.js: main에 구현됨
-// - #14 newtab.html · newtab.css: #notice 칸과 .notice__* · .btn* 모양 있음. 정리 기록 창(history-*)의 모양은 아직 없음
-// - #17 cards.js: [정리하기] 뒤에 actions.showResultNotice(entry)를 부름
-// - #15 render.js: 뼈대 (actions에 showResultNotice를 넣는 코드, 정리 기록 버튼에서 showHistory를 부르는 코드 없음)
-//   그래서 지금은 새 탭 콘솔에서 showResultNotice(entry)를 직접 불러 확인한다
+// render.js가 actions.showResultNotice로 정리 결과 안내를 부르고, 헤더의 정리 기록 버튼에서 showHistory를 부른다
 
 import { undo } from "../organize.js";
-import { load } from "../store.js";
-import { loadTree } from "../bookmarks.js";
 import { showToast, icon } from "../ui.js";
 
 // F07-03: 정리 결과 안내를 보여 주는 시간
@@ -27,7 +20,7 @@ const TEXT = {
   resultNew: (bookmarks) => `새 북마크 ${bookmarks}개를 정리했어요`, // 시안
   resultNewNone: "새 북마크를 그대로 뒀어요", // 시안
   resultNothing: "옮긴 북마크가 없어요", // 제안, TODO(팀 결정)
-  resultSkipped: (n) => `${n}개는 옮기지 못해 건너뛰었어요`, // 제안, TODO(팀 결정) (F07-09: 건너뛴 개수를 표시)
+  resultSkipped: (n) => `${n}개는 옮기지 않았어요`, // 제안, TODO(팀 결정) (F07-09: 건너뛴 개수를 표시). skipped에는 지워짐·직접 옮김·오류가 섞여 이유를 단정하지 않는다
   undo: "되돌리기", // 확정 F07-03
   closeNotice: "정리 결과 안내 닫기", // 시안 (닫기 버튼의 aria-label)
 
@@ -35,7 +28,7 @@ const TEXT = {
   undone: "원래대로 되돌렸어요", // 시안
   undoFallback: "원래 폴더가 없어 기타 북마크로 되돌렸어요", // 확정 F13-07
   // TODO(팀 결정) ③: 되돌릴 때 건너뛴 북마크가 있을 때 (F13-05 직접 옮김, F13-08 삭제됨)
-  undoSkipped: (n) => `${n}개는 지금 위치에 그대로 뒀어요`, // 제안, TODO(팀 결정)
+  undoSkipped: (n) => `${n}개는 되돌리지 않았어요`, // 제안, TODO(팀 결정). skipped에는 지워짐·직접 옮김·오류가 섞여 이유를 단정하지 않는다
   undoNone: "되돌린 북마크가 없어요", // 제안, TODO(팀 결정) ③
   undoAlready: "이미 되돌린 정리예요", // 제안, TODO(팀 결정) ③
   undoFailed: "되돌리지 못했어요. 다시 눌러 주세요", // 제안 (명세에 없음)
@@ -122,7 +115,7 @@ function resultMessage(entry) {
     title = created > 0 ? TEXT.resultFirst(created, moved) : TEXT.resultNoNewFolder(moved);
   }
 
-  // F07-09: 이미 지워져 건너뛴 북마크의 개수
+  // F07-09: 옮기지 못하고 건너뛴 북마크의 개수 (이미 지워졌거나 이동 중 오류)
   const desc = skipped > 0 ? TEXT.resultSkipped(skipped) : "";
   return { title, desc };
 }
