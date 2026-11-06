@@ -309,6 +309,13 @@ function renderAllBookmarks(bookmarks, stored) {
   // P2에서 search.js의 searchBookmarks가 구현되면, 웹 검색창처럼 "한 번만 만들기"로 연결한다.
 }
 
+// F02-05: javascript: 북마크는 열지 않고(openBookmark가 false를 돌려준다) 안내를 띄운다
+// 북마크를 여는 곳(모든 북마크, 독)은 이 함수를 쓴다
+async function openWithNotice(bookmark) {
+  const opened = await openBookmark(bookmark);
+  if (opened === false) showToast("이 북마크는 새 탭에서 실행할 수 없어요");
+}
+
 function renderBookmarkTile(bookmark) {
   const button = document.createElement("button");
   button.type = "button";
@@ -321,7 +328,7 @@ function renderBookmarkTile(bookmark) {
   url.className = "bookmark__url";
   url.textContent = shortHost(bookmark.url);
   button.append(name, url);
-  button.addEventListener("click", () => openBookmark(bookmark));
+  button.addEventListener("click", () => openWithNotice(bookmark));
   button.addEventListener("contextmenu", (event) => {
     event.preventDefault();
     showContextMenu(bookmark);
@@ -354,7 +361,7 @@ function renderDock(bookmarks, stored) {
     item.className = "dock__item";
     item.setAttribute("aria-label", `${bookmark.title || bookmark.url} 열기`);
     item.appendChild(appIcon(bookmark, 48));
-    item.addEventListener("click", () => openBookmark(bookmark));
+    item.addEventListener("click", () => openWithNotice(bookmark));
     dock.appendChild(item);
   }
 }
