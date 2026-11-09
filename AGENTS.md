@@ -62,7 +62,7 @@ gh issue view 8 --repo aix-team-5/aix_BaroLink_bookmark
 | 파일 | 규칙 |
 |---|---|
 | `classify.js`, `plan.js`, `forgotten.js`, `topic.js` | 계산만 한다. `chrome` API를 부르지 않고, 파일을 읽지 않고, `Date.now()`를 직접 부르지 않는다. 필요한 값은 모두 입력으로 받는다 |
-| `store.js` | `chrome.storage`는 이 파일에서만 부른다. 한 키는 새 탭과 서비스 워커 중 한쪽만 쓴다(`manualMoves`, `newBookmarks`는 서비스 워커, 나머지는 새 탭) |
+| `store.js` | `chrome.storage`는 이 파일에서만 부른다. 한 키는 새 탭과 서비스 워커 중 한쪽만 쓴다(`manualMoves`, `newBookmarks`, `importing`은 서비스 워커, 나머지는 새 탭) |
 | `bookmarks.js` | `chrome.bookmarks`를 읽고 바꾸는 통로다. 북마크바·기타·모바일은 ID가 아니라 `folderType`으로 구별한다 |
 | `background.js` | 서비스 워커다. 알림 리스너는 파일 맨 위에서 바로 등록하고, 상태는 변수가 아니라 저장소에 둔다 |
 | `organize.js` | 크롬 북마크를 실제로 바꾸는 정리 코드다. 아래 "고치지 않는 동작"을 지킨다 |
