@@ -22,6 +22,9 @@ const DAY = 24 * 60 * 60 * 1000;
 let current = { items: [], actions: {} };
 // 팝업 목록을 비동기로 채우는 중에 다시 불리면, 늦게 끝난 앞의 작업은 버린다
 let fillToken = 0;
+// [이제 안 봐도 됨]으로 뺀 북마크: ID → { index, timer }. 팝업 안 그 자리에 6초 동안 [되돌리기]를 보여 준다
+// 팝업은 showModal()이라 #toast가 어두운 배경 뒤에 깔려 누를 수 없기 때문이다. 팝업을 닫으면 비운다
+const undoRows = new Map();
 
 // "N개월 전" 같은 지난 시간 문구. 한 달이 안 되면 일, 1년 이상도 개월로 센다 (시안의 문구)
 function ago(time, now) {
@@ -166,7 +169,10 @@ function openDialog() {
   dialog.addEventListener("click", (event) => {
     if (event.target === dialog) dialog.close();
   });
-  dialog.addEventListener("close", () => dialog.remove());
+  dialog.addEventListener("close", () => {
+    clearUndoRows();
+    dialog.remove();
+  });
 
   host.appendChild(dialog);
   dialog.showModal();
@@ -174,9 +180,10 @@ function openDialog() {
 }
 
 // 목록을 앞의 8개로 채운다. "연 기록 없음"을 가리려면 우리 기록(lastOpenedByUs)이 필요해 저장 항목을 읽는다
+// 방금 뺀 북마크는 render.js가 다시 그리기 전이라도 빼고, 그 자리에 [되돌리기] 줄을 끼워 넣는다
 async function fillList(dialog) {
   const token = ++fillToken;
-  const items = current.items.slice(0, MAX_SHOWN);
+  const items = current.items.filter((bookmark) => !undoRows.has(String(bookmark.id))).slice(0, MAX_SHOWN);
   let stored = {};
   try {
     stored = await load();
@@ -188,18 +195,41 @@ async function fillList(dialog) {
   const list = dialog.querySelector(".list");
   if (!list) return;
   const now = Date.now();
-  if (items.length === 0) {
+  const rows = items.map((bookmark, index) => renderRow(bookmark, index, stored, now, dialog));
+  const pending = [...undoRows].sort((a, b) => a[1].index - b[1].index);
+  for (const [id, { index }] of pending) rows.splice(Math.min(index, rows.length), 0, renderUndoRow(id, dialog));
+  if (rows.length === 0) {
     const empty = document.createElement("div");
     empty.className = "dialog__subtitle";
     empty.textContent = "지금은 다시 꺼내 볼 북마크가 없어요";
     list.replaceChildren(empty);
     return;
   }
-  list.replaceChildren(...items.map((bookmark) => renderRow(bookmark, stored, now, dialog)));
+  list.replaceChildren(...rows);
+}
+
+// 뺀 북마크 자리에 6초 동안 보이는 줄: "목록에서 뺐어요" + [되돌리기] (F04-09)
+function renderUndoRow(id, dialog) {
+  const row = document.createElement("div");
+  row.className = "list__row";
+  const text = document.createElement("span");
+  text.className = "list__text";
+  const meta = document.createElement("span");
+  meta.className = "meta";
+  meta.textContent = "목록에서 뺐어요";
+  text.appendChild(meta);
+  row.append(text, makeButton("되돌리기", { variant: "btn--ghost", onClick: () => undoDismiss(id, dialog) }));
+  return row;
+}
+
+// 팝업을 닫거나 다시 열 때 되돌리기 줄과 타이머를 비운다
+function clearUndoRows() {
+  for (const { timer } of undoRows.values()) clearTimeout(timer);
+  undoRows.clear();
 }
 
 // 목록 한 줄: 앱 아이콘과 제목(누르면 열기) + 저장·연 시각 + [이제 안 봐도 됨] [어디 있는지 보기]
-function renderRow(bookmark, stored, now, dialog) {
+function renderRow(bookmark, index, stored, now, dialog) {
   const row = document.createElement("div");
   row.className = "list__row";
   const name = bookmark.title || bookmark.url;
@@ -228,7 +258,7 @@ function renderRow(bookmark, stored, now, dialog) {
   const buttons = document.createElement("span");
   buttons.className = "actions";
   buttons.append(
-    makeButton("이제 안 봐도 됨", { variant: "btn--ghost", onClick: () => dismissItem(bookmark) }),
+    makeButton("이제 안 봐도 됨", { variant: "btn--ghost", onClick: () => dismissItem(bookmark, index, dialog) }),
     makeButton("어디 있는지 보기", { variant: "btn--ghost", onClick: () => showLocation(bookmark, dialog) }),
   );
 
@@ -249,25 +279,36 @@ async function openItem(bookmark, newTab, dialog) {
   }
 }
 
-// [이제 안 봐도 됨]: dismissed에 기록하고 6초 동안 [되돌리기]를 보여 준다 (F04-09)
-async function dismissItem(bookmark) {
+// [이제 안 봐도 됨]: dismissed에 기록하고, 그 줄 자리에 6초 동안 [되돌리기]를 보여 준다 (F04-09)
+async function dismissItem(bookmark, index, dialog) {
+  const id = String(bookmark.id);
   try {
-    await dismiss(bookmark.id);
+    await dismiss(id);
   } catch (error) {
     console.warn("목록에서 빼지 못했어요", error);
-    showToast("목록에서 빼지 못했어요");
     return;
   }
-  showToast("목록에서 뺐어요", {
-    actionLabel: "되돌리기",
-    duration: UNDO_MS,
-    onAction: () => {
-      undismiss(bookmark.id).catch((error) => {
-        console.warn("되돌리지 못했어요", error);
-        showToast("되돌리지 못했어요");
-      });
-    },
-  });
+  if (!dialog.isConnected) return;
+  const timer = setTimeout(() => {
+    undoRows.delete(id);
+    if (dialog.isConnected) fillList(dialog);
+  }, UNDO_MS);
+  undoRows.set(id, { index, timer });
+  fillList(dialog);
+}
+
+// [되돌리기]: dismissed에서 지운다. 기록이 바뀌면 render.js가 다시 그려 그 북마크가 목록에 돌아온다
+async function undoDismiss(id, dialog) {
+  const pending = undoRows.get(id);
+  if (!pending) return;
+  clearTimeout(pending.timer);
+  undoRows.delete(id);
+  try {
+    await undismiss(id);
+  } catch (error) {
+    console.warn("되돌리지 못했어요", error);
+  }
+  if (dialog.isConnected) fillList(dialog);
 }
 
 // [어디 있는지 보기]: 이 팝업을 닫고, 그 북마크가 들어 있는 폴더의 팝업을 연다 (F04-10)
