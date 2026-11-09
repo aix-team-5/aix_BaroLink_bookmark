@@ -97,7 +97,7 @@ Chrome의 기본 북마크 정보만으로는 우리 서비스에서 필요한 �
 
 와 같은 서비스 전용 상태 정보가 없다.
 
-따라서 이러한 데이터는 chrome.storage.local에 별도로 저장한다. 저장 항목은 모두 9개다.
+따라서 이러한 데이터는 chrome.storage.local에 별도로 저장한다. 저장 항목은 모두 10개다.
 
 4. 정리 기록 (history)
 목적
@@ -354,7 +354,7 @@ Chrome 북마크 데이터 + lastOpenedByUs + 고정 목록 + 다시 안 볼 목
 
 13. chrome.storage.local에 저장되는 데이터 정리
 
-최종적으로 chrome.storage.local에는 다음 9개의 서비스 전용 데이터가 들어간다.
+최종적으로 chrome.storage.local에는 다음 10개의 서비스 전용 데이터가 들어간다.
 
 저장 항목   이름   형태   쓰는 쪽   저장 목적
 정리 기록   history   기록의 목록   새 탭   자동 정리 전후의 위치를 저장하고 기록 확인 및 Undo에 사용
@@ -366,6 +366,7 @@ lastOpenedByUs   lastOpenedByUs   { 북마크ID: 시각 }   새 탭   새 탭에
 다시 안 볼 북마크   dismissed   { 북마크ID: 시각 }   새 탭   사용자가 더 이상 추천받지 않도록 지정한 북마크를 기억
 고정 목록   pinned   [북마크ID, …] (최대 8개)   새 탭   새 탭의 고정 영역에 표시할 북마크를 기억
 첫 정리 카드 상태   state   { firstCard: 상태 }   새 탭   첫 정리 카드를 처리했는지 기억
+가져오는 중 표시   importing   { at: 시각(ms) } 또는 null   서비스 워커   크롬이 북마크를 가져오는 중이라는 표시. onImportBegan에 기록하고 onImportEnded에 null로 지움. 기록한 지 10분이 지나면 끝난 것으로 봄(가져오는 도중 크롬이 꺼져 onImportEnded가 오지 않은 경우 대비). 읽는 쪽도 서비스 워커
 
 정리 기록 한 건의 형태
 { id, at, type, createdFolderIds, moves: [{ bookmarkId, title, fromParentId, fromIndex, toParentId }], fromOrder: { 원래 폴더ID: [북마크ID, …] }, skipped, undoneAt }
