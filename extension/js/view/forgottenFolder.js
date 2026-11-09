@@ -25,6 +25,8 @@ let fillToken = 0;
 // [이제 안 봐도 됨]으로 뺀 북마크: ID → { index, timer }. 팝업 안 그 자리에 6초 동안 [되돌리기]를 보여 준다
 // 팝업은 showModal()이라 #toast가 어두운 배경 뒤에 깔려 누를 수 없기 때문이다. 팝업을 닫으면 비운다
 const undoRows = new Map();
+// dismissed에 저장하는 중인 북마크 ID. 저장이 끝나기 전에 같은 줄을 다시 눌러도 한 번만 처리한다
+const dismissing = new Set();
 
 // "N개월 전" 같은 지난 시간 문구. 한 달이 안 되면 일, 1년 이상도 개월로 센다 (시안의 문구)
 function ago(time, now) {
@@ -282,11 +284,15 @@ async function openItem(bookmark, newTab, dialog) {
 // [이제 안 봐도 됨]: dismissed에 기록하고, 그 줄 자리에 6초 동안 [되돌리기]를 보여 준다 (F04-09)
 async function dismissItem(bookmark, index, dialog) {
   const id = String(bookmark.id);
+  if (dismissing.has(id) || undoRows.has(id)) return;
+  dismissing.add(id);
   try {
     await dismiss(id);
   } catch (error) {
     console.warn("목록에서 빼지 못했어요", error);
     return;
+  } finally {
+    dismissing.delete(id);
   }
   if (!dialog.isConnected) return;
   const timer = setTimeout(() => {
