@@ -802,6 +802,14 @@ a {
   margin-top: var(--space-10);
 }
 
+/* 북마크가 하나도 없을 때의 안내 문구 (F01-05, render.js가 채운다) */
+.empty-note {
+  margin: var(--space-6) 0;
+  text-align: center;
+  font-size: var(--font-sm);
+  color: var(--color-text-muted);
+}
+
 #all-bookmarks .bookmark-search {
   display: flex;
   align-items: center;
