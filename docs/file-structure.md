@@ -91,8 +91,8 @@ aix_BaroLink_bookmark/
 |---|---|---|---|---|
 | `manifest.json` | 권한, 새 탭을 `newtab.html`로 바꾸기, 서비스 워커(`type: module`) 등록 | — | C01, C02 | A |
 | `background.js` | 새 탭이 닫혀 있어도 북마크 알림을 받아 기록. 새 북마크는 `newBookmarks`, 우리 정리가 아닌 이동은 `manualMoves`에 기록. 가져오기 중엔 멈춤 | onCreated·onMoved·onRemoved 처리 (N32–N34) | bookmarks 알림, runtime.onInstalled (C03, C09, C10, C12, C13) | B |
-| `js/bookmarks.js` | 크롬 북마크를 읽고 바꾸는 통로. 전체 읽기(기타 북마크가 두 개면 동기화되는 쪽), 폴더 만들기·이름·삭제(안의 북마크는 꺼냄), 옮기기, 열기, 파비콘 | loadTree, createFolder, moveBookmark, renameFolder, deleteFolderKeepChildren, openBookmark, faviconUrl (N01–N07) | bookmarks, tabs, favicon (C04–C08, C18, C22) | A |
-| `js/store.js` | 저장 항목을 읽고 쓰는 통로. 읽고→고치고→쓰기를 한 함수로 묶어 순서대로 처리 | load, update, recordOpened, pin, dismiss, markManualMove, setPending/isPending, addHistory, cleanupMissing, setFirstCard, markHandledNew, addNew/removeNew/purgeWorkerKeys, setImporting/isImporting (N08–N16, N38–N40, N47) | storage.local (C14, C15) | A |
+| `js/bookmarks.js` | 크롬 북마크를 읽고 바꾸는 통로. 전체 읽기(기타 북마크가 두 개면 동기화되는 쪽), 폴더 만들기·이름·삭제(안의 북마크는 꺼냄), 옮기기, 열기, 북마크 삭제·되살리기, 파비콘 | loadTree, createFolder, moveBookmark, renameFolder, deleteFolderKeepChildren, openBookmark, faviconUrl, removeBookmark, restoreBookmark (N01–N07, N48, N49) | bookmarks, tabs, favicon (C04–C08, C18, C22) | A |
+| `js/store.js` | 저장 항목을 읽고 쓰는 통로. 읽고→고치고→쓰기를 한 함수로 묶어 순서대로 처리 | load, update, recordOpened, pin, dismiss, markManualMove, setPending/isPending, addHistory, cleanupMissing, setFirstCard, markHandledNew, addNew/removeNew/purgeWorkerKeys, setImporting/isImporting, snapshotStored/restoreStored (N08–N16, N38–N40, N47, N50) | storage.local (C14, C15) | A |
 | `js/organize.js` | 정리 적용: 원래 위치 읽기 → 북마크바 맨 뒤에 폴더 만들기 → '옮기는 중' 저장 → 옮기기 → 정리 기록. 되돌리기: 원래 바로 앞에 있던 북마크의 뒤에 놓아 순서를 복원, 직접 옮긴 것은 건너뜀 | applyPlan, undo (N22, N23) | bookmarks.js · store.js 경유 | A |
 | `js/classify.js` | 분류표 → 주소 끝 → 제목 키워드 순으로 카테고리 하나. 정답지로 적용률·정확도 측정. 새 북마크 추천 폴더 | classify, measure, suggestForNew (N17, N18, N24) | 없음 | B |
 | `js/forgotten.js` | 마지막으로 연 시각(우리 기록·dateLastUsed 중 최근 → 저장 시각) 계산, 30일 넘게 안 연 북마크를 오래 안 연 순으로 고르기. 화면은 앞의 8개만 보여 줌 | lastOpened, pickForgotten (N25, N26) | 없음 | B |
@@ -101,7 +101,7 @@ aix_BaroLink_bookmark/
 | `js/render.js` | 화면의 시작점. 북마크·저장소 알림을 받아 전체를 다시 그리고, 각 화면 파일의 그리기 함수를 부름. 헤더·날짜·화면 아래의 고정됨(독)·모든 북마크는 직접 그림 | renderAll (N30) | bookmarks 알림, storage.onChanged (C09–C12, C16) | D |
 | `js/ui.js` | 모든 화면 파일이 함께 쓰는 공통 화면 조각. 앱 아이콘(색 타일 위의 파비콘, 없으면 첫 글자), 짧은 안내 문구, 선 아이콘 12종 | appIcon, showToast, icon (N44–N46) | bookmarks.js 경유 (파비콘) | D |
 | `js/view/cards.js` | 첫 정리 카드, 고정 제안 카드, 자세히 보기와 [정리하기] 창, 고정할 북마크 고르기 창. 고정 제안의 권한 요청과 자주 방문한 사이트 읽기 | showFirstCard, showOrganizeDialog, showPinPicker (N31) | permissions, topSites (C19–C21) | D (고정 제안은 C와 협업) |
-| `js/view/folders.js` | 내 폴더 줄, 폴더 팝업(폴더 안의 폴더 포함), 폴더 만들기·이름 바꾸기·삭제, 우클릭 메뉴 | showFolders, openFolderPopup, showContextMenu (N41) | bookmarks.js 경유 | C |
+| `js/view/folders.js` | 내 폴더 줄, 폴더 팝업(폴더 안의 폴더 포함), 폴더 만들기·이름 바꾸기·삭제, 우클릭 메뉴(폴더로 이동·북마크 삭제) | showFolders, openFolderPopup, showContextMenu (N41) | bookmarks.js 경유 | C |
 | `js/view/forgottenFolder.js` | 잊고 있던 북마크 폴더(개수 배지)와 팝업. 8개까지 표시, 열기·고정하기·이제 안 봐도 됨·어디 있는지 보기 | showForgotten (N42) | bookmarks.js · store.js 경유 | B |
 | `js/view/history.js` | 정리 결과 안내([되돌리기], 12초)와 정리 기록 화면 | showResultNotice, showHistory (N43) | organize.js · store.js 경유 | A |
 | `js/search.js` | 웹 검색(위쪽 검색창. 주소면 이동, 아니면 기본 검색엔진)과 북마크 검색(모든 북마크 영역의 검색창. 제목·주소 부분 일치). 두 검색창은 연동하지 않음 | searchBookmarks, isUrlLike, runWebSearch (N27–N29) | search, tabs (C17, C18) | D |
@@ -358,7 +358,7 @@ sequenceDiagram
 |---|---|---|
 | `actions.openFolder(folderId)` | `view/folders.js`의 `openFolderPopup` | 잊고 있던 북마크의 [어디 있는지 보기] (F04-10) |
 | `actions.showResultNotice(entry)` | `view/history.js`의 `showResultNotice` | 첫 정리 카드와 정리 창의 [정리하기] 뒤 (F07) |
-| `actions.showContextMenu(bookmark)` | `view/folders.js`의 `showContextMenu` | 잊고 있던 북마크 목록의 우클릭 (P2, F15) |
+| `actions.showContextMenu(bookmark, { x, y, container })` | `view/folders.js`의 `showContextMenu` | 잊고 있던 북마크 팝업 안 앱의 우클릭 (P2, F15). container는 그 팝업 <dialog> (v19) |
 
 `actions`를 받는 함수: `showForgotten(items, actions)`, `showFirstCard(plan, actions)`, `showOrganizeDialog(plan, actions)`.
 
