@@ -123,8 +123,8 @@ await (async () => {
   T.stored = () => chrome.storage.local.get(null);
   T.saveStore = async () => structuredClone(await chrome.storage.local.get(null));
   T.restoreStore = async (saved) => { await chrome.storage.local.clear(); await chrome.storage.local.set(saved); };
-  // 명세 '참고_저장 항목'의 기본값 9개 (계산 함수에 넣을 가짜 저장 항목)
-  T.emptyStored = () => ({ pinned: [], lastOpenedByUs: {}, dismissed: {}, manualMoves: {}, newBookmarks: [], handledNew: [], pendingMoves: {}, history: [], state: { firstCard: "pending" } });
+  // 명세 '참고_저장 항목'의 기본값 10개 (계산 함수에 넣을 가짜 저장 항목)
+  T.emptyStored = () => ({ pinned: [], lastOpenedByUs: {}, dismissed: {}, manualMoves: {}, newBookmarks: [], handledNew: [], pendingMoves: {}, history: [], state: { firstCard: "pending" }, importing: null });
 
   // 크롬 북마크를 우리 함수 없이 직접 읽는 도구 (비교 기준용). 최상위 폴더는 folderType으로 고른다 (F01-04)
   T.rawRoots = async () => {
@@ -506,10 +506,11 @@ await (async () => {
     try {
       await chrome.storage.local.clear();
       const d = await T.store.load();
-      const keys = ["pinned", "lastOpenedByUs", "dismissed", "manualMoves", "newBookmarks", "handledNew", "pendingMoves", "history", "state"];
-      T.expect("저장 항목 9개가 모두 있다", d && keys.every((k) => k in d), d && Object.keys(d));
+      const keys = ["pinned", "lastOpenedByUs", "dismissed", "manualMoves", "newBookmarks", "handledNew", "pendingMoves", "history", "state", "importing"];
+      T.expect("저장 항목 10개가 모두 있다", d && keys.every((k) => k in d), d && Object.keys(d));
       T.expect("비어 있으면 기본값('참고_저장 항목'의 형태)", T.same(d, T.emptyStored()), d);
       T.expect("state 값이 없으면 firstCard는 pending", d?.state?.firstCard === "pending", d?.state);
+      T.expect("importing이 없으면 null", d?.importing === null, d?.importing);
       await chrome.storage.local.set({ pinned: ["검증-1"], state: { firstCard: "later" } });
       const d2 = await T.store.load();
       T.expect("저장된 값을 실제로 읽는다(pinned)", T.same(d2?.pinned, ["검증-1"]), d2?.pinned);
@@ -520,7 +521,7 @@ await (async () => {
     }
   })();
   ```
-- 기대 결과: 저장 항목 9개를 한 번에 읽고, 없는 키는 '참고_저장 항목' 시트의 형태로 기본값을 채운다. `state`가 없으면 `firstCard`는 `"pending"`이다. (N08, C14)
+- 기대 결과: 저장 항목 10개를 한 번에 읽고, 없는 키는 '참고_저장 항목' 시트의 형태로 기본값을 채운다. `state`가 없으면 `firstCard`는 `"pending"`이다. (N08, C14)
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N09 update: 읽고 → 고치고 → 쓰기 · P1
