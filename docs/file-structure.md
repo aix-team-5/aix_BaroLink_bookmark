@@ -358,7 +358,7 @@ sequenceDiagram
 |---|---|---|
 | `actions.openFolder(folderId)` | `view/folders.js`의 `openFolderPopup` | 잊고 있던 북마크의 [어디 있는지 보기] (F04-10) |
 | `actions.showResultNotice(entry)` | `view/history.js`의 `showResultNotice` | 첫 정리 카드와 정리 창의 [정리하기] 뒤 (F07) |
-| `actions.showContextMenu(bookmark)` | `view/folders.js`의 `showContextMenu` | 잊고 있던 북마크 목록의 우클릭 (P2, F15) |
+| `actions.showContextMenu(bookmark, { x, y, container })` | `view/folders.js`의 `showContextMenu` | 잊고 있던 북마크 팝업 안 앱의 우클릭 (P2, F15). container는 그 팝업 <dialog> (v19) |
 
 `actions`를 받는 함수: `showForgotten(items, actions)`, `showFirstCard(plan, actions)`, `showOrganizeDialog(plan, actions)`.
 
