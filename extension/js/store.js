@@ -17,7 +17,7 @@ const DEFAULTS = Object.freeze({
 // '옮기는 중' 표시가 유효한 시간 (1분)
 const PENDING_TTL = 60000;
 
-// 고정됨(독)에 넣을 수 있는 최대 개수 (N11 pin에서 쓴다. pin은 P2에서 채운다)
+// 고정됨(독)에 넣을 수 있는 최대 개수 (N11 pin에서 쓴다)
 const MAX_PINNED = 8;
 
 // 키마다 쓰는 쪽. 두 쪽이 같은 키를 동시에 쓰면 값이 사라진다(실행 확인: 120번 중 91개만 남음)
@@ -122,14 +122,32 @@ export async function recordOpened(id) {
   });
 }
 
-// N11: 독에 추가. 이미 8개면 넣지 않고 false
+// N11: 독에 추가. 이미 있으면 다시 넣지 않고 true, 이미 8개면 넣지 않고 false
 export async function pin(id) {
-  return false;
+  const key = toId(id);
+  let added = false;
+  await update("pinned", (pinned) => {
+    if (pinned.includes(key)) {
+      added = true;
+      return undefined;
+    }
+    if (pinned.length >= MAX_PINNED) {
+      added = false;
+      return undefined;
+    }
+    added = true;
+    return [...pinned, key];
+  });
+  return added;
 }
 
 // N11: 독에서 제거. 고정 목록을 돌려준다
 export async function unpin(id) {
-  return [];
+  const key = toId(id);
+  return update("pinned", (pinned) => {
+    if (!pinned.includes(key)) return undefined;
+    return pinned.filter((item) => item !== key);
+  });
 }
 
 // N12: "이제 안 봐도 됨" 기록 · 취소 (dismissed)
