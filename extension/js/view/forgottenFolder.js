@@ -1,6 +1,6 @@
 // 담당: 팀원 B · 이슈 #9 · 명세: N42 (F04)
 // 화면 파일끼리는 서로 부르지 않는다 (공통 조각은 ui.js). 크롬은 bookmarks.js와 store.js를 거친다.
-// 이 PR은 P1만 다룬다. [고정하기](F04-08), "N개 더 있어요 · 모두 보기", 우클릭 메뉴(F15)는 P2 브랜치에서 한다.
+// P2: "N개 더 있어요 · 모두 보기", 되돌리기 줄 자리. [고정하기](F04-08)와 우클릭 메뉴(F15)는 store.js pin과 folders.js showContextMenu가 합쳐진 뒤 붙인다.
 
 import { openBookmark } from "../bookmarks.js";
 import { load, dismiss, undismiss } from "../store.js";
@@ -12,7 +12,7 @@ const SLOT_ID = "forgotten-slot";
 const DIALOG_HOST_ID = "dialogs";
 const DIALOG_ID = "dialog-forgotten";
 
-// 한 번에 보여 주는 개수 (F04-04 배지, F04-05 팝업)
+// 한 번에 보여 주는 개수 (F04-04 배지, F04-05 팝업). 팝업은 "모두 보기"를 누르면 전부 보여 준다
 const MAX_SHOWN = 8;
 // [이제 안 봐도 됨]의 되돌리기 안내 시간 (F04-09, v9)
 const UNDO_MS = 6000;
@@ -29,6 +29,8 @@ let fillToken = 0;
 const undoRows = new Map();
 // dismissed에 저장하는 중인 북마크 ID. 저장이 끝나기 전에 같은 줄을 다시 눌러도 한 번만 처리한다
 const dismissing = new Set();
+// "N개 더 있어요 · 모두 보기"를 눌렀는지. 누르면 8개를 넘는 후보도 모두 보여 준다. 팝업을 닫으면 다시 8개로 (F04-05 비고, P2)
+let showAll = false;
 
 // "N개월 전" 같은 지난 시간 문구. 한 달이 안 되면 일, 1년 이상도 개월로 센다 (시안의 문구)
 function ago(time, now) {
@@ -175,6 +177,7 @@ function openDialog() {
   });
   dialog.addEventListener("close", () => {
     clearUndoRows();
+    showAll = false;
     dialog.remove();
   });
 
@@ -183,11 +186,13 @@ function openDialog() {
   fillList(dialog);
 }
 
-// 목록을 앞의 8개로 채운다. "연 기록 없음"을 가리려면 우리 기록(lastOpenedByUs)이 필요해 저장 항목을 읽는다
+// 목록을 앞의 8개로 채운다("모두 보기"를 눌렀으면 전부). "연 기록 없음"을 가리려면 우리 기록(lastOpenedByUs)이 필요해 저장 항목을 읽는다
 // 방금 뺀 북마크는 render.js가 다시 그리기 전이라도 빼고, 그 자리에 [되돌리기] 줄을 끼워 넣는다
 async function fillList(dialog) {
   const token = ++fillToken;
-  const items = current.items.filter((bookmark) => !undoRows.has(String(bookmark.id))).slice(0, MAX_SHOWN);
+  const remaining = current.items.filter((bookmark) => !undoRows.has(String(bookmark.id)));
+  const items = showAll ? remaining : remaining.slice(0, MAX_SHOWN);
+  const hidden = remaining.length - items.length;
   let stored = {};
   try {
     stored = await load();
@@ -213,7 +218,24 @@ async function fillList(dialog) {
     list.replaceChildren(empty);
     return;
   }
+  if (hidden > 0) rows.push(renderMoreRow(hidden, dialog));
   list.replaceChildren(...rows);
+}
+
+// 목록 아래 "N개 더 있어요 · 모두 보기" (확정 시안). 누르면 나머지 후보까지 모두 보여 준다
+function renderMoreRow(hidden, dialog) {
+  const row = document.createElement("div");
+  row.className = "dialog__subtitle";
+  row.append(
+    makeButton(`${hidden}개 더 있어요 · 모두 보기`, {
+      variant: "btn--ghost",
+      onClick: () => {
+        showAll = true;
+        fillList(dialog);
+      },
+    }),
+  );
+  return row;
 }
 
 // 일반 줄({ time, row }, 오래된 순)과 되돌리기 줄을 "마지막으로 연 시각" 순으로 합쳐 줄 목록을 돌려준다
