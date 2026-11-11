@@ -1047,6 +1047,11 @@ a {
   box-shadow: var(--shadow-sm);
 }
 
+/* 파비콘이 있는 타일: 색 타일 대신 중립 배경 (파비콘 뒤에 색이 겹쳐 보이지 않게) */
+.app-icon--favicon {
+  background-color: var(--color-surface-strong);
+}
+
 .app-icon__img {
   width: 60%;
   height: 60%;
