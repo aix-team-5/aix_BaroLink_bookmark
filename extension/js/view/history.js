@@ -13,12 +13,12 @@ const NOTICE_MS = 12000;
 const TEXT = {
   // 정리 결과 안내 (#notice)
   resultFirst: (folders, bookmarks) => `폴더 ${folders}개를 만들고 북마크 ${bookmarks}개를 넣었어요`, // 확정 F07-03
-  // TODO(팀 결정) ①: 같은 이름의 폴더를 다시 써서 새로 만든 폴더가 없거나 적을 때 "만들고"가 틀린 말이 된다
-  //   임시로 만든 폴더가 0개일 때만 resultNoNewFolder를 쓴다
-  resultNoNewFolder: (bookmarks) => `북마크 ${bookmarks}개를 폴더에 넣었어요`, // 제안
-  // TODO(팀 결정) ②: type "new"일 때의 문구 (명세에 없음)
-  resultNew: (bookmarks) => `새 북마크 ${bookmarks}개를 정리했어요`, // 시안
-  resultNewNone: "새 북마크를 그대로 뒀어요", // 시안
+  // 같은 이름의 폴더를 다시 써서 새로 만든 폴더가 0개일 때 (팀 결정 11/09 ①)
+  resultNoNewFolder: (bookmarks) => `북마크 ${bookmarks}개를 폴더에 넣었어요`, // 확정(11/09)
+  // 새 북마크 정리 type "new" (팀 결정 11/09 ②, F10-05)
+  resultNew: (bookmarks) => `새 북마크 ${bookmarks}개를 정리했어요`, // 확정(11/09)
+  resultNewWithFolders: (folders, bookmarks) => `폴더 ${folders}개를 만들고 새 북마크 ${bookmarks}개를 정리했어요`, // 확정(11/09), F10-06으로 폴더도 만들었을 때
+  resultNewNone: "새 북마크를 그대로 뒀어요", // 확정(11/09), 모두 '그대로 두기'일 때
   resultNothing: "옮긴 북마크가 없어요", // 제안, TODO(팀 결정)
   resultSkipped: (n) => `${n}개는 옮기지 않았어요`, // 제안, TODO(팀 결정) (F07-09: 건너뛴 개수를 표시). skipped에는 지워짐·직접 옮김·오류가 섞여 이유를 단정하지 않는다
   undo: "되돌리기", // 확정 F07-03
@@ -27,11 +27,11 @@ const TEXT = {
   // 되돌린 뒤 안내 (#toast, ui.js의 showToast)
   undone: "원래대로 되돌렸어요", // 시안
   undoFallback: "원래 폴더가 없어 기타 북마크로 되돌렸어요", // 확정 F13-07
-  // TODO(팀 결정) ③: 되돌릴 때 건너뛴 북마크가 있을 때 (F13-05 직접 옮김, F13-08 삭제됨)
-  undoSkipped: (n) => `${n}개는 되돌리지 않았어요`, // 제안, TODO(팀 결정). skipped에는 지워짐·직접 옮김·오류가 섞여 이유를 단정하지 않는다
-  undoNone: "되돌린 북마크가 없어요", // 제안, TODO(팀 결정) ③
-  undoAlready: "이미 되돌린 정리예요", // 제안, TODO(팀 결정) ③
-  undoFoldersOnly: "정리로 만든 빈 폴더를 지웠어요", // 제안, TODO(팀 결정) ③
+  // 되돌릴 때 건너뛴 북마크가 있을 때 (F13-05 직접 옮김, F13-08 삭제됨) (팀 결정 11/09 ③)
+  undoSkipped: (n) => `${n}개는 되돌리지 않았어요`, // 확정(11/09). skipped에는 지워짐·직접 옮김·오류가 섞여 이유를 단정하지 않는다
+  undoNone: "되돌린 북마크가 없어요", // 확정(11/09)
+  undoAlready: "이미 되돌린 정리예요", // 확정(11/09)
+  undoFoldersOnly: "정리로 만든 빈 폴더를 지웠어요", // 확정(11/09)
   undoFailed: "되돌리지 못했어요. 다시 눌러 주세요", // 제안 (명세에 없음)
   // 토스트는 한 번에 하나라서 되돌린 뒤 안내 문구를 이어 붙인다 (팀원 A 결정)
   toastJoin: " · ",
@@ -105,14 +105,15 @@ function resultMessage(entry) {
   const skipped = Number(entry.skipped) || 0;
 
   let title;
-  if (moved === 0 && created === 0) {
+  if (entry.type === "new") {
+    // ②: 새 북마크 정리. 모두 '그대로 두기'면 옮긴 것이 없어도 "그대로 뒀어요"가 맞는 말이다
+    if (moved === 0) title = TEXT.resultNewNone;
+    else title = created > 0 ? TEXT.resultNewWithFolders(created, moved) : TEXT.resultNew(moved);
+  } else if (moved === 0 && created === 0) {
     // 옮긴 것도 만든 폴더도 없으면 기록이 저장되지 않은 결과다
     title = TEXT.resultNothing;
-  } else if (entry.type === "new") {
-    // TODO(팀 결정) ②: 시안 문구를 임시로 쓴다 (P1의 applyPlan은 "new"를 받지 않는다)
-    title = moved > 0 ? TEXT.resultNew(moved) : TEXT.resultNewNone;
   } else {
-    // TODO(팀 결정) ①: 만든 폴더가 0개면 "만들고"가 틀린 말이라 임시로 다른 문구를 쓴다
+    // ①: 만든 폴더가 0개면 "만들고"가 틀린 말이라 다른 문구를 쓴다
     title = created > 0 ? TEXT.resultFirst(created, moved) : TEXT.resultNoNewFolder(moved);
   }
 
@@ -132,7 +133,7 @@ function undoMessage(r, entry) {
   const skipped = (r && Number(r.skipped)) || 0;
   const fallback = (r && Number(r.fallback)) || 0;
 
-  // TODO(팀 결정) ③: 복원한 북마크가 없을 때의 문구. 제안 문구를 임시로 쓴다
+  // ③: 복원한 북마크가 없을 때의 문구
   if (restored === 0) {
     if (skipped === 0) {
       // 옮긴 북마크 없이 폴더만 만든 정리는 되돌리면 빈 폴더만 지운다
@@ -146,7 +147,7 @@ function undoMessage(r, entry) {
 
   const parts = [TEXT.undone];
   if (fallback > 0) parts.push(TEXT.undoFallback); // F13-07
-  // TODO(팀 결정) ③: 되돌릴 때 건너뛴 북마크(F13-05 직접 옮김, F13-08 삭제됨)의 안내. 제안 문구를 임시로 쓴다
+  // ③: 되돌릴 때 건너뛴 북마크(F13-05 직접 옮김, F13-08 삭제됨)의 안내
   if (skipped > 0) parts.push(TEXT.undoSkipped(skipped));
   return parts.join(TEXT.toastJoin);
 }
