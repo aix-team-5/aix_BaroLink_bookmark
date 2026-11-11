@@ -48,6 +48,7 @@
   --color-text-strong: #0f172a; /* slate-900 */
   --color-text-muted: #94a3b8;  /* slate-400 */
   --color-text-faint: #64748b;  /* slate-500 */
+  --color-text-soft: #475569;   /* slate-600. 사진 배경 위의 보조 글자 */
   --color-primary: #7c3aed;         /* violet-600 */
   --color-primary-strong: #6d28d9;  /* violet-700 */
   --color-primary-soft: #ede9fe;    /* violet-100 */
@@ -143,6 +144,11 @@ body {
   min-width: var(--layout-min);
   min-height: 100vh;
   background-color: var(--color-bg);
+  /* 배경 사진 (시안). 사진이 없을 때를 위해 위의 배경색을 남긴다. 사진은 스크롤해도 고정 */
+  background-image: url("img/cloud-background.jpg");
+  background-size: cover;
+  background-position: center;
+  background-attachment: fixed;
   color: var(--color-text);
   font-size: var(--font-base);
   line-height: 1.5;
@@ -173,6 +179,7 @@ a {
 
 /* 배경 장식 (은은한 번짐) */
 .bg-decor {
+  display: none; /* 배경 사진을 쓰므로 색 번짐 장식은 끈다 */
   position: fixed;
   inset: 0;
   z-index: 0;
@@ -674,12 +681,14 @@ a {
 .section-head .desc {
   margin-top: var(--space-1);
   font-size: var(--font-sm);
-  color: var(--color-text-muted);
+  color: var(--color-text-soft);
 }
 
-/* #my-folders — 내 폴더 */
+/* #my-folders — 내 폴더 (시안: 배경 없이 흐림만 있는 투명 카드) */
 #my-folders {
   margin-top: var(--space-14);
+  background: none;
+  backdrop-filter: blur(4px);
 }
 
 /* #forgotten-slot 과 #folder-list 는 한 줄로 이어져 보이게 한다 (이슈 #14) */
@@ -743,7 +752,7 @@ a {
 
 .folder__count {
   font-size: var(--font-xs);
-  color: var(--color-text-muted);
+  color: var(--color-text-soft);
 }
 
 /* #forgotten-slot — 잊고 있던 북마크 칸 (어두운 카드. forgottenFolder.js가 채운다) */
@@ -800,6 +809,8 @@ a {
 /* #all-bookmarks — 모든 북마크 (render.js + search.js가 채운다) */
 #all-bookmarks {
   margin-top: var(--space-10);
+  background: none;
+  backdrop-filter: blur(8px);
 }
 
 /* 북마크가 하나도 없을 때의 안내 문구 (F01-05, render.js가 채운다) */
@@ -807,7 +818,7 @@ a {
   margin: var(--space-6) 0;
   text-align: center;
   font-size: var(--font-sm);
-  color: var(--color-text-muted);
+  color: var(--color-text-soft);
 }
 
 #all-bookmarks .bookmark-search {
@@ -888,7 +899,7 @@ a {
   text-overflow: ellipsis;
   white-space: nowrap;
   font-size: 10px;
-  color: var(--color-text-muted);
+  color: var(--color-text-soft);
 }
 
 /* #dock — 화면 아래 고정 바 (render.js가 채운다. 맨 아래에서 띄워 크롬 띠 56px를 피한다) */
