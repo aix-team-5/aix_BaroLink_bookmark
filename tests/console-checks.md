@@ -576,7 +576,7 @@ await (async () => {
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N11 pin / unpin: 독에 고정·해제 · P2
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (`feat/F08-pin`)
 - 파일·담당: store.js · 팀원 A
 - 관련 요구사항: F08-01, F08-02, F08-04, F08-06
 - 안전 등급: 저장 항목을 바꿈 (끝에 되돌림)
@@ -602,7 +602,7 @@ await (async () => {
       const again = await T.store.pin("검증-p1");
       p = (await T.stored()).pinned || [];
       T.expect("이미 있으면 다시 넣지 않는다", p.filter((x) => x === "검증-p1").length === 1 && p.length === 7, p);
-      T.record("이미 있는 ID를 pin했을 때 돌려주는 값(명세에 없다)", again);
+      T.expect("이미 있는 ID를 pin하면 true (명세 v19)", again === true, again);
     } finally {
       await T.restoreStore(saved);
     }
@@ -1995,7 +1995,7 @@ await (async () => {
 
 export는 모두 있지만(자동 검사가 확인한다), 몸체가 비어 있거나 빈 값만 돌려준다. `store.js`의 `load()`는 기본값 객체를 돌려주지만 `chrome.storage`를 읽지 않으므로 뼈대로 본다.
 
-2026-10-30 `main` `049b9be`: `bookmarks.js`·`store.js`가 합쳐져 N01~N03, N05~N10, N12~N16, N38, N40이 구현됐다. 이 두 파일에서 아직 뼈대인 것은 N04 `renameFolder`, N11 `pin`·`unpin`, N39 `markHandledNew`다. 아래 표는 작성 시점(`309b583`) 그대로 둔다.
+2026-10-30 `main` `049b9be`: `bookmarks.js`·`store.js`가 합쳐져 N01~N03, N05~N10, N12~N16, N38, N40이 구현됐다. 이 두 파일에서 아직 뼈대인 것은 N04 `renameFolder`, N39 `markHandledNew`다. N11 `pin`·`unpin`은 `feat/F08-pin`에서 구현됐다. 아래 표는 작성 시점(`309b583`) 그대로 둔다.
 
 | N | 함수 | 파일 | 담당 | 이슈 |
 |---|---|---|---|---|
