@@ -109,7 +109,8 @@ export function appIcon(bookmark = {}, size = 56) {
   tile.style.width = `${size}px`;
   tile.style.height = `${size}px`;
   tile.style.fontSize = `${Math.round(size * 0.4)}px`;
-  tile.style.backgroundColor = pickTileColorVar(title || url);
+  const tileColor = pickTileColorVar(title || url);
+  tile.style.backgroundColor = tileColor;
 
   // 먼저 첫 글자로 채운다 (파비콘이 없거나 아직 확인 전인 기본 모양)
   tile.textContent = firstLetter(title);
@@ -129,8 +130,13 @@ export function appIcon(bookmark = {}, size = 56) {
       // 파비콘 로딩이 실패하면 첫 글자로 되돌린다
       img.addEventListener("error", () => {
         img.remove();
+        tile.classList.remove("app-icon--favicon");
+        tile.style.backgroundColor = tileColor;
         tile.textContent = firstLetter(title);
       });
+      // 파비콘이 있으면 색 타일이 뒤에 비치지 않게 인라인 배경색을 지우고 중립 배경 클래스를 붙인다
+      tile.style.backgroundColor = "";
+      tile.classList.add("app-icon--favicon");
       tile.textContent = "";
       tile.appendChild(img);
     });
