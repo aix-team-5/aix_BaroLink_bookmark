@@ -2,9 +2,12 @@
 // 분류 규칙. 계산만 한다 (크롬 API를 쓰지 않고, 필요한 값은 모두 입력으로 받는다).
 
 // 주소에서 앞의 www.를 뗀 호스트만 꺼낸다. 해석할 수 없거나 호스트가 없으면(file:// 등) null
+// http·https가 아닌 주소(chrome://, javascript: 등)도 null이라 분류되지 않는다. chrome://settings가 제목 키워드로 분류되지 않게 한다 (#37 리뷰)
 function hostOf(url) {
   try {
-    const host = new URL(url).hostname.toLowerCase();
+    const parsed = new URL(url);
+    if (parsed.protocol !== "http:" && parsed.protocol !== "https:") return null;
+    const host = parsed.hostname.toLowerCase();
     if (!host) return null;
     return host.startsWith("www.") ? host.slice(4) : host;
   } catch {
@@ -89,6 +92,19 @@ export function measure(samples, answers, categories) {
 // N24: 새 북마크마다 분류해, 분류된 카테고리와 이름이 같은 폴더를 추천 폴더로 정한다
 // 출력: [{ bookmarkId, folderId }]. 분류되지 않았거나 같은 이름의 폴더가 없으면 folderId는 null(그대로 두기)
 // 새 폴더를 만들자는 제안은 이 함수가 아니라 plan.js의 suggestNewFolders가 맡는다 (명세 v14)
+// 폴더는 이름(title)이 카테고리 이름과 똑같을 때만 찾는다. 사용자가 이름을 바꿨으면 null이 되는 한계가 있다 (명세 N24 비고)
+// 같은 이름의 폴더가 여럿이면 folders에서 앞에 있는 것(loadTree 순서라 북마크바 쪽이 먼저)을 고른다 (명세에 없어 정함)
+// 관리자 폴더(rootType "managed")에는 옮길 수 없으므로 추천하지 않는다
+// 입력 순서대로 새 북마크마다 하나씩 돌려준다
 export function suggestForNew(newBookmarks, folders, categories) {
-  return [];
+  const folderOf = new Map();
+  for (const folder of folders ?? []) {
+    if (folder.rootType === "managed" || folderOf.has(folder.title)) continue;
+    folderOf.set(folder.title, folder.id);
+  }
+  return (newBookmarks ?? []).map((bookmark) => {
+    const { category } = classify(bookmark, categories);
+    const folderId = category === null ? null : folderOf.get(category) ?? null;
+    return { bookmarkId: bookmark.id, folderId };
+  });
 }
