@@ -1,9 +1,9 @@
 // 담당: 팀원 B · 이슈 #9 · 명세: N42 (F04)
 // 화면 파일끼리는 서로 부르지 않는다 (공통 조각은 ui.js). 크롬은 bookmarks.js와 store.js를 거친다.
-// P2: "N개 더 있어요 · 모두 보기", 되돌리기 줄 자리. [고정하기](F04-08)와 우클릭 메뉴(F15)는 store.js pin과 folders.js showContextMenu가 합쳐진 뒤 붙인다.
+// P2: [고정하기](F04-08), "N개 더 있어요 · 모두 보기", 되돌리기 줄 자리. 우클릭 메뉴(F15)는 folders.js의 showContextMenu가 합쳐진 뒤 붙인다.
 
 import { openBookmark } from "../bookmarks.js";
-import { load, dismiss, undismiss } from "../store.js";
+import { load, dismiss, undismiss, pin } from "../store.js";
 import { lastOpened } from "../forgotten.js";
 import { appIcon, icon, showToast } from "../ui.js";
 
@@ -16,6 +16,8 @@ const DIALOG_ID = "dialog-forgotten";
 const MAX_SHOWN = 8;
 // [이제 안 봐도 됨]의 되돌리기 안내 시간 (F04-09, v9)
 const UNDO_MS = 6000;
+// 팝업 안 안내 문구("고정은 8개까지 할 수 있어요" 등)를 보여 주는 시간
+const NOTICE_MS = 4000;
 const DAY = 24 * 60 * 60 * 1000;
 
 // 마지막으로 받은 값. 팝업이 열려 있는 동안 다시 그릴 때 쓴다
@@ -31,6 +33,10 @@ const undoRows = new Map();
 const dismissing = new Set();
 // "N개 더 있어요 · 모두 보기"를 눌렀는지. 누르면 8개를 넘는 후보도 모두 보여 준다. 팝업을 닫으면 다시 8개로 (F04-05 비고, P2)
 let showAll = false;
+// pinned에 저장하는 중인 북마크 ID. 저장이 끝나기 전에 [고정하기]를 다시 눌러도 한 번만 처리한다
+const pinning = new Set();
+// 팝업 안 안내 문구를 지우는 타이머
+let noticeTimer = null;
 
 // "N개월 전" 같은 지난 시간 문구. 한 달이 안 되면 일, 1년 이상도 개월로 센다 (시안의 문구)
 function ago(time, now) {
@@ -162,12 +168,18 @@ function openDialog() {
 
   const body = document.createElement("div");
   body.className = "dialog__body";
+  // 팝업 안 안내 문구. 팝업은 showModal()이라 #toast가 어두운 배경 뒤에 깔려 보이지 않으므로 여기에 보여 준다
+  const notice = document.createElement("div");
+  notice.className = "dialog__subtitle";
+  notice.dataset.role = "notice";
+  notice.setAttribute("role", "status");
+  notice.hidden = true;
   const list = document.createElement("div");
   list.className = "list";
   const note = document.createElement("div");
   note.className = "dialog__subtitle";
   note.textContent = "북마크는 원래 폴더에 그대로 있어요";
-  body.append(list, note);
+  body.append(notice, list, note);
 
   panel.append(header, body);
   dialog.appendChild(panel);
@@ -178,6 +190,8 @@ function openDialog() {
   dialog.addEventListener("close", () => {
     clearUndoRows();
     showAll = false;
+    clearTimeout(noticeTimer);
+    noticeTimer = null;
     dialog.remove();
   });
 
@@ -302,7 +316,9 @@ function renderRow(bookmark, time, stored, now, dialog) {
 
   const buttons = document.createElement("span");
   buttons.className = "actions";
+  // 버튼 순서는 확정 시안대로 [고정하기] [이제 안 봐도 됨] [어디 있는지 보기]
   buttons.append(
+    makeButton("고정하기", { variant: "btn--ghost", onClick: () => pinItem(bookmark, dialog) }),
     makeButton("이제 안 봐도 됨", { variant: "btn--ghost", onClick: () => dismissItem(bookmark, time, dialog) }),
     makeButton("어디 있는지 보기", { variant: "btn--ghost", onClick: () => showLocation(bookmark, dialog) }),
   );
@@ -322,6 +338,40 @@ async function openItem(bookmark, newTab, dialog) {
     console.warn("북마크를 열지 못했어요", error);
     showToast("북마크를 열지 못했어요");
   }
+}
+
+// 팝업 안에 안내 문구를 잠깐 보여 준다
+function showNotice(dialog, text) {
+  const notice = dialog.querySelector('[data-role="notice"]');
+  if (!notice) return;
+  notice.textContent = text;
+  notice.hidden = false;
+  clearTimeout(noticeTimer);
+  noticeTimer = setTimeout(() => {
+    noticeTimer = null;
+    notice.hidden = true;
+    notice.textContent = "";
+  }, NOTICE_MS);
+}
+
+// [고정하기]: 독(pinned)에 추가한다 (F04-08). 고정한 북마크는 pickForgotten이 빼므로, 저장이 바뀌면 render.js가 다시 그려 후보에서 빠진다
+// 독이 이미 8개면 pin이 false를 돌려준다. 그때는 넣지 않고 "고정은 8개까지 할 수 있어요"를 보여 준다 (F08-06)
+async function pinItem(bookmark, dialog) {
+  const id = String(bookmark.id);
+  if (pinning.has(id)) return;
+  pinning.add(id);
+  let added;
+  try {
+    added = await pin(id);
+  } catch (error) {
+    console.warn("고정하지 못했어요", error);
+    if (dialog.isConnected) showNotice(dialog, "고정하지 못했어요");
+    return;
+  } finally {
+    pinning.delete(id);
+  }
+  if (!dialog.isConnected) return;
+  showNotice(dialog, added ? "고정됨에 추가했어요" : "고정은 8개까지 할 수 있어요");
 }
 
 // [이제 안 봐도 됨]: dismissed에 기록하고, 그 줄 자리에 6초 동안 [되돌리기]를 보여 준다 (F04-09)
