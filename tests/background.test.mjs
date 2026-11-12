@@ -167,6 +167,32 @@ test("onCreated → onMoved를 기다리지 않고 연달아 보내도 이동이
   assert.equal(typeof data.manualMoves[a.id], "number");
 });
 
+test("가져오기: 시작~끝 사이에 저장된 북마크는 기록하지 않고, 끝난 뒤 저장한 것은 기록한다 (F01-07)", async () => {
+  // 크롬처럼 알림을 기다리지 않고 연달아 보낸다: 시작 → 저장 여러 개 → 끝 → 새로 저장
+  const imported = [create(1), create(2), create(1)];
+  const tasks = [listeners.onImportBegan(), ...imported.map((b) => b.fire()), listeners.onImportEnded()];
+  const after = create(1);
+  tasks.push(after.fire());
+  await Promise.all(tasks);
+  assert.deepEqual(data.newBookmarks, [after.id]);
+  assert.equal(data.importing, null);
+});
+
+test("가져오기: 서비스 워커가 다시 켜져도 표시는 저장소에 남아 계속 멈춘다", async () => {
+  await listeners.onImportBegan();
+  assert.equal(typeof data.importing?.at, "number");
+  // 워커가 꺼졌다 켜진 것처럼, 변수 없이 저장소 값만으로 판단하는지 본다
+  await create(1).fire();
+  assert.equal(Object.hasOwn(data, "newBookmarks"), false);
+});
+
+test("가져오기: 끝 알림이 오지 않아도 10분이 지나면 다시 기록한다", async () => {
+  data.importing = { at: Date.now() - 600000 };
+  const a = create(1);
+  await a.fire();
+  assert.deepEqual(data.newBookmarks, [a.id]);
+});
+
 test("onRemoved: 지운 새 북마크는 newBookmarks에서도 빠진다 (F01-06)", async () => {
   const a = create(1);
   const b = create(2);

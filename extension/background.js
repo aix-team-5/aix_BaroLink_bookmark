@@ -9,12 +9,13 @@ chrome.runtime.onInstalled.addListener(onInstalled);
 chrome.bookmarks.onCreated.addListener(inOrder(onCreated));
 chrome.bookmarks.onMoved.addListener(inOrder(onMoved));
 chrome.bookmarks.onRemoved.addListener(inOrder(onRemoved));
-chrome.bookmarks.onImportBegan.addListener(onImportBegan);
-chrome.bookmarks.onImportEnded.addListener(onImportEnded);
+chrome.bookmarks.onImportBegan.addListener(inOrder(onImportBegan));
+chrome.bookmarks.onImportEnded.addListener(inOrder(onImportEnded));
 
 // 북마크 알림을 도착한 순서대로 하나씩 끝까지 처리하는 큐
 // 이동 처리가 isPending을 기다리는 사이에 같은 북마크의 삭제 처리가 먼저 끝나면, 지운 ID를 다시 기록하게 된다
 // 별 버튼 창에서 폴더를 바꾸면 '저장 → 이동' 순서로 알림이 온다(명세 F10-08). 저장 처리가 늦게 끝나면 이동에서 지운 ID를 다시 넣게 되므로 onCreated도 같은 큐를 쓴다
+// 가져오기 시작·끝 알림도 같은 큐를 써서, 그 사이에 온 onCreated가 반드시 '가져오는 중' 표시를 본다
 let queue = Promise.resolve();
 
 function inOrder(handler) {
@@ -39,11 +40,12 @@ async function onInstalled(details) {
 }
 
 // N32: 북마크바·기타·모바일 바로 아래에 저장된 새 북마크를 newBookmarks에 추가 (F10-01)
-// 폴더이거나, 사용자 폴더 안에 바로 저장된 것(F10-09)은 추가하지 않는다
+// 폴더이거나, 사용자 폴더 안에 바로 저장된 것(F10-09)이거나, 가져오는 중에 들어온 것(F01-07)은 추가하지 않는다
 // 바로 아래인지는 폴더 ID가 아니라 부모 폴더의 folderType으로 판단한다 (F01-04)
 async function onCreated(id, node) {
   if (node?.url === undefined) return;
   try {
+    if (await store.isImporting()) return;
     const [parent] = await chrome.bookmarks.get(node.parentId);
     if (!NEW_BOOKMARK_ROOTS.has(parent?.folderType)) return;
     await store.addNew(id);
@@ -87,6 +89,22 @@ async function onRemoved(id, removeInfo) {
   }
 }
 
-// C13: 가져오기 중에는 onCreated 처리를 멈추고, 끝난 뒤 한 번만 다시 읽는다
-function onImportBegan() {}
-function onImportEnded() {}
+// C13·N47: 가져오기가 시작되면 '가져오는 중' 표시(importing)를 켜서 onCreated가 기록을 멈추게 한다 (F01-07)
+// 표시는 변수가 아니라 저장소에 둔다. 가져오는 도중 서비스 워커가 꺼졌다 켜져도 이어지고, 끝 알림이 오지 않으면 10분 뒤 끝난 것으로 본다
+async function onImportBegan() {
+  try {
+    await store.setImporting(true);
+  } catch (error) {
+    console.warn("가져오는 중 표시를 켜지 못했어요", error);
+  }
+}
+
+// 가져오기가 끝나면 표시를 끈다. 가져온 북마크는 새 북마크가 아니므로 서비스 워커가 따로 기록할 것은 없다
+// "끝난 뒤 한 번만 다시 읽는다"(C13)는 새 탭이 맡는다: importing 값이 바뀌면 render.js가 storage.onChanged로 한 번 다시 그린다
+async function onImportEnded() {
+  try {
+    await store.setImporting(false);
+  } catch (error) {
+    console.warn("가져오는 중 표시를 끄지 못했어요", error);
+  }
+}

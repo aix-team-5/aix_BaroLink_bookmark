@@ -1504,7 +1504,7 @@ await (async () => {
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N32 onCreated 처리: 새 북마크 기록 · P2
-- 구현 상태: 일부 구현 (feat/F07-background-p2) · 북마크바·기타·모바일 바로 아래 기록과 사용자 폴더·폴더 제외는 코드와 대조함. 가져오기 중 멈춤(F01-07)은 store.js의 setImporting/isImporting(N47)이 합쳐진 뒤 붙인다
+- 구현 상태: 구현됨 (feat/F07-background-p2) · 코드와 대조함. 가져오기 중 멈춤(F01-07)은 onImportBegan·onImportEnded가 setImporting(N47)으로 표시하고 onCreated가 isImporting을 본다
 - 파일·담당: background.js · 팀원 B
 - 관련 요구사항: F10-01, F10-09, F01-07
 - 안전 등급: ⚠ 크롬 북마크를 바꿈 (임시 북마크)
