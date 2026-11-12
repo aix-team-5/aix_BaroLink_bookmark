@@ -123,8 +123,8 @@ await (async () => {
   T.stored = () => chrome.storage.local.get(null);
   T.saveStore = async () => structuredClone(await chrome.storage.local.get(null));
   T.restoreStore = async (saved) => { await chrome.storage.local.clear(); await chrome.storage.local.set(saved); };
-  // 명세 '참고_저장 항목'의 기본값 9개 (계산 함수에 넣을 가짜 저장 항목)
-  T.emptyStored = () => ({ pinned: [], lastOpenedByUs: {}, dismissed: {}, manualMoves: {}, newBookmarks: [], handledNew: [], pendingMoves: {}, history: [], state: { firstCard: "pending" } });
+  // 명세 '참고_저장 항목'의 기본값 10개 (계산 함수에 넣을 가짜 저장 항목)
+  T.emptyStored = () => ({ pinned: [], lastOpenedByUs: {}, dismissed: {}, manualMoves: {}, newBookmarks: [], handledNew: [], pendingMoves: {}, history: [], state: { firstCard: "pending" }, importing: null });
 
   // 크롬 북마크를 우리 함수 없이 직접 읽는 도구 (비교 기준용). 최상위 폴더는 folderType으로 고른다 (F01-04)
   T.rawRoots = async () => {
@@ -506,10 +506,11 @@ await (async () => {
     try {
       await chrome.storage.local.clear();
       const d = await T.store.load();
-      const keys = ["pinned", "lastOpenedByUs", "dismissed", "manualMoves", "newBookmarks", "handledNew", "pendingMoves", "history", "state"];
-      T.expect("저장 항목 9개가 모두 있다", d && keys.every((k) => k in d), d && Object.keys(d));
+      const keys = ["pinned", "lastOpenedByUs", "dismissed", "manualMoves", "newBookmarks", "handledNew", "pendingMoves", "history", "state", "importing"];
+      T.expect("저장 항목 10개가 모두 있다", d && keys.every((k) => k in d), d && Object.keys(d));
       T.expect("비어 있으면 기본값('참고_저장 항목'의 형태)", T.same(d, T.emptyStored()), d);
       T.expect("state 값이 없으면 firstCard는 pending", d?.state?.firstCard === "pending", d?.state);
+      T.expect("importing이 없으면 null", d?.importing === null, d?.importing);
       await chrome.storage.local.set({ pinned: ["검증-1"], state: { firstCard: "later" } });
       const d2 = await T.store.load();
       T.expect("저장된 값을 실제로 읽는다(pinned)", T.same(d2?.pinned, ["검증-1"]), d2?.pinned);
@@ -520,7 +521,7 @@ await (async () => {
     }
   })();
   ```
-- 기대 결과: 저장 항목 9개를 한 번에 읽고, 없는 키는 '참고_저장 항목' 시트의 형태로 기본값을 채운다. `state`가 없으면 `firstCard`는 `"pending"`이다. (N08, C14)
+- 기대 결과: 저장 항목 10개를 한 번에 읽고, 없는 키는 '참고_저장 항목' 시트의 형태로 기본값을 채운다. `state`가 없으면 `firstCard`는 `"pending"`이다. (N08, C14)
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N09 update: 읽고 → 고치고 → 쓰기 · P1
@@ -1985,6 +1986,35 @@ await (async () => {
 - 기대 결과: 12개 이름마다 선으로 그린 SVG 아이콘을 만들고, 없는 이름이면 빈 요소를 돌려준다. 그림 파일이나 외부 아이콘 글꼴을 쓰지 않는다. (N46)
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
+#### C-N47 setImporting / isImporting: 가져오기 중 표시 · P2
+- 구현 상태: 구현됨 (feat/F01-importing)
+- 파일·담당: store.js · 팀원 A
+- 관련 요구사항: F01-07
+- 안전 등급: 저장 항목을 바꿈 (끝에 되돌림. 정상이면 오류가 나서 실제로는 바뀌지 않는다)
+- 사전 조건: 2장 실행. 둘 다 서비스 워커만 부르는 함수인데, 서비스 워커 콘솔에서는 `import()`를 쓸 수 없다. 그래서 새 탭에서는 "새 탭에서 부르면 오류"와 "읽기"만 본다. 켜기·끄기·10분 만료는 Node 테스트(`tests/store.test.mjs`)로 확인한다. 실제 동작(가져오는 동안 새 북마크를 기록하지 않음)은 `background.js`(N32, 팀원 B)가 이 함수를 부르게 된 뒤 C-N32에서 본다.
+- 붙여 넣을 코드:
+  ```js
+  // C-N47
+  await (async () => {
+    T.begin("C-N47");
+    const saved = await T.saveStore();
+    try {
+      const before = (await T.stored()).importing;
+      T.expect("새 탭에서 setImporting(true)는 오류", await T.throws(() => T.store.setImporting(true)));
+      T.expect("새 탭에서 setImporting(false)도 오류", await T.throws(() => T.store.setImporting(false)));
+      const after = (await T.stored()).importing;
+      T.expect("오류가 난 뒤 importing 값이 바뀌지 않는다", T.same(after, before), { before, after });
+      const r = await T.store.isImporting();
+      T.expect("가져오기 중이 아니면 isImporting()은 false", r === false, r);
+      T.record("지금 저장된 importing 값", after);
+    } finally {
+      await T.restoreStore(saved);
+    }
+  })();
+  ```
+- 기대 결과: 새 탭에서 `setImporting`을 부르면 "서비스 워커만 쓴다" 오류가 나고 값은 그대로다. `isImporting()`은 읽기만 하며, 값이 없거나 표시한 지 10분이 지났으면 `false`다. (N47, F01-07)
+- 결과: 통과 / 실패 / 보류   확인자:   날짜:
+
 ---
 
 ## 4장. 아직 없는 것 · 명세와 다른 것
@@ -2130,6 +2160,7 @@ export는 모두 있지만(자동 검사가 확인한다), 몸체가 비어 있�
 | N44 | appIcon | P1 | 뼈대 | | | #16 |
 | N45 | showToast | P1 | 뼈대 | | | #16 |
 | N46 | icon | P1 | 뼈대 | | | #16 |
+| N47 | setImporting / isImporting | P2 | 구현됨 | | | #3, #6 |
 
 - 결과 칸에는 통과 / 실패 / 보류를 적고, 실패면 비고에 요구사항 번호와 `T.summary()`의 실패 이름을 적는다.
 - 우선순위는 그 함수가 받치는 요구사항 줄의 우선순위다('기능 명세' 시트). P1·P2는 두 우선순위의 줄을 함께 받친다는 뜻이다.

@@ -55,7 +55,7 @@ beforeEach(() => {
 });
 
 // 1. load
-test("load: 저장된 것이 없으면 키 9개 모두 기본값", async () => {
+test("load: 저장된 것이 없으면 키 10개 모두 기본값", async () => {
   const all = await store.load();
   assert.deepEqual(all, {
     pinned: [],
@@ -67,6 +67,7 @@ test("load: 저장된 것이 없으면 키 9개 모두 기본값", async () => {
     pendingMoves: {},
     history: [],
     state: { firstCard: "pending" },
+    importing: null,
   });
 });
 
@@ -233,6 +234,52 @@ test("setPending: 잘못된 입력은 오류, 서비스 워커에서 부르면 �
   asWorker();
   await assert.rejects(store.setPending([{ id: "1", toParentId: "2" }]));
   assert.deepEqual(data, {});
+});
+
+// N47. setImporting / isImporting (서비스 워커만 쓴다)
+test("setImporting: 서비스 워커에서 켜면 { at }, 끄면 null", async () => {
+  asWorker();
+  const base = 1_700_000_000_000;
+  await withNow(base, () => store.setImporting(true));
+  assert.deepEqual(data.importing, { at: base });
+  assert.equal(await withNow(base, () => store.isImporting()), true);
+  await store.setImporting(false);
+  assert.ok(Object.hasOwn(data, "importing"));
+  assert.equal(data.importing, null);
+  assert.equal(await store.isImporting(), false);
+});
+
+test("isImporting: 표시한 지 10분 직전은 true, 정확히 10분이면 false, 값이 없으면 false", async () => {
+  asWorker();
+  assert.equal(await store.isImporting(), false);
+  const base = 1_700_000_000_000;
+  await withNow(base, () => store.setImporting(true));
+  assert.equal(await withNow(base + 599999, () => store.isImporting()), true);
+  assert.equal(await withNow(base + 600000, () => store.isImporting()), false);
+  // isImporting은 읽기만 한다 (만료돼도 값을 지우지 않는다)
+  assert.deepEqual(data.importing, { at: base });
+});
+
+test("setImporting: 새 탭에서 부르면 오류이고 저장하지 않는다. true·false가 아니면 오류", async () => {
+  await assert.rejects(store.setImporting(true), /서비스 워커만 쓴다/);
+  await assert.rejects(store.setImporting(false), /서비스 워커만 쓴다/);
+  assert.deepEqual(data, {});
+  asWorker();
+  await assert.rejects(store.setImporting("false"));
+  await assert.rejects(store.setImporting(1));
+  await assert.rejects(store.setImporting());
+  assert.deepEqual(data, {});
+});
+
+test("isImporting: await 없이 setImporting(true)를 부른 바로 뒤에도 true, false로 끈 바로 뒤에도 false", async () => {
+  asWorker();
+  // background.js처럼 onImportBegan에서 await 없이 켜고, 곧바로 onCreated에서 확인하는 순서
+  for (let i = 0; i < 20; i++) {
+    store.setImporting(true);
+    assert.equal(await store.isImporting(), true, `${i + 1}번째: 켠 바로 뒤`);
+    store.setImporting(false);
+    assert.equal(await store.isImporting(), false, `${i + 1}번째: 끈 바로 뒤`);
+  }
 });
 
 // 7. addHistory / markUndone
