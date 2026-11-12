@@ -55,7 +55,7 @@ beforeEach(() => {
 });
 
 // 1. load
-test("load: 저장된 것이 없으면 키 9개 모두 기본값", async () => {
+test("load: 저장된 것이 없으면 키 10개 모두 기본값", async () => {
   const all = await store.load();
   assert.deepEqual(all, {
     pinned: [],
@@ -67,6 +67,7 @@ test("load: 저장된 것이 없으면 키 9개 모두 기본값", async () => {
     pendingMoves: {},
     history: [],
     state: { firstCard: "pending" },
+    importing: null,
   });
 });
 
@@ -134,12 +135,71 @@ test("update: fn은 복사본을 받는다", async () => {
   assert.deepEqual(data.pinned, ["1"]);
 });
 
-// 5. dismiss / undismiss (pin·unpin은 P2에서 테스트한다)
+// 5. dismiss / undismiss (pin·unpin은 아래 5-1에서 테스트한다)
 test("dismiss 뒤 undismiss하면 원래대로", async () => {
   await store.dismiss("7");
   assert.equal(typeof data.dismissed["7"], "number");
   await store.undismiss("7");
   assert.deepEqual(data.dismissed, {});
+});
+
+// 5-1. pin / unpin (N11, F08-01·04·06)
+test("pin: 맨 뒤에 추가하고 true", async () => {
+  assert.equal(await store.pin("1"), true);
+  assert.equal(await store.pin("2"), true);
+  assert.deepEqual(data.pinned, ["1", "2"]);
+});
+
+test("pin: 이미 고정돼 있으면 다시 넣지 않고 true", async () => {
+  data.pinned = ["1", "2"];
+  assert.equal(await store.pin("1"), true);
+  assert.deepEqual(data.pinned, ["1", "2"]);
+});
+
+test("pin: 이미 8개면 넣지 않고 false, 목록은 그대로", async () => {
+  data.pinned = ["1", "2", "3", "4", "5", "6", "7", "8"];
+  assert.equal(await store.pin("9"), false);
+  assert.deepEqual(data.pinned, ["1", "2", "3", "4", "5", "6", "7", "8"]);
+  assert.equal(await store.pin("8"), true);
+  assert.equal(data.pinned.length, 8);
+});
+
+test("unpin: 그 ID를 빼고 남은 고정 목록을 돌려준다", async () => {
+  data.pinned = ["1", "2", "3"];
+  const list = await store.unpin("2");
+  assert.deepEqual(list, ["1", "3"]);
+  assert.deepEqual(data.pinned, ["1", "3"]);
+});
+
+test("unpin: 없는 ID면 쓰지 않고 지금 목록을 돌려준다", async () => {
+  assert.deepEqual(await store.unpin("1"), []);
+  assert.equal(Object.hasOwn(data, "pinned"), false);
+  data.pinned = ["1", "2"];
+  assert.deepEqual(await store.unpin("9"), ["1", "2"]);
+  assert.deepEqual(data.pinned, ["1", "2"]);
+});
+
+test("pin / unpin: 숫자 ID는 문자열로 맞춘다", async () => {
+  assert.equal(await store.pin(5), true);
+  assert.equal(await store.pin("5"), true);
+  assert.deepEqual(data.pinned, ["5"]);
+  assert.deepEqual(await store.unpin(5), []);
+  assert.deepEqual(data.pinned, []);
+});
+
+test("pin: 동시에 10개를 넣으면 정확히 8개만 들어간다", async () => {
+  const results = await Promise.all(Array.from({ length: 10 }, (_, i) => store.pin(`b${i}`)));
+  assert.equal(results.filter((r) => r === true).length, 8);
+  assert.equal(results.filter((r) => r === false).length, 2);
+  assert.equal(data.pinned.length, 8);
+  assert.equal(new Set(data.pinned).size, 8);
+});
+
+test("pin / unpin: 서비스 워커에서 부르면 오류, 아무것도 저장 안 됨", async () => {
+  asWorker();
+  await assert.rejects(store.pin("1"));
+  await assert.rejects(store.unpin("1"));
+  assert.deepEqual(data, {});
 });
 
 // 6. setPending / isPending
@@ -174,6 +234,52 @@ test("setPending: 잘못된 입력은 오류, 서비스 워커에서 부르면 �
   asWorker();
   await assert.rejects(store.setPending([{ id: "1", toParentId: "2" }]));
   assert.deepEqual(data, {});
+});
+
+// N47. setImporting / isImporting (서비스 워커만 쓴다)
+test("setImporting: 서비스 워커에서 켜면 { at }, 끄면 null", async () => {
+  asWorker();
+  const base = 1_700_000_000_000;
+  await withNow(base, () => store.setImporting(true));
+  assert.deepEqual(data.importing, { at: base });
+  assert.equal(await withNow(base, () => store.isImporting()), true);
+  await store.setImporting(false);
+  assert.ok(Object.hasOwn(data, "importing"));
+  assert.equal(data.importing, null);
+  assert.equal(await store.isImporting(), false);
+});
+
+test("isImporting: 표시한 지 10분 직전은 true, 정확히 10분이면 false, 값이 없으면 false", async () => {
+  asWorker();
+  assert.equal(await store.isImporting(), false);
+  const base = 1_700_000_000_000;
+  await withNow(base, () => store.setImporting(true));
+  assert.equal(await withNow(base + 599999, () => store.isImporting()), true);
+  assert.equal(await withNow(base + 600000, () => store.isImporting()), false);
+  // isImporting은 읽기만 한다 (만료돼도 값을 지우지 않는다)
+  assert.deepEqual(data.importing, { at: base });
+});
+
+test("setImporting: 새 탭에서 부르면 오류이고 저장하지 않는다. true·false가 아니면 오류", async () => {
+  await assert.rejects(store.setImporting(true), /서비스 워커만 쓴다/);
+  await assert.rejects(store.setImporting(false), /서비스 워커만 쓴다/);
+  assert.deepEqual(data, {});
+  asWorker();
+  await assert.rejects(store.setImporting("false"));
+  await assert.rejects(store.setImporting(1));
+  await assert.rejects(store.setImporting());
+  assert.deepEqual(data, {});
+});
+
+test("isImporting: await 없이 setImporting(true)를 부른 바로 뒤에도 true, false로 끈 바로 뒤에도 false", async () => {
+  asWorker();
+  // background.js처럼 onImportBegan에서 await 없이 켜고, 곧바로 onCreated에서 확인하는 순서
+  for (let i = 0; i < 20; i++) {
+    store.setImporting(true);
+    assert.equal(await store.isImporting(), true, `${i + 1}번째: 켠 바로 뒤`);
+    store.setImporting(false);
+    assert.equal(await store.isImporting(), false, `${i + 1}번째: 끈 바로 뒤`);
+  }
 });
 
 // 7. addHistory / markUndone
