@@ -86,7 +86,9 @@ const CLS = {
   moves: "history-moves",
   move: "history-move",
   moveTitle: "history-move__title",
+  moveSep: "history-move__sep",
   movePath: "history-move__path",
+  status: "history-status",
 };
 
 // 정리 종류를 화면 문구로 바꾼다
@@ -270,6 +272,25 @@ const undoingIds = new Set();
 let historyData = null;
 // 늦게 도착한 옛 읽기 결과가 새 결과를 덮어쓰지 않게 하는 번호
 let loadSeq = 0;
+// 창 안 안내 줄의 문구 { text, isError }. 창을 닫기 전까지 남기고, 닫으면 지운다
+let statusMessage = null;
+
+// 창 안 안내 줄(.history-status)에 statusMessage를 반영한다. 비어 있으면 숨긴다
+function applyStatus(el) {
+  const text = statusMessage ? statusMessage.text : "";
+  el.textContent = text;
+  // 처음에는 status, 실패일 때만 alert
+  el.setAttribute("role", statusMessage && statusMessage.isError ? "alert" : "status");
+  el.hidden = text === "";
+}
+
+// 안내 문구를 기억하고, 지금 열린 창의 안내 줄 글자만 바꾼다 (본문은 건드리지 않는다)
+function setStatus(text, isError) {
+  statusMessage = { text, isError };
+  const dialog = document.getElementById(HISTORY_DIALOG_ID);
+  const el = dialog && dialog.querySelector(`.${CLS.status}`);
+  if (el) applyStatus(el);
+}
 
 // loadTree의 결과로 폴더 ID → 폴더 이름 표를 만든다 (루트 포함)
 function folderNames(tree) {
@@ -311,6 +332,7 @@ function getHistoryDialog(host) {
     if (dialog.open) return;
     expandedIds.clear();
     historyData = null;
+    statusMessage = null;
     loadSeq++; // 읽는 중이던 결과는 버린다
     dialog.remove();
   });
@@ -318,7 +340,7 @@ function getHistoryDialog(host) {
   return dialog;
 }
 
-// 머리말(아이콘 · 제목 · 설명 · 닫기)과 본문 칸을 새로 그린다. 본문 칸을 돌려준다
+// 머리말(아이콘 · 제목 · 설명 · 닫기), 안내 줄, 본문 칸을 새로 그린다. 본문 칸을 돌려준다
 function drawFrame(dialog) {
   dialog.replaceChildren();
 
@@ -347,10 +369,16 @@ function drawFrame(dialog) {
   closeButton.addEventListener("click", () => dialog.close());
   header.append(headText, closeButton);
 
+  // 창 안 [되돌리기]의 결과 안내 줄. 토스트(#toast)는 모달 뒤에 깔려 보이지 않아 창 안에 둔다
+  // 머리말과 본문 사이에 한 번만 만들고, 본문을 다시 그려도 건드리지 않는다
+  const status = document.createElement("div");
+  status.className = CLS.status;
+  applyStatus(status);
+
   const body = document.createElement("div");
   body.className = CLS.dialogBody;
 
-  panel.append(header, body);
+  panel.append(header, status, body);
   dialog.appendChild(panel);
   return body;
 }
@@ -440,13 +468,17 @@ function historyItem(dialog, body, entry, names) {
       const moveTitle = document.createElement("span");
       moveTitle.className = CLS.moveTitle;
       moveTitle.textContent = move.title ?? "";
+      // CSS가 없어도 "제목 · 원래 → 옮긴 폴더"로 읽히게 구분 글자를 넣는다
+      const moveSep = document.createElement("span");
+      moveSep.className = CLS.moveSep;
+      moveSep.textContent = " · ";
       const movePath = document.createElement("span");
       movePath.className = CLS.movePath;
       movePath.textContent = TEXT.historyMove(
         folderName(names, move.fromParentId),
         folderName(names, move.toParentId),
       );
-      moveEl.append(moveTitle, movePath);
+      moveEl.append(moveTitle, moveSep, movePath);
       movesEl.appendChild(moveEl);
     }
     item.appendChild(movesEl);
@@ -494,18 +526,36 @@ async function fillBody(dialog) {
   if (body) drawBody(dialog, body);
 }
 
-// 창 안의 [되돌리기]: handleUndo를 그대로 쓰고, 끝나면(성공·실패 모두) 그때 열려 있는 창의 본문을 다시 채운다
-// renderAll은 이 창을 다시 그리지 않으므로 "되돌림"이 보이려면 여기서 다시 읽어야 한다
+// 창 안의 [되돌리기] (F13-07, F13-09): undo를 직접 부르고, 결과는 토스트 대신 창 안 안내 줄에 보여 준다
+// (모달은 top layer라 #toast가 흐린 배경 뒤에 깔리고 화면 낭독기에도 전달되지 않는다. #notice의 [되돌리기]는 handleUndo와 토스트 그대로)
+// 끝나면(성공·실패 모두) 그때 열려 있는 창의 본문을 다시 채운다. renderAll은 이 창을 다시 그리지 않는다
 // 되돌리는 중에 창을 닫았다 다시 열면 누른 버튼의 창은 이미 지워졌으므로, 끝난 뒤 지금 열린 창을 id로 다시 찾는다
 async function undoFromHistory(entry, button) {
   const key = String(entry.id);
   if (button.disabled || undoingIds.has(key)) return;
   undoingIds.add(key);
+  button.disabled = true; // 두 번 눌리지 않게 바로 막는다
+
+  let r;
+  let failed = false;
   try {
-    await handleUndo(entry, button);
+    r = await undo(entry.id);
+  } catch (error) {
+    console.error("정리를 되돌리지 못했어요", error);
+    failed = true;
   } finally {
     undoingIds.delete(key);
   }
+
+  if (failed) {
+    button.disabled = false; // 다시 누를 수 있게
+    setStatus(TEXT.undoFailed, true);
+  } else {
+    // handleUndo처럼 이 기록의 결과 안내(#notice)는 닫는다
+    clearNotice(entry.id);
+    setStatus(undoMessage(r, entry), false);
+  }
+
   const current = document.getElementById(HISTORY_DIALOG_ID);
   if (!current || !current.open) return;
   await fillBody(current);
