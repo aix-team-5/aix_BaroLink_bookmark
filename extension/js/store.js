@@ -1,7 +1,7 @@
-// 담당: 팀원 A · 이슈 #3 · 명세: N08~N16, N38~N40 · 크롬 API: C14, C15
+// 담당: 팀원 A · 이슈 #3 · 명세: N08~N16, N38~N40, N47 · 크롬 API: C14, C15
 // 저장 항목을 읽고 쓰는 통로. 모든 저장은 이 파일을 거친다. 한 키는 한쪽(새 탭 또는 서비스 워커)만 쓴다.
 
-// 저장 항목 9개의 기본값. 밖으로 내보낼 때는 항상 복사본을 준다
+// 저장 항목 10개의 기본값. 밖으로 내보낼 때는 항상 복사본을 준다
 const DEFAULTS = Object.freeze({
   pinned: [],
   lastOpenedByUs: {},
@@ -12,12 +12,13 @@ const DEFAULTS = Object.freeze({
   pendingMoves: {},
   history: [],
   state: { firstCard: "pending" },
+  importing: null,
 });
 
 // '옮기는 중' 표시가 유효한 시간 (1분)
 const PENDING_TTL = 60000;
 
-// 고정됨(독)에 넣을 수 있는 최대 개수 (N11 pin에서 쓴다. pin은 P2에서 채운다)
+// 고정됨(독)에 넣을 수 있는 최대 개수 (N11 pin에서 쓴다)
 const MAX_PINNED = 8;
 
 // 키마다 쓰는 쪽. 두 쪽이 같은 키를 동시에 쓰면 값이 사라진다(실행 확인: 120번 중 91개만 남음)
@@ -31,11 +32,15 @@ const WRITER = {
   state: "newtab",
   manualMoves: "worker",
   newBookmarks: "worker",
+  importing: "worker",
 };
 
 const SIDE_NAME = { newtab: "새 탭", worker: "서비스 워커" };
 
 const FIRST_CARD_VALUES = ["pending", "done", "later"];
+
+// '가져오는 중' 표시가 유효한 시간 (10분). 가져오는 도중 크롬이 꺼져 onImportEnded가 오지 않은 경우 대비
+const IMPORTING_TTL = 600000;
 
 // 읽고 → 고치고 → 쓰기 작업을 한 줄로 세우는 큐
 let queue = Promise.resolve();
@@ -122,14 +127,32 @@ export async function recordOpened(id) {
   });
 }
 
-// N11: 독에 추가. 이미 8개면 넣지 않고 false
+// N11: 독에 추가. 이미 있으면 다시 넣지 않고 true, 이미 8개면 넣지 않고 false
 export async function pin(id) {
-  return false;
+  const key = toId(id);
+  let added = false;
+  await update("pinned", (pinned) => {
+    if (pinned.includes(key)) {
+      added = true;
+      return undefined;
+    }
+    if (pinned.length >= MAX_PINNED) {
+      added = false;
+      return undefined;
+    }
+    added = true;
+    return [...pinned, key];
+  });
+  return added;
 }
 
 // N11: 독에서 제거. 고정 목록을 돌려준다
 export async function unpin(id) {
-  return [];
+  const key = toId(id);
+  return update("pinned", (pinned) => {
+    if (!pinned.includes(key)) return undefined;
+    return pinned.filter((item) => item !== key);
+  });
 }
 
 // N12: "이제 안 봐도 됨" 기록 · 취소 (dismissed)
@@ -193,6 +216,26 @@ export async function isPending(id, parentId) {
   const entry = (stored.pendingMoves || {})[key];
   if (!entry) return false;
   return String(entry.toParentId) === String(parentId) && Date.now() - entry.at < PENDING_TTL;
+}
+
+// N47: 가져오기 중 표시를 켜고 끈다 (importing). 서비스 워커만 호출 (onImportBegan → true, onImportEnded → false)
+// true면 { at: 지금 }, false면 null. true·false가 아니면 오류
+export async function setImporting(on) {
+  if (typeof on !== "boolean") {
+    throw new Error(`store.js: setImporting에는 true 또는 false가 필요하다 (받은 값: ${on})`);
+  }
+  await update("importing", () => (on ? { at: Date.now() } : null));
+}
+
+// N47: 지금 가져오기 중인지 확인. 서비스 워커가 부름, 읽기만 함 (update를 쓰지 않는다)
+// 값이 없거나 표시한 지 10분이 지났으면 false
+export async function isImporting() {
+  // 같은 쪽(서비스 워커)에서 먼저 부른 setImporting이 저장을 끝낼 때까지 기다린다
+  await queue;
+  const stored = await chrome.storage.local.get("importing");
+  const entry = stored.importing;
+  if (!entry || typeof entry.at !== "number") return false;
+  return Date.now() - entry.at < IMPORTING_TTL;
 }
 
 // N15: 정리 기록 추가 (history). 최신 기록이 맨 앞
