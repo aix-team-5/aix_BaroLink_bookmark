@@ -425,7 +425,7 @@ function historyItem(dialog, body, entry, names) {
     undoButton.className = `${CLS.btn} ${CLS.undo}`;
     undoButton.textContent = TEXT.undo;
     undoButton.disabled = undoingIds.has(key);
-    undoButton.addEventListener("click", () => undoFromHistory(dialog, entry, undoButton));
+    undoButton.addEventListener("click", () => undoFromHistory(entry, undoButton));
     row.appendChild(undoButton);
   }
   item.appendChild(row);
@@ -479,8 +479,13 @@ async function fillBody(dialog) {
     historyData = null;
     if (!dialog.isConnected || !dialog.open) return;
     const body = dialog.querySelector(`.${CLS.dialogBody}`);
-    if (body) body.replaceChildren();
-    showToast(TEXT.historyLoadFailed);
+    if (!body) return;
+    // 토스트(#toast)는 모달 바깥이라 가려지고 화면 낭독기에도 전달되지 않는다 → 본문 안에 안내한다
+    const failed = document.createElement("div");
+    failed.className = CLS.empty;
+    failed.setAttribute("role", "alert");
+    failed.textContent = TEXT.historyLoadFailed;
+    body.replaceChildren(failed);
     return;
   }
   if (seq !== loadSeq || !dialog.isConnected || !dialog.open) return;
@@ -489,9 +494,10 @@ async function fillBody(dialog) {
   if (body) drawBody(dialog, body);
 }
 
-// 창 안의 [되돌리기]: handleUndo를 그대로 쓰고, 끝나면(성공·실패 모두) 창이 아직 열려 있을 때만 본문을 다시 채운다
+// 창 안의 [되돌리기]: handleUndo를 그대로 쓰고, 끝나면(성공·실패 모두) 그때 열려 있는 창의 본문을 다시 채운다
 // renderAll은 이 창을 다시 그리지 않으므로 "되돌림"이 보이려면 여기서 다시 읽어야 한다
-async function undoFromHistory(dialog, entry, button) {
+// 되돌리는 중에 창을 닫았다 다시 열면 누른 버튼의 창은 이미 지워졌으므로, 끝난 뒤 지금 열린 창을 id로 다시 찾는다
+async function undoFromHistory(entry, button) {
   const key = String(entry.id);
   if (button.disabled || undoingIds.has(key)) return;
   undoingIds.add(key);
@@ -500,10 +506,12 @@ async function undoFromHistory(dialog, entry, button) {
   } finally {
     undoingIds.delete(key);
   }
-  if (dialog.isConnected && dialog.open) await fillBody(dialog);
+  const current = document.getElementById(HISTORY_DIALOG_ID);
+  if (!current || !current.open) return;
+  await fillBody(current);
   // 다시 그리면 눌렀던 버튼이 없어지므로, 창이 아직 열려 있으면 그 내역의 펼치기 버튼에 포커스를 돌려놓는다
-  if (!dialog.isConnected || !dialog.open) return;
-  const toggle = [...dialog.querySelectorAll(`.${CLS.toggle}`)].find((el) => el.dataset.historyId === key);
+  if (!current.isConnected || !current.open) return;
+  const toggle = [...current.querySelectorAll(`.${CLS.toggle}`)].find((el) => el.dataset.historyId === key);
   if (toggle) toggle.focus();
 }
 
