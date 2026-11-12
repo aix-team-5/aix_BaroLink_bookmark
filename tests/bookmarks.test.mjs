@@ -108,6 +108,15 @@ const bookmarks = {
     nodes.delete(node.id);
     calls.push("bookmarks.remove");
   },
+  // 실제 크롬처럼 없는 ID·루트·최상위 폴더·관리자 폴더는 오류
+  async update(id, { title }) {
+    const node = need(id);
+    if (node.parentId === undefined || node.parentId === "0") throw new Error("Can't modify the root bookmark folders.");
+    if (node.unmodifiable) throw new Error("Can't modify managed bookmarks.");
+    if (title !== undefined) node.title = title;
+    calls.push("bookmarks.update");
+    return view(node.id, false);
+  },
 };
 
 // ---- 가짜 chrome.tabs ----
@@ -405,6 +414,82 @@ test("moveBookmark: 옮기는 사이 지워지면 null", async () => {
   } finally {
     bookmarks.move = original;
   }
+});
+
+// ---- N04 renameFolder ----
+
+test("renameFolder: 폴더 이름을 바꾸고 바뀐 크롬 노드를 그대로 돌려준다 (F03-05)", async () => {
+  const result = await b.renameFolder("11", "공부 자료");
+  assert.deepEqual(result, { id: "11", title: "공부 자료", dateAdded: 1, syncing: true, parentId: "1", index: 1 });
+  assert.equal(nodes.get("11").title, "공부 자료");
+  assert.deepEqual(calls, ["bookmarks.update"]);
+});
+
+test("renameFolder: 앞뒤 공백을 자르고 저장한다 (가운데 공백은 그대로)", async () => {
+  const result = await b.renameFolder("12", "  새  이름 \t");
+  assert.equal(result.title, "새  이름");
+  assert.equal(nodes.get("12").title, "새  이름");
+});
+
+test("renameFolder: 숫자 ID도 받는다", async () => {
+  assert.equal((await b.renameFolder(110, "강좌")).id, "110");
+});
+
+test("renameFolder: 빈 이름·공백뿐·문자열이 아닌 이름은 오류, 바꾸지 않는다 (F03-07)", async () => {
+  for (const name of ["", "   ", "\t\n", undefined, null, 3]) {
+    await assert.rejects(b.renameFolder("11", name), { message: "폴더 이름이 비어 있어요" }, JSON.stringify(name));
+  }
+  assert.equal(nodes.get("11").title, "공부");
+  assert.equal(calls.includes("bookmarks.update"), false);
+});
+
+test("renameFolder: 최상위 폴더(북마크바·기타 북마크)는 오류, 바꾸지 않는다", async () => {
+  for (const id of ["1", "2", "3"]) {
+    await assert.rejects(b.renameFolder(id, "바꾸면 안 됨"), /이름을 바꿀 수 없어요/, id);
+  }
+  assert.equal(nodes.get("1").title, "북마크바");
+  assert.equal(nodes.get("2").title, "기타 북마크");
+  assert.equal(calls.includes("bookmarks.update"), false);
+});
+
+test("renameFolder: 모바일 북마크 폴더도 오류", async () => {
+  build([{ id: "4", title: "모바일 북마크", folderType: "mobile", syncing: true, kids: [] }]);
+  await assert.rejects(b.renameFolder("4", "폰"));
+  assert.equal(nodes.get("4").title, "모바일 북마크");
+  assert.equal(calls.includes("bookmarks.update"), false);
+});
+
+test("renameFolder: 루트(\"0\")는 오류", async () => {
+  await assert.rejects(b.renameFolder("0", "루트"), { message: "최상위 폴더는 이름을 바꿀 수 없어요" });
+  await assert.rejects(b.renameFolder(0, "루트"));
+  assert.equal(nodes.get("0").title, "");
+  assert.equal(calls.includes("bookmarks.update"), false);
+});
+
+test("renameFolder: 관리자 폴더(unmodifiable)는 오류", async () => {
+  build([
+    { id: "1", title: "북마크바", folderType: "bookmarks-bar", syncing: true, kids: [] },
+    {
+      id: "5", title: "회사", folderType: "managed", syncing: false, unmodifiable: "managed",
+      kids: [{ id: "51", title: "팀", unmodifiable: "managed", kids: [] }],
+    },
+  ]);
+  await assert.rejects(b.renameFolder("51", "우리 팀"), { message: "바꿀 수 없는 폴더예요" });
+  await assert.rejects(b.renameFolder("5", "우리 회사"), { message: "바꿀 수 없는 폴더예요" });
+  assert.equal(nodes.get("51").title, "팀");
+  assert.equal(nodes.get("5").title, "회사");
+  assert.equal(calls.includes("bookmarks.update"), false);
+});
+
+test("renameFolder: 북마크 ID는 오류", async () => {
+  await assert.rejects(b.renameFolder("10", "네이버 메인"), { message: "폴더가 아니에요" });
+  assert.equal(nodes.get("10").title, "네이버");
+  assert.equal(calls.includes("bookmarks.update"), false);
+});
+
+test("renameFolder: 없는 ID는 null이 아니라 오류", async () => {
+  await assert.rejects(b.renameFolder("999", "없음"), { message: "폴더를 찾지 못했어요" });
+  assert.equal(calls.includes("bookmarks.update"), false);
 });
 
 // ---- N05 deleteFolderKeepChildren ----

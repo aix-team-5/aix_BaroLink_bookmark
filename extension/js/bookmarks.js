@@ -141,9 +141,20 @@ async function findNode(id) {
   }
 }
 
-// N04: 앱 폴더 이름 바꾸기
+// N04: 앱 폴더 이름 바꾸기. 바뀐 노드를 돌려준다 (createFolder처럼 크롬 노드 그대로)
+// 이름은 앞뒤 공백을 자르고 저장한다. 빈 이름·없는 폴더·바꿀 수 없는 폴더면 바꾸지 않고 오류를 던진다
 export async function renameFolder(id, name) {
-  return null;
+  const title = typeof name === "string" ? name.trim() : "";
+  if (!title) throw new Error("폴더 이름이 비어 있어요");
+  const node = await findNode(id);
+  if (!node) throw new Error("폴더를 찾지 못했어요");
+  // 관리자가 정한 폴더(managed)는 바꿀 수 없다
+  if (node.unmodifiable) throw new Error("바꿀 수 없는 폴더예요");
+  if (node.url !== undefined) throw new Error("폴더가 아니에요");
+  // 루트("0")는 parentId가 없다
+  if (node.parentId === undefined) throw new Error("최상위 폴더는 이름을 바꿀 수 없어요");
+  if (node.folderType) throw new Error("북마크바·기타 북마크·모바일 북마크는 이름을 바꿀 수 없어요");
+  return chrome.bookmarks.update(node.id, { title });
 }
 
 // N05: 안의 북마크를 상위 폴더로 꺼낸 뒤 폴더만 삭제. 꺼낸 북마크 수를 돌려준다
