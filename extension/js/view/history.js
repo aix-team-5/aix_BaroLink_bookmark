@@ -547,13 +547,20 @@ async function undoFromHistory(entry, button) {
     undoingIds.delete(key);
   }
 
+  // 끝난 시점에 창이 닫혀 있으면 안내 줄 대신 토스트로 알린다 (닫은 뒤 다시 열었을 때 옛 문구가 남지 않게)
+  const openNow = document.getElementById(HISTORY_DIALOG_ID);
+  const isOpen = Boolean(openNow && openNow.open);
   if (failed) {
     button.disabled = false; // 다시 누를 수 있게
-    setStatus(TEXT.undoFailed, true);
+    if (isOpen) setStatus(TEXT.undoFailed, true);
+    else showToast(TEXT.undoFailed);
   } else {
     // handleUndo처럼 이 기록의 결과 안내(#notice)는 닫는다
     clearNotice(entry.id);
-    setStatus(undoMessage(r, entry), false);
+    const message = undoMessage(r, entry);
+    if (isOpen) setStatus(message, false);
+    // handleUndo와 같게: 문구를 이어 붙였으면 읽을 시간을 조금 더 준다
+    else showToast(message, message === TEXT.undone ? {} : { duration: 5000 });
   }
 
   const current = document.getElementById(HISTORY_DIALOG_ID);
