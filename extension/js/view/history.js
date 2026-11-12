@@ -1,9 +1,11 @@
 // 담당: 팀원 A · 이슈 #5 · 명세: N43 (F07, F13)
-// 화면 파일끼리는 서로 부르지 않는다 (공통 조각은 ui.js). 크롬은 organize.js와 store.js를 거친다.
+// 화면 파일끼리는 서로 부르지 않는다 (공통 조각은 ui.js). 크롬은 bookmarks.js(폴더 이름 읽기), organize.js(되돌리기), store.js를 거친다.
 
 // render.js가 actions.showResultNotice로 정리 결과 안내를 부르고, 헤더의 정리 기록 버튼에서 showHistory를 부른다
 
+import { loadTree } from "../bookmarks.js";
 import { undo } from "../organize.js";
+import { load } from "../store.js";
 import { showToast, icon } from "../ui.js";
 
 // F07-03: 정리 결과 안내를 보여 주는 시간
@@ -47,6 +49,7 @@ const TEXT = {
   typeFirst: "첫 정리", // 확정 F13-01
   typeNew: "새 북마크 정리", // 확정 F13-01
   unknownFolder: "(지워진 폴더)", // 제안
+  historyLoadFailed: "정리 기록을 불러오지 못했어요", // 제안 (명세에 없음)
 };
 
 // 이 파일이 붙이는 CSS 클래스 이름. 모양은 newtab.css(팀원 D)에 둔다
@@ -60,13 +63,14 @@ const CLS = {
   btnUndo: "btn--primary",
   btnClose: "btn--icon",
 
-  // 정리 기록 창 (<dialog>, #dialogs)
-  dialog: "history-dialog",
-  header: "history-header",
-  title: "history-title",
-  titleIcon: "history-title__icon",
-  desc: "history-desc",
-  close: "history-close",
+  // 정리 기록 창 (<dialog>, #dialogs). 틀·머리말은 공통 .dialog, .dialog__panel/__header/__title/__subtitle/__body
+  dialogFrame: "dialog",
+  dialogPanel: "dialog__panel",
+  dialogHeader: "dialog__header",
+  dialogTitle: "dialog__title",
+  dialogSubtitle: "dialog__subtitle",
+  dialogBody: "dialog__body",
+  // 아래는 정리 기록 창에만 있는 모양 (newtab.css에 아직 없음, 팀원 D에게 부탁)
   empty: "history-empty",
   list: "history-list",
   item: "history-item",
@@ -253,14 +257,262 @@ export function showResultNotice(entry) {
   noticeTimer = setTimeout(() => clearNotice(), NOTICE_MS);
 }
 
-// N43: 정리 기록 화면
+// 정리 기록 창: #dialogs 안의 <dialog>를 하나만 두고 다시 쓴다
+const DIALOG_HOST_ID = "dialogs";
+const HISTORY_DIALOG_ID = "dialog-history";
+const HISTORY_TITLE_ID = "dialog-history-title";
+
+// 펼쳐 둔 내역의 ID(문자열). 본문을 다시 채워도 펼친 채로 둔다. 창을 닫으면 비운다
+const expandedIds = new Set();
+// 창 안 [되돌리기]가 진행 중인 내역의 ID. 본문을 다시 그려도 버튼을 막아 둔다
+const undoingIds = new Set();
+// 마지막으로 읽은 { entries, names }. 펼치기는 저장소를 다시 읽지 않고 이 값으로 본문만 다시 그린다
+let historyData = null;
+// 늦게 도착한 옛 읽기 결과가 새 결과를 덮어쓰지 않게 하는 번호
+let loadSeq = 0;
+
+// loadTree의 결과로 폴더 ID → 폴더 이름 표를 만든다 (루트 포함)
+function folderNames(tree) {
+  const names = new Map();
+  // 고르지 않은 루트(두 번째 기타 북마크 등): 바로 아래 북마크의 folderTitle이 루트의 이름이다
+  for (const bookmark of tree.bookmarks) {
+    if (bookmark.path.length === 0) names.set(String(bookmark.rootId), bookmark.folderTitle);
+  }
+  for (const root of Object.values(tree.roots)) {
+    if (root) names.set(String(root.id), root.title);
+  }
+  for (const folder of tree.folders) {
+    names.set(String(folder.id), folder.title);
+  }
+  return names;
+}
+
+// 지금 있는 폴더면 이름, 없으면 TEXT.unknownFolder
+function folderName(names, id) {
+  const key = String(id);
+  return names.has(key) ? names.get(key) : TEXT.unknownFolder;
+}
+
+// #dialog-history를 하나만 두고 다시 쓴다. 처음 만들 때만 이벤트를 단다
+function getHistoryDialog(host) {
+  let dialog = document.getElementById(HISTORY_DIALOG_ID);
+  if (dialog) return dialog;
+
+  dialog = document.createElement("dialog");
+  dialog.id = HISTORY_DIALOG_ID;
+  dialog.className = CLS.dialogFrame;
+  dialog.setAttribute("aria-labelledby", HISTORY_TITLE_ID);
+  // 바깥(어두운 곳)을 누르면 닫는다 (folders.js와 같게). Esc는 <dialog>의 기본 동작
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+  dialog.addEventListener("close", () => {
+    // close 이벤트는 close() 뒤에 늦게 온다. 그사이 다시 열었으면 지우지 않는다
+    if (dialog.open) return;
+    expandedIds.clear();
+    historyData = null;
+    loadSeq++; // 읽는 중이던 결과는 버린다
+    dialog.remove();
+  });
+  host.appendChild(dialog);
+  return dialog;
+}
+
+// 머리말(아이콘 · 제목 · 설명 · 닫기)과 본문 칸을 새로 그린다. 본문 칸을 돌려준다
+function drawFrame(dialog) {
+  dialog.replaceChildren();
+
+  const panel = document.createElement("div");
+  panel.className = CLS.dialogPanel;
+
+  const header = document.createElement("div");
+  header.className = CLS.dialogHeader;
+  const headText = document.createElement("div");
+  const title = document.createElement("div");
+  title.className = CLS.dialogTitle;
+  const titleText = document.createElement("span");
+  titleText.id = HISTORY_TITLE_ID;
+  titleText.textContent = TEXT.historyTitle;
+  title.append(icon("history", 20), titleText);
+  const subtitle = document.createElement("div");
+  subtitle.className = CLS.dialogSubtitle;
+  subtitle.textContent = TEXT.historyDesc;
+  headText.append(title, subtitle);
+
+  const closeButton = document.createElement("button");
+  closeButton.type = "button";
+  closeButton.className = `${CLS.btn} ${CLS.btnClose}`;
+  closeButton.setAttribute("aria-label", TEXT.historyClose);
+  closeButton.appendChild(icon("close", 20));
+  closeButton.addEventListener("click", () => dialog.close());
+  header.append(headText, closeButton);
+
+  const body = document.createElement("div");
+  body.className = CLS.dialogBody;
+
+  panel.append(header, body);
+  dialog.appendChild(panel);
+  return body;
+}
+
+// 본문을 historyData로 다시 그린다. 여러 번 불려도 결과가 같다
+function drawBody(dialog, body) {
+  body.replaceChildren();
+  if (!historyData) return;
+
+  const { entries, names } = historyData;
+  // F13-10: 내역이 하나도 없을 때
+  if (entries.length === 0) {
+    const empty = document.createElement("div");
+    empty.className = CLS.empty;
+    empty.textContent = TEXT.historyEmpty;
+    body.appendChild(empty);
+    return;
+  }
+
+  // F13-01: 최신순(at이 큰 순). 원본 배열은 건드리지 않는다
+  const sorted = [...entries].sort((a, b) => (Number(b.at) || 0) - (Number(a.at) || 0));
+  const list = document.createElement("div");
+  list.className = CLS.list;
+  for (const entry of sorted) {
+    list.appendChild(historyItem(dialog, body, entry, names));
+  }
+  body.appendChild(list);
+}
+
+// 내역 한 줄: [펼치기 버튼(아이콘 · 날짜 · 종류 · 이동 개수 · 화살표)] [되돌리기 또는 "되돌림"] + 펼친 내용
+function historyItem(dialog, body, entry, names) {
+  const key = String(entry.id);
+  const moves = Array.isArray(entry.moves) ? entry.moves : [];
+  const expanded = expandedIds.has(key);
+  const undone = Boolean(entry.undoneAt);
+
+  const item = document.createElement("div");
+  item.className = CLS.item;
+  if (undone) item.classList.add(CLS.itemUndone);
+  if (expanded) item.classList.add(CLS.expanded);
+
+  const row = document.createElement("div");
+  row.className = CLS.row;
+
+  // F13-01: 날짜 · 종류 · 이동 개수
+  const toggle = document.createElement("button");
+  toggle.type = "button";
+  toggle.className = CLS.toggle;
+  toggle.dataset.historyId = key;
+  toggle.setAttribute("aria-expanded", String(expanded));
+  const rowIcon = document.createElement("span");
+  rowIcon.className = CLS.rowIcon;
+  rowIcon.appendChild(icon("history", 16));
+  const label = document.createElement("span");
+  label.className = CLS.rowLabel;
+  label.textContent = TEXT.historyRow(dateLabel(entry.at), typeLabel(entry.type), moves.length);
+  const chevron = icon("chevron", 16);
+  chevron.classList.add(CLS.chevron);
+  toggle.append(rowIcon, label, chevron);
+  toggle.addEventListener("click", () => toggleEntry(dialog, body, key));
+  row.appendChild(toggle);
+
+  // F13-09: 되돌린 내역은 [되돌리기] 대신 "되돌림"
+  if (undone) {
+    const undoneLabel = document.createElement("span");
+    undoneLabel.className = CLS.undoneLabel;
+    undoneLabel.textContent = TEXT.historyUndone;
+    row.appendChild(undoneLabel);
+  } else {
+    const undoButton = document.createElement("button");
+    undoButton.type = "button";
+    undoButton.className = `${CLS.btn} ${CLS.undo}`;
+    undoButton.textContent = TEXT.undo;
+    undoButton.disabled = undoingIds.has(key);
+    undoButton.addEventListener("click", () => undoFromHistory(dialog, entry, undoButton));
+    row.appendChild(undoButton);
+  }
+  item.appendChild(row);
+
+  // F13-02: 펼치면 북마크마다 "원래 폴더 → 옮긴 폴더"
+  if (expanded) {
+    const movesEl = document.createElement("div");
+    movesEl.className = CLS.moves;
+    for (const move of moves) {
+      const moveEl = document.createElement("div");
+      moveEl.className = CLS.move;
+      const moveTitle = document.createElement("span");
+      moveTitle.className = CLS.moveTitle;
+      moveTitle.textContent = move.title ?? "";
+      const movePath = document.createElement("span");
+      movePath.className = CLS.movePath;
+      movePath.textContent = TEXT.historyMove(
+        folderName(names, move.fromParentId),
+        folderName(names, move.toParentId),
+      );
+      moveEl.append(moveTitle, movePath);
+      movesEl.appendChild(moveEl);
+    }
+    item.appendChild(movesEl);
+  }
+  return item;
+}
+
+// 내역을 펼치거나 접는다. 저장소는 다시 읽지 않고 본문만 다시 그린 뒤 같은 버튼에 포커스를 돌려놓는다
+function toggleEntry(dialog, body, key) {
+  if (expandedIds.has(key)) expandedIds.delete(key);
+  else expandedIds.add(key);
+  drawBody(dialog, body);
+  const toggle = [...body.querySelectorAll(`.${CLS.toggle}`)].find((el) => el.dataset.historyId === key);
+  if (toggle) toggle.focus();
+}
+
+// history와 폴더 이름을 읽어 본문을 채운다. 창이 닫혔거나 더 새 읽기가 시작됐으면 버린다
+async function fillBody(dialog) {
+  const seq = ++loadSeq;
+  let data;
+  try {
+    const [stored, tree] = await Promise.all([load(), loadTree()]);
+    data = {
+      entries: Array.isArray(stored.history) ? stored.history : [],
+      names: folderNames(tree),
+    };
+  } catch (error) {
+    if (seq !== loadSeq) return;
+    console.error("정리 기록을 불러오지 못했어요", error);
+    historyData = null;
+    if (!dialog.isConnected || !dialog.open) return;
+    const body = dialog.querySelector(`.${CLS.dialogBody}`);
+    if (body) body.replaceChildren();
+    showToast(TEXT.historyLoadFailed);
+    return;
+  }
+  if (seq !== loadSeq || !dialog.isConnected || !dialog.open) return;
+  historyData = data;
+  const body = dialog.querySelector(`.${CLS.dialogBody}`);
+  if (body) drawBody(dialog, body);
+}
+
+// 창 안의 [되돌리기]: handleUndo를 그대로 쓰고, 끝나면(성공·실패 모두) 창이 아직 열려 있을 때만 본문을 다시 채운다
+// renderAll은 이 창을 다시 그리지 않으므로 "되돌림"이 보이려면 여기서 다시 읽어야 한다
+async function undoFromHistory(dialog, entry, button) {
+  const key = String(entry.id);
+  if (button.disabled || undoingIds.has(key)) return;
+  undoingIds.add(key);
+  try {
+    await handleUndo(entry, button);
+  } finally {
+    undoingIds.delete(key);
+  }
+  if (dialog.isConnected && dialog.open) await fillBody(dialog);
+}
+
+// N43: 정리 기록 화면 (F13-01, F13-02, F13-09, F13-10)
+// 머리말은 바로 그리고, 본문은 load · loadTree를 읽은 뒤 채운다. 이미 열려 있으면 내용만 바꾼다
 export function showHistory() {
-  // TODO(P2, #22 닫힌 뒤)
-  // 1. load()로 history를, loadTree()로 폴더 이름을 읽는다
-  // 2. 이미 열린 history-dialog가 있으면 내용만 바꾸고, 없으면 <dialog>를 만들어 #dialogs에 붙이고 showModal()
-  // 3. 머리: icon("history") + TEXT.historyTitle, TEXT.historyDesc, 닫기 버튼
-  // 4. history가 비었으면 TEXT.historyEmpty (F13-10)
-  // 5. at이 큰 순서(최신순)로 한 줄씩: dateLabel · typeLabel · 이동 개수 (F13-01)
-  //    undoneAt이 있으면 TEXT.historyUndone, 없으면 [되돌리기] → handleUndo(entry, button) (F13-09)
-  // 6. 줄을 누르면 펼쳐서 북마크마다 "원래 폴더 이름 → 옮긴 폴더 이름" (F13-02). 없는 폴더는 TEXT.unknownFolder
+  const host = document.getElementById(DIALOG_HOST_ID);
+  if (!host) return;
+
+  const dialog = getHistoryDialog(host);
+  const body = drawFrame(dialog);
+  // 이미 열려 있어 읽어 둔 값이 있으면 먼저 그려 두고, 새로 읽은 값으로 바꾼다
+  drawBody(dialog, body);
+  if (!dialog.open) dialog.showModal();
+  fillBody(dialog);
 }
