@@ -501,6 +501,10 @@ async function undoFromHistory(dialog, entry, button) {
     undoingIds.delete(key);
   }
   if (dialog.isConnected && dialog.open) await fillBody(dialog);
+  // 다시 그리면 눌렀던 버튼이 없어지므로, 창이 아직 열려 있으면 그 내역의 펼치기 버튼에 포커스를 돌려놓는다
+  if (!dialog.isConnected || !dialog.open) return;
+  const toggle = [...dialog.querySelectorAll(`.${CLS.toggle}`)].find((el) => el.dataset.historyId === key);
+  if (toggle) toggle.focus();
 }
 
 // N43: 정리 기록 화면 (F13-01, F13-02, F13-09, F13-10)
