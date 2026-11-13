@@ -993,8 +993,10 @@ a {
   color: var(--color-text-faint);
 }
 
-/* #toast — 짧은 안내 거품 (ui.js가 채우고 .is-visible로 켠다) */
-#toast {
+/* #toast — 짧은 안내 거품 (ui.js가 채우고 .is-visible로 켠다)
+   .toast--inline은 showToast의 container 옵션으로 팝업 안에 만든 같은 모양의 안내다 */
+#toast,
+.toast--inline {
   position: fixed;
   top: var(--space-6);
   left: 50%;
@@ -1012,7 +1014,8 @@ a {
   box-shadow: var(--shadow-lg);
 }
 
-#toast.is-visible {
+#toast.is-visible,
+.toast--inline {
   display: flex;
 }
 
