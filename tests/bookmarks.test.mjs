@@ -36,6 +36,8 @@ const storage = {
 // nodes: id → { id, parentId, title, url?, dateAdded, dateLastUsed?, folderType?, syncing, children?: [id] }
 let nodes = new Map();
 let nextId = 1000;
+// create가 불리기 직전에 한 번 실행할 함수 (없으면 null)
+let beforeCreate = null;
 
 function view(id, deep) {
   const node = nodes.get(id);
@@ -71,15 +73,23 @@ const bookmarks = {
     if (!node.children) return [];
     return node.children.map((child) => view(child, false));
   },
-  async create({ parentId, title, url }) {
+  // index가 폴더의 개수보다 크면 move처럼 "Index out of bounds" 오류, 없으면 맨 뒤
+  async create({ parentId, title, url, index }) {
+    // 테스트가 "확인한 직후 폴더가 지워짐" 같은 끼어들기를 만들 때 쓴다 (한 번만 실행)
+    if (beforeCreate) {
+      const hook = beforeCreate;
+      beforeCreate = null;
+      hook();
+    }
     const parent = need(parentId, "Can't find parent bookmark for id.");
     if (parent.id === "0") throw new Error("Can't modify the root bookmark folders.");
+    if (index !== undefined && index > parent.children.length) throw new Error("Index out of bounds.");
     const id = String(nextId++);
     const node = { id, parentId: parent.id, title, dateAdded: 1, syncing: parent.syncing };
     if (url !== undefined) node.url = url;
     else node.children = [];
     nodes.set(id, node);
-    parent.children.push(id);
+    parent.children.splice(index ?? parent.children.length, 0, id);
     calls.push("bookmarks.create");
     return view(id, false);
   },
@@ -102,6 +112,7 @@ const bookmarks = {
   async remove(id) {
     const node = need(id);
     if (node.parentId === "0") throw new Error("Can't modify the root bookmark folders.");
+    if (node.unmodifiable) throw new Error("Can't modify managed bookmarks.");
     if (node.children && node.children.length > 0) throw new Error("Can't remove non-empty folder.");
     const siblings = nodes.get(node.parentId).children;
     siblings.splice(siblings.indexOf(node.id), 1);
@@ -208,6 +219,7 @@ beforeEach(() => {
   build(structuredClone(SAMPLE));
   data = {};
   calls = [];
+  beforeCreate = null;
   tabsLog = [];
   currentTab = { id: 77 };
 });
@@ -551,6 +563,120 @@ test("loadTree: 관리자 북마크에는 unmodifiable: \"managed\", 보통 북�
   const { bookmarks } = await b.loadTree();
   assert.equal(bookmarks.find((item) => item.id === "50").unmodifiable, "managed");
   assert.equal(Object.hasOwn(bookmarks.find((item) => item.id === "10"), "unmodifiable"), false);
+});
+
+test("removeBookmark: 지우고 { id, title, url, parentId, index }를 돌려준다. 저장소에는 쓰지 않는다 (F15-06, F15-12)", async () => {
+  const saved = await b.removeBookmark("111");
+  assert.deepEqual(saved, { id: "111", title: "구글", url: "https://google.com/", parentId: "11", index: 1 });
+  assert.equal(nodes.has("111"), false);
+  assert.deepEqual(childIds("11"), ["110"]);
+  assert.deepEqual(calls, ["bookmarks.remove"]);
+  assert.deepEqual(data, {});
+});
+
+test("removeBookmark → restoreBookmark: 같은 폴더 같은 자리에 같은 제목·주소로, 새 ID (F15-07)", async () => {
+  const saved = await b.removeBookmark(10);
+  assert.equal(saved.index, 0);
+  const { node, fallback } = await b.restoreBookmark(saved);
+  assert.equal(fallback, false);
+  assert.notEqual(node.id, "10");
+  assert.equal(node.parentId, "1");
+  assert.equal(node.index, 0);
+  assert.equal(node.title, "네이버");
+  assert.equal(node.url, "https://naver.com/");
+  assert.deepEqual(childIds("1"), [node.id, "11", "12", "13"]);
+});
+
+test("removeBookmark: 이미 없는 북마크는 null, 아무것도 지우지 않는다 (F15-11)", async () => {
+  assert.equal(await b.removeBookmark("999"), null);
+  await b.removeBookmark("10");
+  assert.equal(await b.removeBookmark("10"), null);
+  assert.deepEqual(calls, ["bookmarks.remove"]);
+});
+
+test("removeBookmark: 읽은 뒤 remove 직전에 지워졌으면 null", async () => {
+  const remove = bookmarks.remove;
+  bookmarks.remove = async (id) => {
+    await remove(id);
+    throw new Error("Can't find bookmark for id.");
+  };
+  try {
+    assert.equal(await b.removeBookmark("10"), null);
+  } finally {
+    bookmarks.remove = remove;
+  }
+});
+
+test("removeBookmark: 폴더·최상위 폴더는 오류, 지우지 않는다", async () => {
+  await assert.rejects(b.removeBookmark("12"), /북마크가 아니에요/);
+  await assert.rejects(b.removeBookmark("1"), /북마크가 아니에요/);
+  assert.equal(nodes.has("12"), true);
+  assert.deepEqual(calls, []);
+});
+
+test("removeBookmark: 관리자 북마크(unmodifiable)는 오류, 지우지 않는다 (F15-10)", async () => {
+  build([...structuredClone(SAMPLE), structuredClone(MANAGED)]);
+  await assert.rejects(b.removeBookmark("50"), /바꿀 수 없는 북마크/);
+  assert.equal(nodes.has("50"), true);
+  assert.deepEqual(calls, []);
+});
+
+test("restoreBookmark: 원래 폴더가 지워졌으면 기타 북마크(동기화되는 쪽) 맨 뒤, fallback: true (F15-08)", async () => {
+  const saved = await b.removeBookmark("1100");
+  await b.deleteFolderKeepChildren("110");
+  assert.equal(nodes.has("110"), false);
+  const { node, fallback } = await b.restoreBookmark(saved);
+  assert.equal(fallback, true);
+  assert.equal(node.parentId, "2");
+  assert.deepEqual(childIds("2"), ["20", "21", node.id]);
+  assert.equal(node.title, "MDN");
+  assert.equal(node.url, "https://developer.mozilla.org/ko/");
+});
+
+test("restoreBookmark: 원래 폴더 확인 직후 폴더가 지워져 create가 실패하면 기타 북마크 맨 뒤, fallback: true", async () => {
+  const saved = await b.removeBookmark("1100");
+  // 폴더(110)는 있는 것으로 확인된 뒤, 첫 create 직전에 지워진다
+  beforeCreate = () => {
+    nodes.get("11").children = nodes.get("11").children.filter((id) => id !== "110");
+    nodes.delete("110");
+  };
+  const { node, fallback } = await b.restoreBookmark(saved);
+  assert.equal(fallback, true);
+  assert.equal(node.parentId, "2");
+  assert.deepEqual(childIds("2"), ["20", "21", node.id]);
+  assert.equal(calls.filter((name) => name === "bookmarks.create").length, 1);
+});
+
+test("restoreBookmark: 폴더가 남아 있는데 create가 실패하면 기타 북마크로 가지 않고 오류를 그대로 던진다", async () => {
+  const saved = await b.removeBookmark("111");
+  const create = bookmarks.create;
+  bookmarks.create = async () => {
+    throw new Error("Can't modify managed bookmarks.");
+  };
+  try {
+    await assert.rejects(b.restoreBookmark(saved), /managed/);
+  } finally {
+    bookmarks.create = create;
+  }
+  assert.deepEqual(childIds("2"), ["20", "21"]);
+});
+
+test("restoreBookmark: index가 폴더 안 항목 수보다 크면 맨 뒤 (오류 없음)", async () => {
+  const saved = await b.removeBookmark("13");
+  assert.equal(saved.index, 3);
+  await b.deleteFolderKeepChildren("12");
+  await b.removeBookmark("10");
+  const { node, fallback } = await b.restoreBookmark(saved);
+  assert.equal(fallback, false);
+  assert.deepEqual(childIds("1"), ["11", node.id]);
+  assert.equal(node.index, 1);
+});
+
+test("restoreBookmark: 주소나 폴더가 없는 입력은 오류", async () => {
+  await assert.rejects(b.restoreBookmark(null));
+  await assert.rejects(b.restoreBookmark({ id: "10", title: "네이버", parentId: "1", index: 0 }));
+  await assert.rejects(b.restoreBookmark({ id: "10", title: "네이버", url: "https://naver.com/", index: 0 }));
+  assert.equal(calls.includes("bookmarks.create"), false);
 });
 
 // ---- N06 openBookmark ----
