@@ -538,6 +538,21 @@ test("deleteFolderKeepChildren: pendingMoves 저장이 끝난 뒤 옮긴다", as
   assert.equal(data.pendingMoves["110"].toParentId, "1");
 });
 
+// ---- N48 removeBookmark / N49 restoreBookmark (F15) ----
+
+// 샘플 트리에 관리자 폴더(5)와 그 안의 관리자 북마크(50)를 더한다
+const MANAGED = {
+  id: "5", title: "회사", folderType: "managed", syncing: false, unmodifiable: "managed",
+  kids: [{ id: "50", title: "사내", url: "https://intra.example.com/", unmodifiable: "managed" }],
+};
+
+test("loadTree: 관리자 북마크에는 unmodifiable: \"managed\", 보통 북마크에는 필드가 없다 (F15-10)", async () => {
+  build([...structuredClone(SAMPLE), structuredClone(MANAGED)]);
+  const { bookmarks } = await b.loadTree();
+  assert.equal(bookmarks.find((item) => item.id === "50").unmodifiable, "managed");
+  assert.equal(Object.hasOwn(bookmarks.find((item) => item.id === "10"), "unmodifiable"), false);
+});
+
 // ---- N06 openBookmark ----
 
 const bm = (id) => ({ id, url: nodes.get(id).url });

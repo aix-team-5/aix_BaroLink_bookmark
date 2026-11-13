@@ -68,6 +68,8 @@ function collect(nodes, folderTitle, path, base, bookmarks, folders) {
       };
       // 한 번도 안 연 북마크에는 dateLastUsed가 없다. 크롬처럼 필드를 넣지 않는다
       if (node.dateLastUsed !== undefined) item.dateLastUsed = node.dateLastUsed;
+      // 관리자가 정한 북마크에만 있다("managed"). 이것도 크롬에 있을 때만 넣는다 (F15-10)
+      if (node.unmodifiable !== undefined) item.unmodifiable = node.unmodifiable;
       // path는 항목마다 복사한다. 한 항목의 path를 고쳐도 다른 항목이 바뀌지 않게
       bookmarks.push({ ...item, folderTitle, ...base, path: [...path] });
       continue;
