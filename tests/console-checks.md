@@ -1020,9 +1020,9 @@ await (async () => {
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N21 pickPinCandidates: 고정 후보 고르기 · P2
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (`feat/F09-pin-candidates`)
 - 파일·담당: plan.js · 팀원 C
-- 관련 요구사항: F09-03, F09-08, F09-09
+- 관련 요구사항: F09-03, F09-04, F09-08, F09-09
 - 안전 등급: 읽기만
 - 사전 조건: 2장 실행
 - 붙여 넣을 코드:
@@ -1052,11 +1052,52 @@ await (async () => {
     T.expect("F09-08 자주 방문한 사이트가 비면 최근에 연 순만", T.same(ids(r2), ["n1", "c1", "g1", "t1", "i1"]), ids(r2));
     const r3 = T.plan.pickPinCandidates(bms, [], T.emptyStored());
     T.expect("F09-09 연 적 있는 북마크도 없으면 0개", Array.isArray(r3) && r3.length === 0, ids(r3));
+    const bmsBar = [...bms, T.fakeBm("b1", "북마크바에서 연 것", "https://bar.example/", { dateLastUsed: now - 2 * d })];
+    const r4 = T.plan.pickPinCandidates(bmsBar, [], stored);
+    T.expect("F04-03 dateLastUsed도 연 시각으로 본다(n1 1일 전 → b1 2일 전 → c1 3일 전)", T.same(ids(r4).slice(0, 3), ["n1", "b1", "c1"]), ids(r4));
+    const r5 = T.plan.pickPinCandidates(bms, top, { ...stored, pinned: ["n1"] });
+    T.expect("이미 고정한 북마크는 뺀다", !ids(r5).includes("n1"), ids(r5));
+    const bmsDup = [...bms, T.fakeBm("g2", "깃허브 2", "https://github.com/b")];
+    const r6 = T.plan.pickPinCandidates(bmsDup, top, stored);
+    T.expect("자주 방문한 사이트 단계(①)에서는 사이트 하나에 북마크 하나: 앞 두 자리에 g1·g2 중 하나만", ids(r6).slice(0, 2).filter((x) => x === "g1" || x === "g2").length === 1, ids(r6));
+    T.expect("같은 사이트면 더 최근에 연 g1이 2번째 자리", ids(r6)[1] === "g1", ids(r6));
+    const beforeIn = JSON.stringify([bms, top, stored]);
+    T.plan.pickPinCandidates(bms, top, stored);
+    T.expect("입력을 바꾸지 않는다", JSON.stringify([bms, top, stored]) === beforeIn);
+    T.record("F09-04 저장소에 topSites 같은 키가 생기지 않았는지", Object.keys(await T.stored()).filter((k) => /top/i.test(k)));
     T.expect("같은 입력은 같은 결과", T.same(ids(r1), ids(T.plan.pickPinCandidates(bms, top, stored))));
   })();
   ```
-- 기대 결과: 자주 방문한 사이트와 호스트가 같은 북마크를 목록 순서대로 먼저 고르고, 모자라면 최근에 연 순으로 채워 최대 5개다. 연 적 없는 북마크는 후보가 아니어서 0개일 수 있다. (N21, F09-03, F09-08, F09-09)
-- 판단: "최근에 연 순"의 시각은 `lastOpenedByUs`만 넣어 확인했다. `dateLastUsed`를 함께 볼지는 명세에 없다.
+- 기대 결과: 자주 방문한 사이트와 호스트가 같은 북마크를 목록 순서대로 먼저 고르고, 모자라면 최근에 연 순으로 채워 최대 5개다. 연 적 없는 북마크는 후보가 아니어서 0개일 수 있다. (N21, F09-03, F09-08, F09-09) 자주 방문한 사이트 단계(①)에서는 사이트 하나에 북마크 하나만 고르고(②단계에서는 같은 사이트의 다른 북마크가 다시 들어올 수 있다), 이미 고정한 것과 javascript: 북마크는 뺀다. 연 시각은 lastOpenedByUs와 dateLastUsed 중 더 최근 값(F04-03).
+- 판단: 연 시각은 F04-03처럼 lastOpenedByUs와 dateLastUsed 중 더 최근 값으로 본다(명세 N21에 없어 정함, 4-3). 자주 방문한 사이트 단계(①)에서는 사이트 하나에 북마크 하나, 이미 고정한 것·javascript: 제외도 명세에 없어 정함.
+- 결과: 통과 / 실패 / 보류   확인자:   날짜:
+
+#### C-N21-실제 pickPinCandidates: 실제 북마크로 고정 후보 보기 · P2
+- 구현 상태: 구현됨 (`feat/F09-pin-candidates`)
+- 파일·담당: plan.js · 팀원 C
+- 관련 요구사항: F09-03, F09-08, F09-09
+- 안전 등급: 읽기만
+- 사전 조건: 2장 실행. `sample-under10.html` 또는 `sample-20.html`을 가져온 프로필(폴더 계획이 pin인 세트). topSites 권한은 아직 [고정하기] 화면이 없으므로 이 항목에서 요청하지 않는다. `chrome.topSites`가 있으면(이미 허락했으면) 쓰고, 없으면 `[]`로 본다.
+- 붙여 넣을 코드:
+  ```js
+  // C-N21-실제
+  await (async () => {
+    T.begin("C-N21-실제");
+    const tree = await T.bookmarks.loadTree();
+    const stored = { ...T.emptyStored(), ...(await chrome.storage.local.get(["pinned", "lastOpenedByUs"])) };
+    const top = (chrome.topSites ? await chrome.topSites.get() : []).filter((s) => /^https?:/i.test(s.url));
+    const r = T.plan.pickPinCandidates(tree.bookmarks, top, stored);
+    const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return ""; } };
+    const topHosts = new Set(top.map((s) => host(s.url)));
+    const allIds = new Set(tree.bookmarks.map((b) => b.id));
+    T.expect("결과가 배열이고 5개 이하", Array.isArray(r) && r.length <= 5, r);
+    T.expect("모든 결과가 tree.bookmarks 안의 북마크", (r || []).every((b) => allIds.has(b.id)), r);
+    T.expect("이미 고정한 북마크가 없다", (r || []).every((b) => !(stored.pinned || []).includes(b.id)), r);
+    T.record("topSites 개수", top.length);
+    T.record("결과 [제목, 고른 이유]", (r || []).map((b) => [b.title, topHosts.has(host(b.url)) ? "자주 방문" : "최근에 연 시각"]));
+  })();
+  ```
+- 기대 결과: 가져온 직후(아무것도 안 열었고 topSites가 없으면) 0개다(F09-09). 북마크바에서 2개를 열고 다시 돌리면 그 2개가 최근에 연 순으로 나온다(`dateLastUsed`). 아무것도 저장하지 않는다. (N21, F09-03, F09-08, F09-09)
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N22 applyPlan: 정리 적용 · P1
@@ -1504,7 +1545,7 @@ await (async () => {
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N32 onCreated 처리: 새 북마크 기록 · P2
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (feat/F07-background-p2) · 코드와 대조함. 가져오기 중 멈춤(F01-07)은 onImportBegan·onImportEnded가 setImporting(N47)으로 표시하고 onCreated가 isImporting을 본다
 - 파일·담당: background.js · 팀원 B
 - 관련 요구사항: F10-01, F10-09, F01-07
 - 안전 등급: ⚠ 크롬 북마크를 바꿈 (임시 북마크)
@@ -1544,7 +1585,7 @@ await (async () => {
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N33 onMoved 처리: 직접 옮김 기록 · P1·P2
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (P1 main `79e0daf`, P2 newBookmarks에서 지우기는 feat/F07-background-p2) · 코드와 대조함
 - 파일·담당: background.js · 팀원 B
 - 관련 요구사항: F07-05, F07-06, F10-08, F15-05
 - 안전 등급: ⚠ 크롬 북마크를 바꿈 (임시 북마크) · 저장 항목을 바꿈(`pendingMoves`)
@@ -1585,7 +1626,7 @@ await (async () => {
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N34 onRemoved 처리: 지워진 북마크 ID 정리 · P1
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (main `79e0daf`) · 코드와 대조함
 - 파일·담당: background.js · 팀원 B
 - 관련 요구사항: F01-06
 - 안전 등급: ⚠ 크롬 북마크를 바꿈 (임시 북마크) · 저장 항목을 바꿈
@@ -2064,7 +2105,7 @@ await (async () => {
 
 export는 모두 있지만(자동 검사가 확인한다), 몸체가 비어 있거나 빈 값만 돌려준다. `store.js`의 `load()`는 기본값 객체를 돌려주지만 `chrome.storage`를 읽지 않으므로 뼈대로 본다.
 
-2026-10-30 `main` `049b9be`: `bookmarks.js`·`store.js`가 합쳐져 N01~N03, N05~N10, N12~N16, N38, N40이 구현됐다. 이 두 파일에서 아직 뼈대인 것은 N04 `renameFolder`, N39 `markHandledNew`다. N11 `pin`·`unpin`은 `feat/F08-pin`에서 구현됐다. 아래 표는 작성 시점(`309b583`) 그대로 둔다.
+2026-10-30 `main` `049b9be`: `bookmarks.js`·`store.js`가 합쳐져 N01~N03, N05~N10, N12~N16, N38, N40이 구현됐다. 이 두 파일에서 아직 뼈대인 것은 N04 `renameFolder`, N39 `markHandledNew`다. N11 `pin`·`unpin`은 `feat/F08-pin`에서 구현됐다. N21 `pickPinCandidates`는 `feat/F09-pin-candidates`에서 구현됐다. 아래 표는 작성 시점(`309b583`) 그대로 둔다.
 
 | N | 함수 | 파일 | 담당 | 이슈 |
 |---|---|---|---|---|
@@ -2136,6 +2177,7 @@ export는 모두 있지만(자동 검사가 확인한다), 몸체가 비어 있�
 | N18 | `measure(samples, answers, …)`의 samples와 answers 형태 | 둘 다 `answer-key-100.json` 배열 | C-N18 |
 | N19 | options `{북마크바 제외, 포함할 사용자 폴더}`의 키 이름 | 명세 v17에서 `{ excludeBar, includeFolderIds }`(기본값 `{ excludeBar: false, includeFolderIds: [] }`)로 정해졌다. P2라 `{}`(기본값)만 확인 | C-N19 |
 | N20 | `rest`가 배열인지 개수인지, `reasons`의 형태, pin의 `reason` 값 | 명세 v17에서 정해졌다. `rest`는 개수(숫자), `reasons`는 폴더마다 items와 같은 순서·같은 길이의 `{ bookmarkId, step, rule, needsCheck }`, `reason`은 `"tooFew"`·`"noGroup"`. 처음에는 `rest`를 둘 다 받게 썼고 `reasons`는 기록만 했다 | C-N20, C-N20-예외, C-N31 |
+| N21 | "최근에 연" 시각, 같은 호스트 북마크가 여럿일 때, 이미 고정한 북마크 | `lastOpenedByUs`와 `dateLastUsed` 중 더 최근 값(F04-03), 자주 방문한 사이트 단계(①)에서는 사이트 하나에 북마크 하나(최근에 연 것. ②단계에서는 같은 사이트의 다른 북마크가 다시 들어올 수 있다), 이미 고정한 것·`javascript:` 제외 | C-N21, C-N21-실제 |
 | N22 | `folders[].items`의 원소(북마크 노드인지 ID인지), `keep`의 원소 | 크롬 북마크 노드 / 북마크 ID | C-N22, C-N22-예외 |
 | N24 | `folders`(현재 폴더)의 원소 | 크롬 폴더 노드처럼 `{ id, title }` | C-N24 |
 | N31 | `showPinPicker()`의 입력 (P2를 시작할 때 정한다, `docs/file-structure.md` 12번) | 입력 없이 부름 | C-N31 |
@@ -2173,7 +2215,7 @@ export는 모두 있지만(자동 검사가 확인한다), 몸체가 비어 있�
 | N18 | measure | P1 | 뼈대 | | | #7 |
 | N19 | getTargets (+ 예외) | P1 | 뼈대 | | | #11 |
 | N20 | makePlan (+ 예외) | P1 | 뼈대 | | | #11 |
-| N21 | pickPinCandidates | P2 | 뼈대 | | | #11 |
+| N21 | pickPinCandidates | P2 | 구현됨 | | | #11 |
 | N22 | applyPlan (+ 예외) | P1 | 뼈대 | | | #4 |
 | N23 | undo (+ 예외) | P1 | 뼈대 | | | #4 |
 | N24 | suggestForNew | P2 | 뼈대 | | | #7 |
