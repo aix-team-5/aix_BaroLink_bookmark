@@ -1,4 +1,4 @@
-// 담당: 팀원 A · 이슈 #2 · 명세: N01~N07 (F01, F02, F03, F07) · 크롬 API: C04~C08, C18, C22
+// 담당: 팀원 A · 이슈 #2 · 명세: N01~N07, N48~N49 (F01, F02, F03, F07, F15) · 크롬 API: C04~C08, C18, C22
 // 크롬 북마크를 읽고 바꾸는 통로. 크롬을 부르는 함수는 async다.
 
 import { recordOpened, setPending } from "./store.js";
@@ -68,6 +68,8 @@ function collect(nodes, folderTitle, path, base, bookmarks, folders) {
       };
       // 한 번도 안 연 북마크에는 dateLastUsed가 없다. 크롬처럼 필드를 넣지 않는다
       if (node.dateLastUsed !== undefined) item.dateLastUsed = node.dateLastUsed;
+      // 관리자가 정한 북마크에만 있다("managed"). 이것도 크롬에 있을 때만 넣는다 (F15-10)
+      if (node.unmodifiable !== undefined) item.unmodifiable = node.unmodifiable;
       // path는 항목마다 복사한다. 한 항목의 path를 고쳐도 다른 항목이 바뀌지 않게
       bookmarks.push({ ...item, folderTitle, ...base, path: [...path] });
       continue;
@@ -183,6 +185,61 @@ export async function deleteFolderKeepChildren(id) {
   // removeTree는 쓰지 않는다(안의 북마크까지 지워짐). 비어 있지 않으면 크롬이 오류를 낸다
   await chrome.bookmarks.remove(folder.id);
   return moved;
+}
+
+// N48: 북마크 하나를 지우고, 되살리기에 쓸 정보 { id, title, url, parentId, index }를 돌려준다. 이미 없으면 null (F15-11)
+// 폴더는 지우지 않는다(N05). 관리자가 정한 북마크(unmodifiable)는 오류 (F15-10)
+// 돌려준 정보는 저장하지 않는다. 부르는 쪽이 화면 메모리에만 두고 6초 뒤 버린다 (F15-12)
+export async function removeBookmark(id) {
+  const node = await findNode(id);
+  if (!node) return null;
+  if (node.unmodifiable) throw new Error("바꿀 수 없는 북마크예요");
+  if (node.url === undefined) throw new Error("북마크가 아니에요 (폴더는 여기서 지우지 않아요)");
+  // 지우면 크롬에서 다시 읽을 수 없으므로 먼저 만들어 둔다
+  const saved = { id: node.id, title: node.title, url: node.url, parentId: node.parentId, index: node.index };
+  try {
+    await chrome.bookmarks.remove(node.id);
+  } catch (error) {
+    // 그사이 지워졌으면 null, 그 밖의 오류는 그대로 던진다
+    if (!(await findNode(node.id))) return null;
+    throw error;
+  }
+  return saved;
+}
+
+// N49: removeBookmark가 돌려준 정보로 같은 제목·주소의 북마크를 원래 폴더의 원래 자리에 다시 만든다 (새 ID, F15-07)
+// index가 폴더 안 항목 수보다 크면 맨 뒤. 원래 폴더가 없으면 기타 북마크 맨 뒤에 만들고 fallback: true (F15-08)
+// 돌려주는 node는 크롬 노드 그대로다
+export async function restoreBookmark(saved) {
+  if (!saved || typeof saved.url !== "string" || saved.url === "") throw new Error("되살릴 주소가 없어요");
+  if (saved.parentId === undefined || saved.parentId === null || saved.parentId === "") {
+    throw new Error("되살릴 폴더가 없어요");
+  }
+  const title = typeof saved.title === "string" ? saved.title : "";
+  const parent = await findNode(saved.parentId);
+  // 폴더 ID는 다시 쓰이지 않으므로, 폴더가 아닌 노드가 나오면 원래 폴더가 없는 것으로 본다
+  if (parent && parent.url === undefined) {
+    const details = { parentId: parent.id, title, url: saved.url };
+    try {
+      if (typeof saved.index === "number" && Number.isFinite(saved.index)) {
+        // 폴더의 개수보다 크면 크롬이 "Index out of bounds" 오류를 내므로 줄인다
+        const count = (await chrome.bookmarks.getChildren(parent.id)).length;
+        details.index = Math.min(Math.max(0, Math.trunc(saved.index)), count);
+      }
+      return { node: await chrome.bookmarks.create(details), fallback: false };
+    } catch (error) {
+      // 확인한 직후 폴더가 지워졌으면 기타 북마크로, 그 밖의 오류는 그대로 던진다
+      if (await findNode(parent.id)) throw error;
+    }
+  }
+  return { node: await createInOther(title, saved.url), fallback: true };
+}
+
+// 기타 북마크(loadTree의 roots.other와 같은 폴더) 맨 뒤에 북마크를 만든다
+async function createInOther(title, url) {
+  const other = pickRoot(await chrome.bookmarks.getChildren("0"), "other");
+  if (!other) throw new Error("기타 북마크 폴더를 찾지 못했어요");
+  return chrome.bookmarks.create({ parentId: other.id, title, url });
 }
 
 // N06: 연 시각을 기록한 뒤 주소를 연다. javascript: 주소(또는 해석할 수 없는 주소)면 열지 않고 false를 돌려준다

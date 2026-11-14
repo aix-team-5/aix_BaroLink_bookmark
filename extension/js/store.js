@@ -1,4 +1,4 @@
-// 담당: 팀원 A · 이슈 #3 · 명세: N08~N16, N38~N40, N47 · 크롬 API: C14, C15
+// 담당: 팀원 A · 이슈 #3 · 명세: N08~N16, N38~N40, N47, N50 · 크롬 API: C14, C15
 // 저장 항목을 읽고 쓰는 통로. 모든 저장은 이 파일을 거친다. 한 키는 한쪽(새 탭 또는 서비스 워커)만 쓴다.
 
 // 저장 항목 10개의 기본값. 밖으로 내보낼 때는 항상 복사본을 준다
@@ -351,4 +351,56 @@ export async function purgeWorkerKeys(ids) {
     }
     return changed ? moves : undefined;
   });
+}
+
+// N50: 지우기 직전 그 ID의 새 탭 쪽 기록을 읽어 둔다 (F15-07). 읽기만 함 (update를 쓰지 않는다)
+// { pinnedIndex: 고정 목록 안의 자리, lastOpened: 연 시각, dismissedAt: 다시 안 볼 표시 시각 }. 기록이 없으면 각각 null
+// 반드시 removeBookmark 전에 부른다. 지운 뒤에는 cleanupMissing이 옛 ID를 지운다
+export async function snapshotStored(id) {
+  const key = toId(id);
+  // 같은 쪽에서 먼저 시작한 쓰기(방금 누른 고정 등)가 끝날 때까지 기다린다
+  await queue;
+  const stored = await chrome.storage.local.get(["pinned", "lastOpenedByUs", "dismissed"]);
+  const pinned = withDefault("pinned", stored.pinned);
+  const opened = withDefault("lastOpenedByUs", stored.lastOpenedByUs);
+  const dismissed = withDefault("dismissed", stored.dismissed);
+  const index = Array.isArray(pinned) ? pinned.findIndex((item) => String(item) === key) : -1;
+  const timeOf = (map) => (map && typeof map[key] === "number" ? map[key] : null);
+  return { pinnedIndex: index === -1 ? null : index, lastOpened: timeOf(opened), dismissedAt: timeOf(dismissed) };
+}
+
+// N50: 되살린 북마크의 새 ID로 snapshotStored의 기록을 옮겨 적고 handledNew에 넣는다 (F15-07). 새 탭만 호출
+// handledNew를 가장 먼저 쓴다. 되살리는 순간 서비스 워커가 새 ID를 newBookmarks에 넣으므로 "새로"를 막는 기록을 먼저 남긴다
+// 고정은 같은 자리(목록보다 뒤면 맨 뒤)에 넣고, 이미 MAX_PINNED개면 고정만 되살리지 않는다
+// 메모: 옛 ID가 아직 pinned에 남아 있으면(cleanupMissing 전) 그것까지 세어 8개로 판정한다. 옛 ID는 입력에 없어 여기서 뺄 수 없다
+export async function restoreStored(newId, snapshot) {
+  const key = toId(newId);
+  if (!snapshot || typeof snapshot !== "object") {
+    throw new Error("store.js: restoreStored에는 snapshotStored의 출력이 필요하다");
+  }
+  const { pinnedIndex, lastOpened, dismissedAt } = snapshot;
+
+  // 서비스 워커에서 부르면 여기서 오류가 나고 아무것도 쓰지 않는다 (WRITER 검사)
+  await update("handledNew", (list) => (list.some((item) => String(item) === key) ? undefined : [...list, key]));
+
+  if (Number.isInteger(pinnedIndex) && pinnedIndex >= 0) {
+    await update("pinned", (pinned) => {
+      if (pinned.some((item) => String(item) === key) || pinned.length >= MAX_PINNED) return undefined;
+      const next = [...pinned];
+      next.splice(Math.min(pinnedIndex, next.length), 0, key);
+      return next;
+    });
+  }
+  if (typeof lastOpened === "number") {
+    await update("lastOpenedByUs", (opened) => {
+      opened[key] = lastOpened;
+      return opened;
+    });
+  }
+  if (typeof dismissedAt === "number") {
+    await update("dismissed", (dismissed) => {
+      dismissed[key] = dismissedAt;
+      return dismissed;
+    });
+  }
 }
