@@ -2,8 +2,15 @@
 // 웹 검색창과 북마크 검색. 두 검색창은 연동하지 않는다.
 
 // N27: 제목 · 주소 부분 일치(대소문자 무시). 빈 입력이면 빈 배열
+// 앞뒤 공백은 뺀다(공백만 있으면 빈 입력). 결과는 입력 북마크의 순서를 그대로 지킨다
 export function searchBookmarks(query, bookmarks) {
-  return [];
+  const keyword = String(query ?? "").trim().toLowerCase();
+  if (keyword === "" || !Array.isArray(bookmarks)) return [];
+  return bookmarks.filter((bookmark) => {
+    const title = String(bookmark?.title ?? "").toLowerCase();
+    const url = String(bookmark?.url ?? "").toLowerCase();
+    return title.includes(keyword) || url.includes(keyword);
+  });
 }
 
 // N28: http(s)://로 시작하거나 띄어쓰기 없이 점이 있으면 true
