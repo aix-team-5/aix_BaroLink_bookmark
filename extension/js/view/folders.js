@@ -11,6 +11,8 @@ const POPUP_TITLE_ID = "dialog-folder-title";
 const PREVIEW_COUNT = 4;
 const PREVIEW_ICON_SIZE = 40;
 const POPUP_ICON_SIZE = 48;
+// 팝업이 닫힌 뒤 실패를 알리는 안내는 문구가 길어서 오래 보여 준다
+const ERROR_TOAST_MS = 5000;
 
 // showFolders가 받은 가장 최근 tree. openFolderPopup(folderId)이 폴더를 찾을 때 쓴다 (render.js는 폴더 ID만 넘긴다)
 let latestTree = null;
@@ -19,7 +21,10 @@ let openFolderId = null;
 // 팝업 상태. 다시 그려도(showFolders) 지우지 않고, 폴더를 새로 열거나 팝업을 닫으면 되돌린다
 // mode: "view"(보기) | "rename"(이름 바꾸는 중) | "delete"(삭제 확인 중) | "create"(새 폴더 만들기)
 // draft: 입력 칸에 친 글자 · message: 팝업 안 안내 줄 { text, error } 또는 null · busy: 크롬 북마크를 바꾸는 중
-let popup = { mode: "view", draft: "", message: null, busy: false };
+// job: busy를 건 작업 번호 (없으면 0). 팝업을 닫고 다른 작업을 시작했을 때 앞 작업이 끝나며 뒤 작업의 busy를 풀지 않게 한다
+let popup = { mode: "view", draft: "", message: null, busy: false, job: 0 };
+// 마지막으로 시작한 작업 번호 (0부터 1씩 늘린다)
+let lastJob = 0;
 
 // 팝업 상태를 기본값으로 되돌린다
 function resetPopup() {
@@ -27,6 +32,35 @@ function resetPopup() {
   popup.draft = "";
   popup.message = null;
   popup.busy = false;
+  popup.job = 0;
+}
+
+// 크롬 북마크를 바꾸는 작업을 시작한다: 새 작업 번호로 busy를 건다. 그 번호를 돌려준다
+function startJob() {
+  lastJob += 1;
+  popup.busy = true;
+  popup.job = lastJob;
+  return lastJob;
+}
+
+// 작업이 끝났을 때: busy를 건 작업이 이 작업이면 busy를 풀고 true
+// 그사이 팝업을 닫거나(resetPopup) 다른 작업이 busy를 걸었으면 아무것도 바꾸지 않고 false
+function finishJob(job) {
+  if (popup.job !== job) return false;
+  popup.busy = false;
+  popup.job = 0;
+  return true;
+}
+
+// 팝업이 닫힌 뒤(또는 다른 작업으로 바뀐 뒤) 끝난 작업의 결과를 알린다
+// showModal()로 연 팝업은 #toast를 어두운 배경 뒤에 가리므로, 그사이 다른 팝업을 열었으면 그 안에 띄운다
+// container 옵션은 ui.js showToast에 있다 (#65, forgottenFolder.js의 showNotice와 같은 방식)
+function notifyAfterClose(text, error = false) {
+  const openDialog = document.querySelector("dialog[open]");
+  const options = {};
+  if (openDialog) options.container = openDialog;
+  if (error) options.duration = ERROR_TOAST_MS;
+  showToast(text, options);
 }
 
 // 줄에 보일 폴더: 최상위 폴더(북마크바·기타·모바일) 바로 아래의 폴더. 순서는 tree.folders 그대로 (F03-02)
@@ -391,15 +425,17 @@ async function submitCreate(dialog) {
     return;
   }
 
-  popup.busy = true;
+  const job = startJob();
   popup.message = null;
   drawPopup(dialog, null);
   try {
     await createFolder(name, bar.id);
   } catch (error) {
     console.warn("폴더를 만들지 못했어요", error);
-    if (!stillCreating()) return;
-    popup.busy = false;
+    if (!finishJob(job) || !stillCreating()) {
+      notifyAfterClose("폴더를 만들지 못했어요", true);
+      return;
+    }
     popup.message = { text: "폴더를 만들지 못했어요", error: true };
     drawPopup(dialog, null);
     return;
@@ -407,8 +443,8 @@ async function submitCreate(dialog) {
 
   // 팝업을 먼저 닫아야 #toast가 어두운 배경 뒤에 깔리지 않는다
   // 새 폴더는 render.js가 크롬 알림을 받아 showFolders를 다시 부르면 줄 끝에 생긴다. 다시 그리라고 부르지 않는다
-  if (stillCreating()) dialog.close();
-  showToast(`'${name}' 폴더를 만들었어요`);
+  if (finishJob(job) && stillCreating()) dialog.close();
+  notifyAfterClose(`'${name}' 폴더를 만들었어요`);
 }
 
 // 팝업 패널 하나: 머리말 + 본문
@@ -566,22 +602,24 @@ async function submitRename(dialog, info) {
     return;
   }
 
-  popup.busy = true;
+  const job = startJob();
   popup.message = null;
   redrawPopup(dialog);
   try {
     await renameFolder(info.id, name);
   } catch (error) {
     console.warn("이름을 바꾸지 못했어요", error);
-    popup.busy = false;
-    if (!stillOn(dialog, info)) return;
+    if (!finishJob(job) || !stillOn(dialog, info)) {
+      notifyAfterClose("이름을 바꾸지 못했어요", true);
+      return;
+    }
     popup.message = { text: "이름을 바꾸지 못했어요", error: true };
     redrawPopup(dialog);
     return;
   }
 
-  popup.busy = false;
-  if (!stillOn(dialog, info)) return;
+  // 팝업이 닫혔으면 알리지 않는다. 바뀐 이름은 내 폴더 줄에 들어온다
+  if (!finishJob(job) || !stillOn(dialog, info)) return;
   // 바뀐 이름은 render.js가 크롬 알림(onChanged)을 받아 showFolders를 다시 부르면 줄과 팝업 제목에 함께 들어온다
   backToView(dialog);
 }
@@ -595,7 +633,7 @@ async function submitDelete(dialog, info) {
   // 하위 폴더를 지우면 같은 팝업에서 상위 폴더로 간다
   const backToParent = info.parentFolder !== null;
 
-  popup.busy = true;
+  const job = startJob();
   popup.message = null;
   redrawPopup(dialog);
   let moved;
@@ -603,8 +641,10 @@ async function submitDelete(dialog, info) {
     moved = await deleteFolderKeepChildren(info.id);
   } catch (error) {
     console.warn("폴더를 지우지 못했어요", error);
-    popup.busy = false;
-    if (!stillOn(dialog, info)) return;
+    if (!finishJob(job) || !stillOn(dialog, info)) {
+      notifyAfterClose("폴더를 지우지 못했어요. 일부 북마크는 이미 상위 폴더로 옮겨졌을 수 있어요", true);
+      return;
+    }
     // N05는 중간에 실패하면 일부만 꺼낸 채 오류를 던진다
     popup.mode = "view";
     popup.message = { text: "폴더를 지우지 못했어요. 일부 북마크는 이미 상위 폴더로 옮겨졌을 수 있어요", error: true };
@@ -612,11 +652,10 @@ async function submitDelete(dialog, info) {
     return;
   }
 
-  popup.busy = false;
   const doneText = `'${title}' 폴더를 지우고 북마크 ${moved}개를 '${parentTitle}'에 꺼냈어요`;
-  if (!stillOn(dialog, info)) {
-    // 그사이 사용자가 팝업을 닫았으면 결과만 알린다
-    if (!dialog.open) showToast(doneText);
+  if (!finishJob(job) || !stillOn(dialog, info)) {
+    // 그사이 사용자가 팝업을 닫았으면 지금 팝업은 건드리지 않고 결과만 알린다
+    notifyAfterClose(doneText);
     return;
   }
 
