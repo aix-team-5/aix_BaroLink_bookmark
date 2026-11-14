@@ -843,6 +843,40 @@ a {
   outline: none;
 }
 
+/* 북마크 검색 결과 리스트 (F14-03). 검색창 바로 아래에 한 줄씩 보인다. render.js가 채운다 */
+.search-results {
+  margin-bottom: var(--space-4);
+}
+
+.search-results .list__row {
+  background: var(--color-surface);
+  font: inherit;
+}
+
+.search-results .list__row:hover {
+  background: var(--color-surface-strong);
+}
+
+.search-results .list__text .meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.search-result__folder {
+  flex: 0 0 auto;
+  max-width: 40%;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  padding: 2px var(--space-2);
+  border-radius: var(--radius-full);
+  background: var(--color-primary-soft);
+  color: var(--color-primary-text);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-bold);
+}
+
 #all-bookmarks .bookmark-grid {
   display: grid;
   grid-template-columns: repeat(3, minmax(0, 1fr));
