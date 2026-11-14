@@ -346,7 +346,7 @@ test("cleanupMissing: 노드 배열(children 포함)과 ID Set도 받는다", as
   assert.deepEqual(data.dismissed, { 3: 100 });
 });
 
-// 9. setFirstCard / addNew · removeNew · purgeWorkerKeys (markHandledNew는 P2에서 테스트한다)
+// 9. setFirstCard / addNew · removeNew · purgeWorkerKeys (markHandledNew는 10번)
 test("setFirstCard: 허용된 값만, 잘못된 값은 오류", async () => {
   await store.setFirstCard("done");
   assert.deepEqual(data.state, { firstCard: "done" });
@@ -372,4 +372,38 @@ test("addNew / removeNew / purgeWorkerKeys: 서비스 워커에서 동작", asyn
   await store.purgeWorkerKeys(["2", 4]);
   assert.deepEqual(data.newBookmarks, ["3"]);
   assert.deepEqual(data.manualMoves, {});
+});
+
+// 10. markHandledNew (N39, 명세 v20)
+test("markHandledNew: handledNew에 중복 없이 뒤에 붙이고, ID는 문자열로 맞춘다", async () => {
+  await store.markHandledNew(["3", 5, "3"]);
+  assert.deepEqual(data.handledNew, ["3", "5"]);
+  await store.markHandledNew(["5", "7"]);
+  assert.deepEqual(data.handledNew, ["3", "5", "7"]);
+});
+
+test("markHandledNew: 새로 넣을 ID가 없거나 빈 배열이면 저장하지 않는다", async () => {
+  data.handledNew = ["3"];
+  const set = chrome.storage.local.set;
+  let writes = 0;
+  chrome.storage.local.set = async (items) => {
+    writes++;
+    return set(items);
+  };
+  try {
+    await store.markHandledNew([]);
+    await store.markHandledNew(["3", 3]);
+  } finally {
+    chrome.storage.local.set = set;
+  }
+  assert.equal(writes, 0);
+  assert.deepEqual(data.handledNew, ["3"]);
+});
+
+test("markHandledNew: 배열이 아니거나 빈 ID면 오류, 서비스 워커에서 부르면 오류", async () => {
+  await assert.rejects(store.markHandledNew("3"));
+  await assert.rejects(store.markHandledNew(["3", ""]));
+  asWorker();
+  await assert.rejects(store.markHandledNew(["3"]), /새 탭만/);
+  assert.equal(data.handledNew, undefined);
 });

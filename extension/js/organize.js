@@ -2,10 +2,10 @@
 // 정리 적용과 되돌리기. 크롬 북마크를 실제로 바꾼다. bookmarks.js와 store.js를 거친다.
 
 import { loadTree, createFolder, moveBookmark, deleteFolderKeepChildren } from "./bookmarks.js";
-import { load, setPending, addHistory, markUndone } from "./store.js";
+import { load, setPending, addHistory, markUndone, markHandledNew } from "./store.js";
 
 const TYPES = ["first", "new"];
-const F10_ERROR = "새 북마크 정리(F10)는 아직 지원하지 않아요";
+const FIRST_ONLY_ERROR = "첫 정리에서는 keep·folderId를 쓰지 않아요";
 
 // applyPlan·undo를 한 줄로 세우는 큐. 같은 탭에서 두 번 눌러 겹치는 것을 막는다 (다른 탭까지는 막지 않는다)
 let queue = Promise.resolve();
@@ -39,48 +39,66 @@ function childrenByFolder(tree) {
   return result;
 }
 
-// 아무것도 바꾸기 전에 계획 전체를 검사하고, 폴더 이름별로 북마크 ID를 모은다
-// N22 입력은 { folders, keep? }라 type이 없어도 받는다. 있으면 "folders"여야 한다(N20 makePlan의 "pin" 등은 오류)
-function readPlan(plan) {
+// 아무것도 바꾸기 전에 계획 전체를 검사하고, 목적지(기존 폴더 ID 또는 새 폴더 이름)별로 북마크 ID를 모은다
+// N22 입력은 { folders: [{ folderId 또는 name, items }], keep? }라 type이 없어도 받는다. 있으면 "folders"여야 한다(N20 makePlan의 "pin" 등은 오류)
+// 돌려주는 값: { groups: Map(목적지 키 → { folderId | name, ids }), keep: [북마크 ID] (중복 없음), seen: Set(folders에 나온 ID) }
+function readPlan(plan, type) {
   if (!plan || typeof plan !== "object" || (plan.type !== undefined && plan.type !== "folders") || !Array.isArray(plan.folders)) {
     throw new Error("정리할 폴더 계획이 아니에요");
   }
-  const keep = plan.keep;
-  if (keep !== undefined && keep !== null && !(Array.isArray(keep) && keep.length === 0)) throw new Error(F10_ERROR);
+  const rawKeep = plan.keep ?? [];
+  if (!Array.isArray(rawKeep)) throw new Error("그대로 둘 북마크 목록(keep)이 배열이 아니에요");
+  // 첫 정리에는 '그대로 두기'가 없다 (명세 v20)
+  if (type === "first" && rawKeep.length > 0) throw new Error(FIRST_ONLY_ERROR);
+  const keep = [...new Set(rawKeep.map(itemId))];
 
-  const groups = new Map(); // 폴더 이름 → [북마크 ID]. 같은 이름은 같은 폴더가 되므로 합친다
-  const seen = new Map(); // 북마크 ID → 처음 나온 폴더 이름
+  const groups = new Map(); // 목적지 키 → { folderId | name, ids }. 같은 목적지는 합친다
+  const seen = new Map(); // 북마크 ID → 처음 나온 목적지 이름(경고 문구용)
   for (const folder of plan.folders) {
     if (!folder || typeof folder !== "object") throw new Error("정리할 폴더 계획이 아니에요");
-    if (folder.folderId !== undefined && folder.folderId !== null) throw new Error(F10_ERROR);
-    const name = typeof folder.name === "string" ? folder.name.trim() : "";
-    if (!name) throw new Error("폴더 이름이 비어 있어요");
-    if (!Array.isArray(folder.items)) throw new Error(`"${name}" 폴더의 북마크 목록이 없어요`);
-    if (!groups.has(name)) groups.set(name, []);
+    const hasFolderId = folder.folderId !== undefined && folder.folderId !== null && folder.folderId !== "";
+    if (hasFolderId && type === "first") throw new Error(FIRST_ONLY_ERROR);
+    let key;
+    let label;
+    let target;
+    if (hasFolderId) {
+      // folderId와 name이 둘 다 있으면 folderId를 쓰고 name은 무시한다 (명세 v20)
+      const folderId = String(folder.folderId);
+      key = `id:${folderId}`;
+      label = `폴더 ${folderId}`;
+      target = { folderId };
+    } else {
+      const name = typeof folder.name === "string" ? folder.name.trim() : "";
+      if (!name) throw new Error("폴더 이름이 비어 있어요");
+      key = `name:${name}`;
+      label = `"${name}"`;
+      target = { name };
+    }
+    if (!Array.isArray(folder.items)) throw new Error(`${label} 폴더의 북마크 목록이 없어요`);
+    if (!groups.has(key)) groups.set(key, { ...target, ids: [] });
     for (const item of folder.items) {
       const id = itemId(item);
       if (seen.has(id)) {
-        console.warn(`북마크 ${id}가 "${seen.get(id)}"와 "${name}"에 함께 있어 처음 것만 써요`);
+        console.warn(`북마크 ${id}가 ${seen.get(id)}와 ${label}에 함께 있어 처음 것만 써요`);
         continue;
       }
-      seen.set(id, name);
-      groups.get(name).push(id);
+      seen.set(id, label);
+      groups.get(key).ids.push(id);
     }
   }
-  return groups;
+  return { groups, keep, seen: new Set(seen.keys()) };
 }
 
 // N22: 폴더를 만들고 북마크를 옮긴 뒤 기록을 저장. type은 "first" | "new"
 // 옮긴 것도 만든 폴더도 없으면 기록을 저장하지 않고 돌려주기만 한다(되돌릴 것이 없다)
+// 결과: { id, at, type, createdFolderIds, moves, fromOrder, skipped, kept }. kept는 '그대로 두기'로 기록한 수("first"는 0)
 export async function applyPlan(plan, type) {
   return enqueue(() => runApplyPlan(plan, type));
 }
 
 async function runApplyPlan(plan, type) {
   if (!TYPES.includes(type)) throw new Error(`정리 종류는 "first" 또는 "new"여야 해요 (지금: ${type})`);
-  // P1에서는 첫 정리만 받는다. 새 북마크 정리는 P2에서 연다
-  if (type === "new") throw new Error(F10_ERROR);
-  const groups = readPlan(plan);
+  const { groups, keep, seen } = readPlan(plan, type);
 
   // ① 원래 폴더와 원래 순서를 첫 북마크를 옮기기 전에 한꺼번에 읽는다
   const tree = await loadTree();
@@ -89,17 +107,30 @@ async function runApplyPlan(plan, type) {
   const before = childrenByFolder(tree);
   const byId = new Map(tree.bookmarks.map((bookmark) => [String(bookmark.id), bookmark]));
   const barBefore = new Set(bar.childIds.map(String));
+  // folderId로 쓸 수 있는 폴더: 폴더 목록과 최상위 폴더(북마크바·기타·모바일). 맨 위 루트("0")는 쓰지 않는다
+  const folderIds = new Set(tree.folders.map((folder) => String(folder.id)));
+  for (const root of Object.values(tree.roots)) if (root) folderIds.add(String(root.id));
+  folderIds.delete("0");
 
-  // ② 북마크바 맨 뒤에 폴더를 만든다. 같은 이름 폴더가 있으면 그 폴더를 쓴다 (F07-08)
+  // ② 새 폴더는 북마크바 맨 뒤에 만든다. 같은 이름 폴더가 있으면 그 폴더를 쓴다 (F07-08)
   // 이미 지워진 북마크는 skipped에 세고, 남은 북마크가 없는 그룹은 폴더를 만들지 않는다
+  // folderId의 폴더가 없으면 오류 없이 그 그룹의 북마크를 skipped에 센다 (명세 v20)
   let skipped = 0;
   const createdFolderIds = [];
   const targets = [];
-  for (const [name, ids] of groups) {
-    const alive = ids.filter((id) => byId.has(id));
-    skipped += ids.length - alive.length;
+  for (const group of groups.values()) {
+    const alive = group.ids.filter((id) => byId.has(id));
+    skipped += group.ids.length - alive.length;
     if (alive.length === 0) continue;
-    const folder = await createFolder(name, bar.id);
+    if (group.folderId !== undefined) {
+      if (!folderIds.has(group.folderId)) {
+        skipped += alive.length;
+        continue;
+      }
+      targets.push({ folderId: group.folderId, ids: alive });
+      continue;
+    }
+    const folder = await createFolder(group.name, bar.id);
     const folderId = String(folder.id);
     if (!barBefore.has(folderId) && !createdFolderIds.includes(folderId)) createdFolderIds.push(folderId);
     targets.push({ folderId, ids: alive });
@@ -148,7 +179,10 @@ async function runApplyPlan(plan, type) {
     fromOrder[move.fromParentId] ??= [...(before.get(move.fromParentId) ?? [])];
   }
 
-  const entry = { id, at, type, createdFolderIds, moves, fromOrder, skipped };
+  // '그대로 두기': keep에서 folders에 나온 ID와 지금 없는 북마크를 뺀 것 (첫 정리는 keep이 없어 0)
+  const kept = keep.filter((keepId) => !seen.has(keepId) && byId.has(keepId));
+
+  const entry = { id, at, type, createdFolderIds, moves, fromOrder, skipped, kept: kept.length };
   // ⑤ 옮긴 것만 기록한다. 저장하지 못하면 손으로 되돌릴 수 있게 기록 전체를 콘솔에 남기고 오류를 그대로 던진다
   if (moves.length > 0 || createdFolderIds.length > 0) {
     try {
@@ -158,6 +192,8 @@ async function runApplyPlan(plan, type) {
       throw error;
     }
   }
+  // ⑥ 기록을 저장한 뒤에 '그대로 두기'를 기록한다. 옮긴 북마크는 서비스 워커가 newBookmarks에서 지운다
+  if (kept.length > 0) await markHandledNew(kept);
   return entry;
 }
 

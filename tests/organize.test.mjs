@@ -349,16 +349,165 @@ test("applyPlan: 계획이 잘못되면 아무것도 바꾸기 전에 오류", {
   assert.deepEqual(childIds("1"), ["10", "11", "12", "13", "14", "15", "16", "17"]);
 });
 
-test("applyPlan: type \"new\"·keep(비어 있지 않음)·folderId는 F10이라 아무것도 바꾸기 전에 오류", { skip: SKIP }, async () => {
-  await assert.rejects(o.applyPlan({ ...plan(["쇼핑", ["11"]]), keep: ["12"] }, "first"), /F10/);
-  await assert.rejects(o.applyPlan({ type: "folders", folders: [{ folderId: "16", items: ["11"] }] }, "first"), /F10/);
-  // P1에서는 빈 keep이어도 type "new"를 받지 않는다
-  await assert.rejects(o.applyPlan({ ...plan(["쇼핑", ["11"]]), keep: [] }, "new"), /F10/);
-  await assert.rejects(o.applyPlan(plan(["쇼핑", ["11"]]), "new"), /F10/);
+test("applyPlan: 첫 정리에 keep(비어 있지 않음)·folderId가 오면 아무것도 바꾸기 전에 오류, 결과의 kept는 0", { skip: SKIP }, async () => {
+  await assert.rejects(o.applyPlan({ ...plan(["쇼핑", ["11"]]), keep: ["12"] }, "first"), /첫 정리/);
+  await assert.rejects(o.applyPlan({ type: "folders", folders: [{ folderId: "16", items: ["11"] }] }, "first"), /첫 정리/);
+  // keep이 배열이 아니면 종류와 상관없이 오류
+  await assert.rejects(o.applyPlan({ ...plan(["쇼핑", ["11"]]), keep: "12" }, "new"), /keep/);
   assert.deepEqual(calls, []);
   // 빈 keep과 type "first"는 받는다
   const entry = await o.applyPlan({ ...plan(["쇼핑", ["11"]]), keep: [] }, "first");
   assert.equal(entry.type, "first");
+  assert.equal(entry.kept, 0);
+  assert.equal(data.history[0].kept, 0);
+  assert.equal(data.handledNew, undefined);
+});
+
+// ---- N22 applyPlan "new" (F10-05, 명세 v20) ----
+
+// 새 북마크 정리의 [정리하기] 입력: { folders: [{ folderId 또는 name, items }], keep }
+const planNew = (folders, keep = []) => ({ folders, keep });
+
+test("applyPlan new: 기존 폴더(folderId)로 옮기면 그 폴더 맨 뒤에 놓고 폴더를 만들지 않는다 (F10-05)", { skip: SKIP }, async () => {
+  const entry = await o.applyPlan(planNew([{ folderId: "16", items: ["11", "13"] }]), "new");
+  assert.deepEqual(childIds("16"), ["160", "11", "13"]);
+  assert.equal(calls.includes("bookmarks.create"), false);
+  assert.equal(entry.type, "new");
+  assert.deepEqual(entry.createdFolderIds, []);
+  assert.equal(entry.skipped, 0);
+  assert.equal(entry.kept, 0);
+  assert.deepEqual(entry.moves.map((m) => [m.bookmarkId, m.toParentId]), [["11", "16"], ["13", "16"]]);
+  assert.deepEqual(entry.fromOrder, { 1: ["10", "11", "12", "13", "14", "15", "16", "17"] });
+  assert.deepEqual(data.history, [entry]);
+});
+
+test("applyPlan new: name만 있으면 북마크바 맨 뒤에 새 폴더를 만들어 옮긴다 (F10-05)", { skip: SKIP }, async () => {
+  const entry = await o.applyPlan(planNew([{ name: "쇼핑", items: ["11", "13"] }]), "new");
+  const folder = folderNamed("쇼핑");
+  assert.equal(childIds("1").at(-1), folder);
+  assert.deepEqual(childIds(folder), ["11", "13"]);
+  assert.deepEqual(entry.createdFolderIds, [folder]);
+  assert.equal(entry.type, "new");
+  assert.deepEqual(data.history, [entry]);
+});
+
+test("applyPlan new: folderId와 name이 둘 다 있으면 folderId를 쓰고 그 이름의 폴더는 만들지 않는다", { skip: SKIP }, async () => {
+  const entry = await o.applyPlan(planNew([{ folderId: "16", name: "쇼핑", items: ["11"] }]), "new");
+  assert.deepEqual(childIds("16"), ["160", "11"]);
+  assert.equal(folderNamed("쇼핑"), undefined);
+  assert.deepEqual(entry.createdFolderIds, []);
+});
+
+test("applyPlan new: folderId 폴더가 없으면 오류 없이 skipped에 세고 handledNew에도 넣지 않는다", { skip: SKIP }, async () => {
+  // 999는 없는 폴더, 10은 폴더가 아니라 북마크
+  const entry = await o.applyPlan(
+    planNew([{ folderId: "999", items: ["11", "12"] }, { folderId: "10", items: ["13"] }, { folderId: "16", items: ["14"] }], ["11", "15"]),
+    "new",
+  );
+  assert.equal(entry.skipped, 3);
+  assert.deepEqual(entry.moves.map((m) => m.bookmarkId), ["14"]);
+  assert.deepEqual(childIds("1").slice(0, 4), ["10", "11", "12", "13"]);
+  // 11은 folders에 나왔으므로 keep에 있어도 그대로 두기가 아니다 → 다음 정리 때 다시 나온다
+  assert.equal(entry.kept, 1);
+  assert.deepEqual(data.handledNew, ["15"]);
+});
+
+test("applyPlan new: folderId가 맨 위 루트(\"0\")면 폴더 없음과 같이 skipped", { skip: SKIP }, async () => {
+  const entry = await o.applyPlan(planNew([{ folderId: "0", items: ["11"] }]), "new");
+  assert.equal(entry.skipped, 1);
+  assert.deepEqual(entry.moves, []);
+  assert.equal(calls.includes("bookmarks.move"), false);
+  assert.equal(data.history, undefined);
+});
+
+test("applyPlan new: keep과 folders에 같은 ID가 있으면 folders를 따르고 handledNew에서 뺀다", { skip: SKIP }, async () => {
+  const entry = await o.applyPlan(planNew([{ folderId: "16", items: ["11"] }], ["11", "12"]), "new");
+  assert.deepEqual(childIds("16"), ["160", "11"]);
+  assert.equal(entry.kept, 1);
+  assert.deepEqual(data.handledNew, ["12"]);
+});
+
+test("applyPlan new: keep만 있으면 기록 없이 같은 모양을 돌려주고 handledNew에 넣는다", { skip: SKIP }, async () => {
+  const entry = await o.applyPlan(planNew([], ["12", "20"]), "new");
+  assert.deepEqual(Object.keys(entry).sort(), ["at", "createdFolderIds", "fromOrder", "id", "kept", "moves", "skipped", "type"]);
+  assert.equal(entry.type, "new");
+  assert.deepEqual(entry.createdFolderIds, []);
+  assert.deepEqual(entry.moves, []);
+  assert.deepEqual(entry.fromOrder, {});
+  assert.equal(entry.skipped, 0);
+  assert.equal(entry.kept, 2);
+  assert.equal(data.history, undefined);
+  assert.equal(data.pendingMoves, undefined);
+  assert.deepEqual(data.handledNew, ["12", "20"]);
+  assert.equal(calls.includes("bookmarks.move"), false);
+});
+
+test("applyPlan new: setPending 저장 뒤에 첫 이동, 기록 뒤에 handledNew, newBookmarks는 건드리지 않는다", { skip: SKIP }, async () => {
+  data.newBookmarks = ["11", "12"];
+  await o.applyPlan(planNew([{ folderId: "16", items: ["11"] }], ["12"]), "new");
+  const firstMove = calls.indexOf("bookmarks.move");
+  const pendingSet = calls.lastIndexOf("storage.set", firstMove);
+  assert.ok(pendingSet !== -1 && pendingSet < firstMove);
+  // 이동 뒤 저장 두 번: history → handledNew
+  assert.deepEqual(calls.slice(firstMove), ["bookmarks.move", "storage.set", "storage.set"]);
+  assert.equal(data.pendingMoves["11"].toParentId, "16");
+  assert.deepEqual(data.newBookmarks, ["11", "12"]);
+});
+
+test("applyPlan new: 계획과 적용 사이에 지워진 북마크는 skipped로 세고 나머지는 옮긴다", { skip: SKIP }, async () => {
+  await bookmarks.remove("13");
+  const entry = await o.applyPlan(planNew([{ folderId: "16", items: ["11", "13"] }, { name: "쇼핑", items: ["12"] }]), "new");
+  assert.equal(entry.skipped, 1);
+  assert.deepEqual(entry.moves.map((m) => m.bookmarkId), ["11", "12"]);
+  assert.deepEqual(childIds("16"), ["160", "11"]);
+  assert.deepEqual(childIds(folderNamed("쇼핑")), ["12"]);
+});
+
+test("applyPlan new: keep 안의 지워진 북마크는 kept에 세지 않고 handledNew에도 넣지 않는다", { skip: SKIP }, async () => {
+  await bookmarks.remove("12");
+  const entry = await o.applyPlan(planNew([], ["12", "14", "998"]), "new");
+  assert.equal(entry.kept, 1);
+  assert.equal(entry.skipped, 0);
+  assert.deepEqual(data.handledNew, ["14"]);
+});
+
+test("applyPlan new: keep에 같은 ID가 두 번 있어도 kept는 1, handledNew에도 한 번만 (숫자 ID 포함)", { skip: SKIP }, async () => {
+  const entry = await o.applyPlan(planNew([], ["12", "12", 12]), "new");
+  assert.equal(entry.kept, 1);
+  assert.deepEqual(data.handledNew, ["12"]);
+  // 이미 handledNew에 있어도 이번에 고른 수로 센다
+  const again = await o.applyPlan(planNew([], ["12"]), "new");
+  assert.equal(again.kept, 1);
+  assert.deepEqual(data.handledNew, ["12"]);
+});
+
+test("applyPlan new → undo: 기존 폴더로 옮긴 것을 원래 자리로 되돌리고 기존 폴더는 남긴다", { skip: SKIP }, async () => {
+  const entry = await o.applyPlan(planNew([{ folderId: "16", items: ["13", "11"] }]), "new");
+  const result = await o.undo(entry.id);
+  assert.deepEqual(result, { restored: 2, skipped: 0, fallback: 0 });
+  assert.deepEqual(childIds("1"), ["10", "11", "12", "13", "14", "15", "16", "17"]);
+  assert.deepEqual(childIds("16"), ["160"]);
+});
+
+test("applyPlan new → undo: 새 폴더를 만들어 옮긴 뒤 되돌리면 만든 폴더를 지운다", { skip: SKIP }, async () => {
+  const entry = await o.applyPlan(planNew([{ name: "쇼핑", items: ["11", "13"] }, { folderId: "16", items: ["12"] }]), "new");
+  const folder = folderNamed("쇼핑");
+  const result = await o.undo(entry.id);
+  assert.deepEqual(result, { restored: 3, skipped: 0, fallback: 0 });
+  assert.equal(nodes.has(folder), false);
+  assert.deepEqual(childIds("1"), ["10", "11", "12", "13", "14", "15", "16", "17"]);
+  assert.deepEqual(childIds("16"), ["160"]);
+});
+
+test("applyPlan new: 폴더를 만들었지만 이동이 모두 실패하면 기록은 남긴다", { skip: SKIP }, async () => {
+  failMove = new Set(["11", "13"]);
+  const entry = await o.applyPlan(planNew([{ name: "쇼핑", items: ["11", "13"] }], ["12"]), "new");
+  assert.equal(entry.skipped, 2);
+  assert.deepEqual(entry.moves, []);
+  assert.deepEqual(entry.createdFolderIds, [folderNamed("쇼핑")]);
+  assert.equal(entry.kept, 1);
+  assert.deepEqual(data.history, [entry]);
+  assert.deepEqual(data.handledNew, ["12"]);
 });
 
 test("applyPlan: 북마크바가 없으면 아무것도 바꾸기 전에 오류", { skip: SKIP }, async () => {
