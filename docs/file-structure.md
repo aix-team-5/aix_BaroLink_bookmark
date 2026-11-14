@@ -370,9 +370,23 @@ sequenceDiagram
 - 그리기 함수는 여러 번 불려도 결과가 같아야 한다. 자기 칸을 비우고 다시 그린다.
 - 열려 있는 `<dialog>`는 다시 그릴 때 닫지 않는다.
 
+### 새 북마크 정리 창의 입력 (F10, 명세 v20)
+
+새 함수를 만들지 않고 첫 정리와 같은 `showOrganizeDialog(plan, actions)`를 다시 쓴다(N31).
+
+- **창에 넘기는 값**: `plan = { type: "new", items: [{ bookmark, folderId }], folders: [{ id, title }], newFolders: [{ name, items }] }`
+  - `items`는 `suggestForNew`(N24) 결과의 `bookmarkId`를 `render.js`가 북마크 항목으로 바꾼 것이다. `folderId`가 `null`이면 '그대로 두기'다.
+  - `folders`는 사용자가 고를 수 있는 기존 폴더로, `loadTree`(N01)의 폴더 항목을 그대로 쓴다. `newFolders`는 `suggestNewFolders`(N37)의 결과다.
+- **[정리하기]**: `applyPlan({ folders: [{ folderId 또는 name, items }], keep: [ID] }, "new")`를 부른다(N22).
+  - `folderId`는 기존 폴더로 옮길 때, `name`은 새로 만들 폴더의 이름이다(창에 넘긴 `folders`의 `title`과 다르다).
+  - `folders` 항목에 `folderId`와 `name`이 둘 다 있으면 `folderId`를 쓰고 `name`은 무시한다.
+  - `folderId`의 폴더가 없으면 오류를 내지 않고, 그 항목의 북마크를 `skipped`로 센다. 옮기지 못한 북마크는 `newBookmarks`에 남아 다음 정리 때 다시 나온다(의도한 동작).
+  - 같은 ID가 `keep`과 `folders`에 함께 있으면 `folders`를 따른다. 그 ID는 `markHandledNew`에 넣지 않는다.
+  - `keep`만 있고 옮긴 북마크가 없으면 `history`를 남기지 않는다. 이때도 같은 모양 `{ id, at, type, createdFolderIds: [], moves: [], fromOrder: {}, skipped, kept }`를 돌려준다(`null`이 아니다). `kept`는 `markHandledNew`에 넣은 북마크 수다. "새 북마크를 그대로 뒀어요" 토스트에 쓴다. `type`이 `"first"`이면 `kept`는 `0`이다.
+- **`markHandledNew(ids)`**(N39): `handledNew`에 중복 없이 추가한다. 새 탭만 부른다(`applyPlan`이 부른다).
+
 ### 아직 정하지 않은 입력 (P2를 시작할 때 정한다)
 
-- 새 북마크 정리 창(F10)에 넘길 값: 새 북마크와 추천 폴더
 - 고정할 북마크 고르기 창(`showPinPicker`, F09)에 넘길 값: 고를 수 있는 북마크 목록
 
 확정 디자인 시안: https://www.figma.com/make/Yf9dLbok1rcVJDNdDQAWI9/Chrome-Extension-UI
