@@ -37,8 +37,6 @@ const dismissing = new Set();
 let showAll = false;
 // pinned에 저장하는 중인 북마크 ID. 저장이 끝나기 전에 [고정하기]를 다시 눌러도 한 번만 처리한다
 const pinning = new Set();
-// 팝업 안 안내 문구를 지우는 타이머
-let noticeTimer = null;
 
 // "N개월 전" 같은 지난 시간 문구. 한 달이 안 되면 일, 1년 이상도 개월로 센다 (시안의 문구)
 function ago(time, now) {
@@ -170,18 +168,12 @@ function openDialog() {
 
   const body = document.createElement("div");
   body.className = "dialog__body";
-  // 팝업 안 안내 문구. 팝업은 showModal()이라 #toast가 어두운 배경 뒤에 깔려 보이지 않으므로 여기에 보여 준다
-  const notice = document.createElement("div");
-  notice.className = "dialog__subtitle";
-  notice.dataset.role = "notice";
-  notice.setAttribute("role", "status");
-  notice.hidden = true;
   const list = document.createElement("div");
   list.className = "list";
   const note = document.createElement("div");
   note.className = "dialog__subtitle";
   note.textContent = "북마크는 원래 폴더에 그대로 있어요";
-  body.append(notice, list, note);
+  body.append(list, note);
 
   panel.append(header, body);
   dialog.appendChild(panel);
@@ -192,8 +184,6 @@ function openDialog() {
   dialog.addEventListener("close", () => {
     clearUndoRows();
     showAll = false;
-    clearTimeout(noticeTimer);
-    noticeTimer = null;
     dialog.remove();
   });
 
@@ -346,28 +336,19 @@ function renderRow(bookmark, time, stored, now, dialog) {
 async function openItem(bookmark, newTab, dialog) {
   try {
     const opened = await openBookmark(bookmark, { newTab });
-    if (opened === false) showToast("이 북마크는 열 수 없어요");
+    if (opened === false) showNotice(dialog, "이 북마크는 열 수 없어요");
     else if (!newTab) dialog.close();
   } catch (error) {
     console.warn("북마크를 열지 못했어요", error);
-    showToast("북마크를 열지 못했어요");
+    showNotice(dialog, "북마크를 열지 못했어요");
   }
 }
 
-// 팝업 안에 안내 문구를 잠깐 보여 준다
+// 안내 문구를 잠깐 보여 준다. 팝업이 열려 있으면 팝업 안에 띄운다 (ui.js showToast의 container, F02-04)
+// 팝업은 showModal()이라 #toast가 어두운 배경 뒤에 깔려 보이지 않기 때문이다. 팝업이 닫혔으면 #toast에 띄운다
 function showNotice(dialog, text) {
-  const notice = dialog.querySelector('[data-role="notice"]');
-  if (!notice) return;
-  notice.textContent = text;
-  notice.hidden = false;
-  // "모두 보기"로 펼친 뒤 아래쪽에서 눌렀으면 안내가 위로 스크롤돼 가려지므로 보이는 곳까지 올린다 (#60 리뷰)
-  notice.scrollIntoView({ block: "nearest" });
-  clearTimeout(noticeTimer);
-  noticeTimer = setTimeout(() => {
-    noticeTimer = null;
-    notice.hidden = true;
-    notice.textContent = "";
-  }, NOTICE_MS);
+  const container = dialog && dialog.isConnected && dialog.open ? dialog : null;
+  showToast(text, { container, duration: NOTICE_MS });
 }
 
 // [고정하기]: 독(pinned)에 추가한다 (F04-08). 고정한 북마크는 pickForgotten이 빼므로, 저장이 바뀌면 render.js가 다시 그려 후보에서 빠진다
@@ -381,12 +362,11 @@ async function pinItem(bookmark, dialog) {
     added = await pin(id);
   } catch (error) {
     console.warn("고정하지 못했어요", error);
-    if (dialog.isConnected) showNotice(dialog, "고정하지 못했어요");
+    showNotice(dialog, "고정하지 못했어요");
     return;
   } finally {
     pinning.delete(id);
   }
-  if (!dialog.isConnected) return;
   showNotice(dialog, added ? "고정됨에 추가했어요" : "고정은 8개까지 할 수 있어요");
 }
 
