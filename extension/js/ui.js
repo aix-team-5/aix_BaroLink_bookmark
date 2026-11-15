@@ -146,17 +146,26 @@ export function appIcon(bookmark = {}, size = 56) {
 }
 
 // N45: 짧은 안내 문구를 #toast 칸에 띄우고 시간이 지나면 지운다. 한 번에 하나만 표시한다
-// options: { actionLabel, onAction, duration }. actionLabel이 있으면 버튼을 함께 보여 주고 누르면 onAction을 부른다
+// options: { actionLabel, onAction, duration, container }. actionLabel이 있으면 버튼을 함께 보여 주고 누르면 onAction을 부른다
+// container(요소)를 주면 #toast 대신 그 요소 안에 안내를 띄운다. showModal()로 연 팝업은 #toast를 배경 뒤에 가리므로, 팝업 안에서 쓸 때 넘긴다
+// container가 요소가 아니면(없거나 null) #toast에 띄운다. 어느 쪽이든 한 번에 하나만 보인다
 let toastTimer = null;
+let inlineToast = null; // container 안에 만든 안내 요소 (한 번에 하나)
 
-export function showToast(message, { actionLabel, onAction, duration = 2200 } = {}) {
-  const toast = document.getElementById("toast");
-  if (!toast) return; // #toast 칸이 없으면 조용히 지나간다
+export function showToast(message, { actionLabel, onAction, duration = 2200, container } = {}) {
+  // 이전 안내(#toast와 container 안의 것 모두)를 지우고(한 번에 하나만) 타이머도 끈다
+  hideToast();
 
-  // 이전 문구를 지우고(한 번에 하나만) 타이머도 끈다
-  if (toastTimer !== null) {
-    clearTimeout(toastTimer);
-    toastTimer = null;
+  let toast;
+  if (container instanceof Element) {
+    toast = document.createElement("div");
+    toast.className = "toast--inline";
+    toast.setAttribute("role", "status");
+    container.appendChild(toast);
+    inlineToast = toast;
+  } else {
+    toast = document.getElementById("toast");
+    if (!toast) return; // #toast 칸이 없으면 조용히 지나간다
   }
   toast.replaceChildren();
 
@@ -198,6 +207,11 @@ export function showToast(message, { actionLabel, onAction, duration = 2200 } = 
 function hideToast() {
   const toast = document.getElementById("toast");
   if (toast) toast.classList.remove("is-visible");
+  // container 안에 만든 안내는 요소째 지운다
+  if (inlineToast !== null) {
+    inlineToast.remove();
+    inlineToast = null;
+  }
   if (toastTimer !== null) {
     clearTimeout(toastTimer);
     toastTimer = null;

@@ -11,7 +11,7 @@ import { load, cleanupMissing } from "./store.js";
 import { getTargets, makePlan } from "./plan.js";
 import { pickForgotten } from "./forgotten.js";
 import { appIcon, icon, showToast } from "./ui.js";
-import { runWebSearch } from "./search.js";
+import { runWebSearch, searchBookmarks } from "./search.js";
 import { showFolders, openFolderPopup, showContextMenu } from "./view/folders.js";
 import { showForgotten } from "./view/forgottenFolder.js";
 import { showResultNotice, showHistory } from "./view/history.js";
@@ -259,9 +259,29 @@ function formatToday() {
 }
 
 // ----- #all-bookmarks -----
+// 북마크 검색(F14)이 찾는 북마크 목록. 다시 그릴 때마다 최신 목록으로 바꾼다
+let searchPool = [];
+
 function renderAllBookmarks(bookmarks, stored) {
   const section = document.getElementById("all-bookmarks");
   if (!section) return;
+  searchPool = bookmarks;
+
+  // 제목·검색창·결과 칸은 한 번만 만든다. 다시 그릴 때 새로 만들면 입력 중이던 글자가 지워진다 (웹 검색창과 같은 방식)
+  if (!section.querySelector(".bookmark-grid")) buildAllBookmarks(section);
+
+  const grid = section.querySelector(".bookmark-grid");
+  grid.replaceChildren();
+  for (const bookmark of bookmarks) {
+    grid.appendChild(renderBookmarkTile(bookmark));
+  }
+
+  // 결과 리스트는 다시 그린 북마크 목록으로 새로 찾는다 (검색 중에 북마크가 바뀌어도 맞게)
+  updateBookmarkSearch(section);
+}
+
+// #all-bookmarks 안의 고정 부분: 제목, 북마크 검색창, 검색 결과 칸, 북마크 격자, 북마크가 없을 때의 안내
+function buildAllBookmarks(section) {
   section.replaceChildren();
 
   const head = document.createElement("div");
@@ -277,7 +297,7 @@ function renderAllBookmarks(bookmarks, stored) {
   head.append(headText);
   section.append(head);
 
-  // 북마크 검색창
+  // 북마크 검색창. 글자를 입력할 때마다 결과를 갱신한다 (F14-01). 웹 검색창과는 연동하지 않는다
   const searchLabel = document.createElement("label");
   searchLabel.className = "bookmark-search";
   searchLabel.appendChild(icon("search", 16));
@@ -286,27 +306,87 @@ function renderAllBookmarks(bookmarks, stored) {
   searchInput.name = "bookmark-q";
   searchInput.placeholder = "북마크 제목 또는 주소로 검색";
   searchInput.setAttribute("aria-label", "북마크 검색");
+  searchInput.addEventListener("input", () => updateBookmarkSearch(section));
   searchLabel.appendChild(searchInput);
   section.append(searchLabel);
+
+  // 검색 결과 리스트 (검색창 바로 아래). 검색어가 없으면 숨긴다 (F14-06)
+  const results = document.createElement("div");
+  results.className = "search-results list hidden";
+  results.setAttribute("aria-live", "polite");
+  section.append(results);
 
   const grid = document.createElement("div");
   grid.className = "bookmark-grid";
   section.append(grid);
 
-  // 북마크가 없으면 안내 문구 (F01-05)
-  if (bookmarks.length === 0) {
-    const empty = document.createElement("p");
-    empty.className = "empty-note";
-    empty.textContent = "아직 북마크가 없어요. 주소창의 별 버튼으로 저장해 보세요";
-    section.append(empty);
+  // 북마크가 없으면 보이는 안내 문구 (F01-05)
+  const empty = document.createElement("p");
+  empty.className = "empty-note all-empty hidden";
+  empty.textContent = "아직 북마크가 없어요. 주소창의 별 버튼으로 저장해 보세요";
+  section.append(empty);
+}
+
+// 검색창의 글자에 맞춰 결과 리스트와 격자를 바꾼다
+// - 글자가 있으면: 결과 리스트를 보이고 격자는 숨긴다. 일치하는 북마크가 없으면 안내 문구 (F14-05)
+// - 글자가 없으면(공백만 있어도): 결과 리스트를 닫고 격자를 다시 보인다 (F14-06)
+function updateBookmarkSearch(section) {
+  const input = section.querySelector(".bookmark-search input");
+  const results = section.querySelector(".search-results");
+  const grid = section.querySelector(".bookmark-grid");
+  const emptyAll = section.querySelector(".all-empty");
+  if (!input || !results || !grid || !emptyAll) return;
+
+  const query = input.value;
+  const searching = query.trim() !== "";
+
+  results.replaceChildren();
+  results.classList.toggle("hidden", !searching);
+  grid.classList.toggle("hidden", searching);
+  emptyAll.classList.toggle("hidden", searching || searchPool.length > 0);
+  if (!searching) return;
+
+  const matches = searchBookmarks(query, searchPool);
+  if (matches.length === 0) {
+    const none = document.createElement("p");
+    none.className = "empty-note";
+    none.textContent = "일치하는 북마크가 없어요";
+    results.appendChild(none);
     return;
   }
-
-  for (const bookmark of bookmarks) {
-    grid.appendChild(renderBookmarkTile(bookmark));
+  for (const bookmark of matches) {
+    results.appendChild(renderSearchResultRow(bookmark));
   }
-  // 북마크 검색(F14)은 P2다. 지금은 검색창만 그리고 input 연결은 하지 않는다.
-  // P2에서 search.js의 searchBookmarks가 구현되면, 웹 검색창처럼 "한 번만 만들기"로 연결한다.
+}
+
+// 검색 결과 한 줄: 사이트 아이콘, 제목, 주소, 들어 있는 폴더 이름 (F14-03)
+// 누르면 그 페이지를 연다. 연 시각은 openBookmark가 기록한다 (F14-04)
+function renderSearchResultRow(bookmark) {
+  const row = document.createElement("button");
+  row.type = "button";
+  row.className = "list__row";
+  row.appendChild(appIcon(bookmark, 44));
+
+  const text = document.createElement("div");
+  text.className = "list__text";
+  const title = document.createElement("span");
+  title.className = "title";
+  title.textContent = bookmark.title || bookmark.url || "";
+  const meta = document.createElement("span");
+  meta.className = "meta";
+  meta.textContent = bookmark.url || "";
+  text.append(title, meta);
+  row.appendChild(text);
+
+  if (bookmark.folderTitle) {
+    const folder = document.createElement("span");
+    folder.className = "search-result__folder";
+    folder.textContent = bookmark.folderTitle;
+    row.appendChild(folder);
+  }
+
+  row.addEventListener("click", () => openWithNotice(bookmark));
+  return row;
 }
 
 // F02-05: javascript: 북마크는 열지 않고(openBookmark가 false를 돌려준다) 안내를 띄운다
