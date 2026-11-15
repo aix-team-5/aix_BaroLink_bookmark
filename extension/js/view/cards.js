@@ -1,9 +1,11 @@
 // 담당: 팀원 D · 이슈 #17 · 명세: N31 (F06, F09, F10) · 크롬 API: C19~C21
 // 화면 파일끼리는 서로 부르지 않는다 (공통 조각은 ui.js). 크롬은 bookmarks.js와 store.js를 거친다 (권한 요청과 topSites만 예외).
-// 이 PR은 P1(F06-01~03·05~06)만 다룬다. 고정 제안 카드·고르기 창(F06-07, F09, F10)은 P2 브랜치에서 한다.
+// P1: 첫 정리 카드와 자세히 보기(F06-01~03·05~06). P2: 고르기 창(F09-05·06), 고정 제안 카드(F06-07, F09-01~03·08·09), 새 북마크 정리 창(F10, 아직)
 
 import { applyPlan } from "../organize.js";
-import { setFirstCard, pin } from "../store.js";
+import { loadTree } from "../bookmarks.js";
+import { pickPinCandidates } from "../plan.js";
+import { setFirstCard, pin, load } from "../store.js";
 import { appIcon, icon, showToast } from "../ui.js";
 
 // 그리는 칸과 팝업을 붙이는 칸 (newtab.html)
@@ -75,10 +77,138 @@ export function showFirstCard(plan, actions) {
   clearSlot(slot);
   if (!plan) return;
 
-  // 폴더 계획만 그린다. 고정 제안(plan.type === "pin")은 P2에서 다룬다 (칸을 비운 채 돌아간다)
+  // 폴더 계획 대신 고정 제안이 돌아오면 첫 정리 카드 대신 고정 제안 카드를 그린다 (F06-07)
+  if (plan.type === "pin") {
+    renderPinCard(slot);
+    return;
+  }
+
   if (plan.type !== "folders" || !Array.isArray(plan.folders) || plan.folders.length === 0) return;
 
   renderFolderCard(slot, plan, actions);
+}
+
+// 독에 넣을 수 있는 최대 개수(store.js의 MAX_PINNED와 같다)와, 고정 제안·고르기에서 한 번에 고정하는 최대 개수 (F08-06, F09-03·05)
+const DOCK_MAX = 8;
+const PIN_SUGGEST_MAX = 5;
+
+// 고정 제안 카드 (F09-01): [나중에] [고르기] [고정하기]
+// 문구는 명세 F09-01 그대로다. plan.reason("tooFew" | "noGroup")은 화면에 보여 주지 않는다 (명세 N20)
+function renderPinCard(slot) {
+  const logo = document.createElement("span");
+  logo.className = "brand__logo brand__logo--primary";
+  logo.appendChild(icon("bookmark", 24));
+
+  const text = document.createElement("div");
+  text.className = "suggestion__text";
+  const title = document.createElement("div");
+  title.className = "suggestion__title";
+  title.textContent = "북마크들이 서로 달라서 아직 묶을 폴더가 없어요. 대신 자주 쓰는 북마크 5개를 고정할까요?";
+  text.append(title);
+
+  const buttons = document.createElement("div");
+  buttons.className = "actions";
+  buttons.append(
+    makeButton("나중에", {
+      variant: "btn--ghost",
+      onClick: () => finishPinSuggestion(slot),
+    }),
+    makeButton("고르기", {
+      variant: "btn--ghost",
+      onClick: () => openPinChoice(slot),
+    }),
+    makeButton("고정하기", {
+      variant: "btn--primary",
+      onClick: (event) => runPinSuggestion(slot, event.currentTarget),
+    }),
+  );
+
+  slot.append(logo, text, buttons);
+}
+
+// 고정 제안을 처리했다: 카드를 지우고 상태를 "later"로 둔다.
+// "done"이 아니라 "later"인 까닭: 북마크가 늘어 폴더 계획을 세울 수 있게 되면 헤더 [정리하기]에서 첫 정리 카드를 다시 제안해야 한다 (F09-07)
+async function finishPinSuggestion(slot) {
+  clearSlot(slot);
+  await setFirstCard("later");
+}
+
+// 자주 방문한 사이트(topSites) 중 http·https 주소만 읽는다. 확장 프로그램 자신의 새 탭 주소가 섞여 있다 (C21). 결과는 저장하지 않는다 (F09-04)
+async function readTopSites() {
+  if (!chrome.topSites || typeof chrome.topSites.get !== "function") return [];
+  const sites = await chrome.topSites.get();
+  return (Array.isArray(sites) ? sites : []).filter((site) => site && typeof site.url === "string" && /^https?:/i.test(site.url));
+}
+
+// [고정하기]: 그때에만 topSites 권한을 요청하고(F09-02), 자주 방문한 사이트와 같은 북마크를 최대 5개 고정한다 (F09-03)
+// 거절했거나 목록이 비면 최근에 연 순으로만 고른다 (F09-08). 고를 북마크가 하나도 없으면 아무것도 고정하지 않고 [고르기] 창을 연다 (F09-09)
+function runPinSuggestion(slot, triggerButton) {
+  // 권한 요청은 클릭 핸들러 안에서 await 없이 바로 부른다. 그 앞에 await가 있으면 크롬이 거절한다 (C19)
+  const requested = chrome.permissions.request({ permissions: ["topSites"] });
+  return applyPinSuggestion(slot, triggerButton, requested);
+}
+
+async function applyPinSuggestion(slot, triggerButton, requested) {
+  if (triggerButton) triggerButton.disabled = true;
+  try {
+    let topSites = [];
+    try {
+      // 거절하면 false가 돌아오고 chrome.topSites는 없는 채로 남는다
+      if (await requested) topSites = await readTopSites();
+    } catch (error) {
+      console.warn("자주 방문한 사이트를 읽지 못했어요", error);
+    }
+
+    const [tree, stored] = await Promise.all([loadTree(), load()]);
+    const picks = pickPinCandidates(tree.bookmarks, topSites, stored);
+    if (picks.length === 0) {
+      if (triggerButton) triggerButton.disabled = false;
+      await openPinChoice(slot);
+      return;
+    }
+
+    const pinned = [];
+    for (const bookmark of picks) {
+      // 독이 이미 8개면 pin이 false를 돌려준다. 거기서 멈춘다
+      if (await pin(bookmark.id)) pinned.push(bookmark.id);
+      else break;
+    }
+    if (pinned.length === 0) {
+      if (triggerButton) triggerButton.disabled = false;
+      showToast("고정은 8개까지 할 수 있어요");
+      return;
+    }
+    await finishPinSuggestion(slot);
+    showToast(`${pinned.length}개를 고정했어요`);
+  } catch (error) {
+    console.error("고정하지 못했어요", error);
+    showToast("고정하지 못했어요");
+    if (triggerButton) triggerButton.disabled = false;
+  }
+}
+
+// [고르기]: 북마크 목록에서 최대 5개를 골라 고정한다 (F09-05)
+async function openPinChoice(slot) {
+  try {
+    const [tree, stored] = await Promise.all([loadTree(), load()]);
+    const pinnedNow = new Set((Array.isArray(stored.pinned) ? stored.pinned : []).map(String));
+    const room = DOCK_MAX - pinnedNow.size;
+    if (room <= 0) {
+      showToast("고정은 8개까지 할 수 있어요");
+      return;
+    }
+    const candidates = tree.bookmarks.filter(
+      (bookmark) => !pinnedNow.has(String(bookmark.id)) && !String(bookmark.url ?? "").trim().toLowerCase().startsWith("javascript:"),
+    );
+    showPinPicker(candidates, {
+      max: Math.min(PIN_SUGGEST_MAX, room),
+      limitMessage: room < PIN_SUGGEST_MAX ? "고정은 8개까지 할 수 있어요" : undefined,
+      onPicked: () => finishPinSuggestion(slot),
+    });
+  } catch (error) {
+    console.error("북마크 목록을 읽지 못했어요", error);
+    showToast("북마크 목록을 읽지 못했어요");
+  }
 }
 
 // 첫 정리 카드: "북마크를 이렇게 묶어 볼까요?" + 요약 + [나중에] [자세히 보기] [정리하기]
