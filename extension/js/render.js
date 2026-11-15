@@ -7,7 +7,7 @@
 // - 북마크나 저장 항목이 바뀌면 renderAll을 다시 부른다. 그리기 함수는 자기 칸을 비우고 다시 그린다.
 
 import { loadTree, openBookmark } from "./bookmarks.js";
-import { load, cleanupMissing } from "./store.js";
+import { load, cleanupMissing, unpin } from "./store.js";
 import { getTargets, makePlan } from "./plan.js";
 import { pickForgotten } from "./forgotten.js";
 import { appIcon, icon, showToast } from "./ui.js";
@@ -15,7 +15,10 @@ import { runWebSearch, searchBookmarks } from "./search.js";
 import { showFolders, openFolderPopup, showContextMenu } from "./view/folders.js";
 import { showForgotten } from "./view/forgottenFolder.js";
 import { showResultNotice, showHistory } from "./view/history.js";
-import { showFirstCard } from "./view/cards.js";
+import { showFirstCard, showPinPicker } from "./view/cards.js";
+
+// 고정됨(독)에 넣을 수 있는 최대 개수. store.js의 MAX_PINNED와 같다 (F08-06)
+const DOCK_MAX = 8;
 
 // 분류표는 이 파일이 읽어서 계산 파일(plan 등)에 넘긴다 (화면 파일·계산 파일은 fetch하지 않는다)
 let categories = null;
@@ -433,17 +436,70 @@ function renderDock(bookmarks, stored) {
   const pinnedIds = Array.isArray(stored?.pinned) ? stored.pinned : [];
   const byId = new Map(bookmarks.map((b) => [String(b.id), b]));
   const pinned = pinnedIds.map((id) => byId.get(String(id))).filter(Boolean);
-  if (pinned.length === 0) return; // 비어 있으면 독을 숨긴다 (:empty)
 
   for (const bookmark of pinned) {
+    const label = bookmark.title || bookmark.url || "";
+    // 앱 하나와 [고정 해제] 버튼을 한 칸에 묶는다. 해제 버튼은 마우스를 올리거나 키보드로 가면 보인다 (F08-04)
+    const slot = document.createElement("div");
+    slot.className = "dock__slot";
+
     const item = document.createElement("button");
     item.type = "button";
     item.className = "dock__item";
-    item.setAttribute("aria-label", `${bookmark.title || bookmark.url} 열기`);
+    item.setAttribute("aria-label", `${label} 열기`);
+    item.title = label;
     item.appendChild(appIcon(bookmark, 48));
     item.addEventListener("click", () => openWithNotice(bookmark));
-    dock.appendChild(item);
+
+    const remove = document.createElement("button");
+    remove.type = "button";
+    remove.className = "dock__remove";
+    remove.setAttribute("aria-label", `${label} 고정 해제`);
+    remove.appendChild(icon("close", 12));
+    // 독은 저장이 바뀌면 render.js가 알림을 받아 다시 그린다. 여기서는 unpin만 부른다
+    remove.addEventListener("click", () => {
+      unpin(bookmark.id).catch((error) => {
+        console.warn("고정을 해제하지 못했어요", error);
+        showToast("고정을 해제하지 못했어요");
+      });
+    });
+
+    slot.append(item, remove);
+    dock.appendChild(slot);
   }
+
+  // 8개가 되면 [+]를 숨긴다 (F09-06). 비어 있어도 [+]는 보여서 첫 고정을 할 수 있다 (시안)
+  if (pinned.length < DOCK_MAX) {
+    if (pinned.length > 0) {
+      const divider = document.createElement("span");
+      divider.className = "dock__divider";
+      dock.appendChild(divider);
+    }
+    const add = document.createElement("button");
+    add.type = "button";
+    add.className = "dock__item dock__add";
+    add.setAttribute("aria-label", "고정 북마크 추가");
+    add.appendChild(icon("plus", 20));
+    add.addEventListener("click", openDockPicker);
+    dock.appendChild(add);
+  }
+}
+
+// 독의 [+]: 고정할 북마크 고르기 창을 연다 (F09-06). 폴더 안의 북마크까지 고를 수 있다
+// 이미 고정한 북마크와 javascript: 북마크는 뺀다. 남은 자리까지만 고르게 한다 (F08-06)
+function openDockPicker() {
+  const pinnedNow = new Set((Array.isArray(currentStored().pinned) ? currentStored().pinned : []).map(String));
+  const candidates = (lastTree?.bookmarks ?? []).filter(
+    (bookmark) => !pinnedNow.has(String(bookmark.id)) && !isScriptUrl(bookmark.url),
+  );
+  showPinPicker(candidates, {
+    max: Math.max(0, DOCK_MAX - pinnedNow.size),
+    limitMessage: "고정은 8개까지 할 수 있어요",
+  });
+}
+
+function isScriptUrl(url) {
+  return typeof url === "string" && url.trim().toLowerCase().startsWith("javascript:");
 }
 
 // ----- 시작과 다시 그리기 -----
