@@ -481,6 +481,69 @@ test("applyPlan new: keep에 같은 ID가 두 번 있어도 kept는 1, handledNe
   assert.deepEqual(data.handledNew, ["12"]);
 });
 
+test("applyPlan new: 이미 목적지 폴더(북마크바)에 있는 북마크는 옮기지 않고 그대로 두기로 센다 (keep에도 있으면 한 번만)", { skip: SKIP }, async () => {
+  const entry = await o.applyPlan(planNew([{ folderId: "1", items: ["11"] }], ["11"]), "new");
+  assert.deepEqual(entry.moves, []);
+  assert.equal(entry.skipped, 0);
+  assert.equal(entry.kept, 1);
+  assert.deepEqual(data.handledNew, ["11"]);
+  assert.equal(data.history, undefined);
+  assert.equal(data.pendingMoves, undefined);
+  assert.equal(calls.includes("bookmarks.move"), false);
+});
+
+test("applyPlan new: keep 없이 folders만으로 제자리 북마크를 줘도 그대로 두기로 센다", { skip: SKIP }, async () => {
+  const entry = await o.applyPlan(planNew([{ folderId: "16", items: ["160"] }]), "new");
+  assert.deepEqual(entry.moves, []);
+  assert.equal(entry.skipped, 0);
+  assert.equal(entry.kept, 1);
+  assert.deepEqual(data.handledNew, ["160"]);
+  assert.deepEqual(childIds("16"), ["160"]);
+});
+
+test("applyPlan new: 제자리 북마크와 옮기는 북마크가 섞이면 moves는 옮긴 것만, kept는 제자리 것만", { skip: SKIP }, async () => {
+  const entry = await o.applyPlan(planNew([{ folderId: "16", items: ["160", "11"] }, { folderId: "1", items: ["12"] }], ["14"]), "new");
+  assert.deepEqual(entry.moves.map((m) => [m.bookmarkId, m.toParentId]), [["11", "16"]]);
+  assert.equal(entry.skipped, 0);
+  assert.equal(entry.kept, 3);
+  assert.deepEqual([...data.handledNew].sort(), ["12", "14", "160"]);
+  assert.equal(data.pendingMoves["160"], undefined);
+  assert.equal(data.pendingMoves["12"], undefined);
+  assert.deepEqual(data.history, [entry]);
+});
+
+test("applyPlan first: 같은 이름 폴더에 이미 있는 북마크는 지금처럼 kept 0, handledNew를 바꾸지 않는다", { skip: SKIP }, async () => {
+  data.handledNew = ["99"];
+  const entry = await o.applyPlan(plan(["개발", ["160", "10"]]), "first");
+  assert.deepEqual(entry.moves.map((m) => m.bookmarkId), ["10"]);
+  assert.equal(entry.skipped, 0);
+  assert.equal(entry.kept, 0);
+  assert.deepEqual(data.handledNew, ["99"]);
+});
+
+test("applyPlan new: 최상위 폴더도 folderId로 쓸 수 있다 (기타 북마크 → 북마크바)", { skip: SKIP }, async () => {
+  const entry = await o.applyPlan(planNew([{ folderId: "1", items: ["20"] }]), "new");
+  assert.deepEqual(entry.moves.map((m) => [m.bookmarkId, m.toParentId]), [["20", "1"]]);
+  assert.equal(entry.kept, 0);
+  assert.equal(childIds("1").at(-1), "20");
+});
+
+test("applyPlan new: folderId가 관리자 폴더(managed)나 그 아래 폴더면 폴더 없음과 같이 skipped, setPending·이동을 하지 않는다", { skip: SKIP }, async () => {
+  build([
+    ...structuredClone(SAMPLE),
+    { id: "3", title: "관리자 북마크", folderType: "managed", syncing: false, kids: [{ id: "30", title: "회사", kids: [link("300", "인트라넷")] }] },
+  ]);
+  const entry = await o.applyPlan(planNew([{ folderId: "3", items: ["11"] }, { folderId: "30", items: ["12"] }]), "new");
+  assert.equal(entry.skipped, 2);
+  assert.deepEqual(entry.moves, []);
+  assert.equal(entry.kept, 0);
+  assert.equal(data.pendingMoves, undefined);
+  assert.equal(data.history, undefined);
+  assert.equal(data.handledNew, undefined);
+  assert.equal(calls.includes("bookmarks.move"), false);
+  assert.deepEqual(childIds("30"), ["300"]);
+});
+
 test("applyPlan new → undo: 기존 폴더로 옮긴 것을 원래 자리로 되돌리고 기존 폴더는 남긴다", { skip: SKIP }, async () => {
   const entry = await o.applyPlan(planNew([{ folderId: "16", items: ["13", "11"] }]), "new");
   const result = await o.undo(entry.id);

@@ -108,7 +108,10 @@ async function runApplyPlan(plan, type) {
   const byId = new Map(tree.bookmarks.map((bookmark) => [String(bookmark.id), bookmark]));
   const barBefore = new Set(bar.childIds.map(String));
   // folderId로 쓸 수 있는 폴더: 폴더 목록과 최상위 폴더(북마크바·기타·모바일). 맨 위 루트("0")는 쓰지 않는다
-  const folderIds = new Set(tree.folders.map((folder) => String(folder.id)));
+  // 관리자 폴더(managed)와 그 아래 폴더는 바꿀 수 없으므로 넣지 않는다(폴더 없음과 같이 skipped)
+  const folderIds = new Set(
+    tree.folders.filter((folder) => folder.rootType !== "managed").map((folder) => String(folder.id)),
+  );
   for (const root of Object.values(tree.roots)) if (root) folderIds.add(String(root.id));
   folderIds.delete("0");
 
@@ -137,11 +140,16 @@ async function runApplyPlan(plan, type) {
   }
 
   const planned = [];
+  // 이미 목적지 폴더에 있는 북마크. 옮기지 않고 moves·skipped에도 넣지 않는다
+  // "new"에서는 '그대로 두기'와 같이 kept에 세고 handledNew에 넣는다. "first"에서는 세지 않는다
+  const inPlace = [];
   for (const { folderId, ids } of targets) {
     for (const id of ids) {
       const bookmark = byId.get(id);
-      // 이미 그 폴더에 있으면 옮기지 않고 기록에도 넣지 않는다
-      if (String(bookmark.parentId) === folderId) continue;
+      if (String(bookmark.parentId) === folderId) {
+        inPlace.push(id);
+        continue;
+      }
       planned.push({
         bookmarkId: id,
         title: bookmark.title,
@@ -180,7 +188,9 @@ async function runApplyPlan(plan, type) {
   }
 
   // '그대로 두기': keep에서 folders에 나온 ID와 지금 없는 북마크를 뺀 것 (첫 정리는 keep이 없어 0)
+  // "new"는 이미 목적지 폴더에 있던 북마크도 더한다(중복 없이)
   const kept = keep.filter((keepId) => !seen.has(keepId) && byId.has(keepId));
+  if (type === "new") for (const keepId of inPlace) if (!kept.includes(keepId)) kept.push(keepId);
 
   const entry = { id, at, type, createdFolderIds, moves, fromOrder, skipped, kept: kept.length };
   // ⑤ 옮긴 것만 기록한다. 저장하지 못하면 손으로 되돌릴 수 있게 기록 전체를 콘솔에 남기고 오류를 그대로 던진다
