@@ -385,8 +385,4 @@ sequenceDiagram
   - `keep`만 있고 옮긴 북마크가 없으면 `history`를 남기지 않는다. 이때도 같은 모양 `{ id, at, type, createdFolderIds: [], moves: [], fromOrder: {}, skipped, kept }`를 돌려준다(`null`이 아니다). `kept`는 `markHandledNew`에 넣은 북마크 수다. "새 북마크를 그대로 뒀어요" 토스트에 쓴다. `type`이 `"first"`이면 `kept`는 `0`이다.
 - **`markHandledNew(ids)`**(N39): `handledNew`에 중복 없이 추가한다. 새 탭만 부른다(`applyPlan`이 부른다).
 
-### 아직 정하지 않은 입력 (P2를 시작할 때 정한다)
-
-- 고정할 북마크 고르기 창(`showPinPicker`, F09)에 넘길 값: 고를 수 있는 북마크 목록
-
 확정 디자인 시안: https://www.figma.com/make/Yf9dLbok1rcVJDNdDQAWI9/Chrome-Extension-UI
