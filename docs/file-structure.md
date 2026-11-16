@@ -96,7 +96,7 @@ aix_BaroLink_bookmark/
 | `js/organize.js` | 정리 적용: 원래 위치 읽기 → 북마크바 맨 뒤에 폴더 만들기 → '옮기는 중' 저장 → 옮기기 → 정리 기록. 되돌리기: 원래 바로 앞에 있던 북마크의 뒤에 놓아 순서를 복원, 직접 옮긴 것은 건너뜀 | applyPlan, undo (N22, N23) | bookmarks.js · store.js 경유 | A |
 | `js/classify.js` | 분류표 → 주소 끝 → 제목 키워드 순으로 카테고리 하나. 정답지로 적용률·정확도 측정. 새 북마크 추천 폴더 | classify, measure, suggestForNew (N17, N18, N24) | 없음 | B |
 | `js/forgotten.js` | 마지막으로 연 시각(우리 기록·dateLastUsed 중 최근 → 저장 시각) 계산, 30일 넘게 안 연 북마크를 오래 안 연 순으로 고르기. 화면은 앞의 8개만 보여 줌 | lastOpened, pickForgotten (N25, N26) | 없음 | B |
-| `js/plan.js` | 정리 대상 고르기(북마크바·기타·모바일과 크롬 가져오기 폴더의 바로 아래에 흩어진 북마크. 사용자 폴더와 최근 30일 안에 북마크바에서 연 북마크는 제외), 폴더 개수·계획, 못 만들면 고정 후보 5개, 새 북마크가 모이면 새 폴더 제안 | getTargets, makePlan, pickPinCandidates, suggestNewFolders (N19–N21, N37) | 없음 (자주 방문한 사이트 목록은 render.js가 받아서 넘겨 줌) | C |
+| `js/plan.js` | 정리 대상 고르기(북마크바·기타·모바일과 크롬 가져오기 폴더의 바로 아래에 흩어진 북마크. 사용자 폴더와 최근 30일 안에 북마크바에서 연 북마크는 제외), 폴더 개수·계획, 못 만들면 고정 후보 5개, 새 북마크가 모이면 새 폴더 제안 | getTargets, makePlan, pickPinCandidates, suggestNewFolders (N19–N21, N37) | 없음 (자주 방문한 사이트 목록은 view/cards.js가 받아서 넘겨 줌) | C |
 | `js/topic.js` | 큰 폴더 안 반복 주제 단어(북마크 3개+, 사이트 2곳+)로 세부 폴더 제안 (P3) | suggestSubfolders (N35) | 없음 | C |
 | `js/render.js` | 화면의 시작점. 북마크·저장소 알림을 받아 전체를 다시 그리고, 각 화면 파일의 그리기 함수를 부름. 헤더·날짜·화면 아래의 고정됨(독)·모든 북마크는 직접 그림 | renderAll (N30) | bookmarks 알림, storage.onChanged (C09–C12, C16) | D |
 | `js/ui.js` | 모든 화면 파일이 함께 쓰는 공통 화면 조각. 앱 아이콘(색 타일 위의 파비콘, 없으면 첫 글자), 짧은 안내 문구, 선 아이콘 12종 | appIcon, showToast, icon (N44–N46) | bookmarks.js 경유 (파비콘) | D |
@@ -173,6 +173,8 @@ graph TD
   RENDER -->|"읽어서 넘겨 줌"| CAT
   CARDS --> ORG
   CARDS --> STORE
+  CARDS --> PLAN
+  CARDS --> BMJS
   FOLDERS --> BMJS
   FOLDERS --> TOPIC
   FVIEW --> BMJS
@@ -291,7 +293,7 @@ sequenceDiagram
 | 위치 | 지금 | 고칠 내용 |
 |---|---|---|
 | `js/plan.js` 칸 | "→ topSites (선택 권한)" | 삭제. `plan.js`는 크롬을 부르지 않는다 |
-| `js/render.js` 칸 | 크롬 호출 표시 없음 | "→ permissions · topSites"를 파란 글씨로 추가 |
+| `js/view/cards.js` 칸 | 크롬 호출 표시 없음 | "→ permissions · topSites"를 파란 글씨로 추가 (고정 제안 카드가 권한 요청과 자주 방문한 사이트 읽기를 함, #72) |
 | `js/store.js` 칸 | 함수 9 | 함수 12 |
 | `js/organize.js` 칸 | "undo: 원래 폴더 · 순서로 되돌리기" | 그대로 두어도 됨. 순서는 "원래 앞 이웃의 뒤" 방식으로 복원 |
 | 머리말 | 기능명세 v6 기준 | v14 기준 |
