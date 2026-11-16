@@ -1,8 +1,16 @@
 // 담당: 팀원 C · 이슈 #13 · 명세: N41 (F03, F15)
 // 화면 파일끼리는 서로 부르지 않는다 (공통 조각은 ui.js). 크롬은 bookmarks.js를 거친다.
 
-import { createFolder, deleteFolderKeepChildren, moveBookmark, openBookmark, renameFolder } from "../bookmarks.js";
-import { load, pin, unpin } from "../store.js";
+import {
+  createFolder,
+  deleteFolderKeepChildren,
+  moveBookmark,
+  openBookmark,
+  removeBookmark,
+  renameFolder,
+  restoreBookmark,
+} from "../bookmarks.js";
+import { load, pin, restoreStored, snapshotStored, unpin } from "../store.js";
 import { appIcon, icon, showToast } from "../ui.js";
 
 const SLOT_ID = "folder-list";
@@ -16,6 +24,8 @@ const POPUP_ICON_SIZE = 48;
 const MENU_MARGIN = 8;
 // 팝업이 닫힌 뒤 실패를 알리는 안내는 문구가 길어서 오래 보여 준다
 const ERROR_TOAST_MS = 5000;
+// 삭제 뒤 [되돌리기]를 보여 주는 시간 (F15-06, F04-09와 같은 6초)
+const UNDO_MS = 6000;
 
 // showFolders가 받은 가장 최근 tree. openFolderPopup(folderId)이 폴더를 찾을 때 쓴다 (render.js는 폴더 ID만 넘긴다)
 let latestTree = null;
@@ -34,6 +44,10 @@ let lastJob = 0;
 // returnKey: returnFocus가 우리 폴더 팝업의 앱 타일이면 그 data-focus-key. 다시 그려져 타일이 바뀌어도 새 타일을 찾는다
 // pinned: 독에 고정돼 있는가. true | false | null(아직 모름). 메인 화면을 다시 그릴 때 이 값을 쓴다 (다시 읽지 않는다)
 let menu = null;
+// 마지막으로 지운 북마크 하나. 되돌리기는 이것만 된다 (F15-06). 화면 메모리에만 두고 저장 항목에 쓰지 않는다 (F15-12). 없으면 null
+// { saved: removeBookmark의 출력, snap: snapshotStored의 출력, folderId, slot, timer, undoing }
+// folderId·slot: 우리 폴더 팝업 안 앱 격자에 되돌리기 칸을 그릴 때 그 폴더 ID와 칸 자리. 칸이 아니라 showToast로 보여 줄 때는 null
+let removed = null;
 
 // 팝업 상태를 기본값으로 되돌린다
 function resetPopup() {
@@ -530,10 +544,11 @@ function popupBreadcrumb(parentFolder) {
 
 // 머리말: 폴더 이름 · 개수 · 닫기 버튼
 function popupHeader(dialog, info) {
+  const count = visibleItems(info).length;
   const subtitle =
     info.subfolders.length > 0
-      ? `폴더 ${info.subfolders.length}개와 북마크 ${info.items.length}개가 이 폴더에 저장되어 있어요.`
-      : `${info.items.length}개의 북마크가 이 폴더에 저장되어 있어요.`;
+      ? `폴더 ${info.subfolders.length}개와 북마크 ${count}개가 이 폴더에 저장되어 있어요.`
+      : `${count}개의 북마크가 이 폴더에 저장되어 있어요.`;
   return dialogHeader(dialog, info.title, subtitle, editArea(dialog, info));
 }
 
@@ -783,10 +798,57 @@ function popupBody(dialog, info) {
     body.appendChild(gridOf(folderTiles));
   }
 
-  const grid = gridOf(info.items.map((bookmark) => appTile(dialog, bookmark)));
+  const tiles = visibleItems(info).map((bookmark) => appTile(dialog, bookmark));
+  // 이 폴더에서 방금 지운 북마크가 있으면 그 자리에 되돌리기 칸을 끼운다 (F15-09). splice는 방금 만든 tiles에만 쓴다
+  if (removed && removed.folderId === info.id) {
+    tiles.splice(Math.min(removed.slot, tiles.length), 0, removedTile(removed));
+  }
+  const grid = gridOf(tiles);
   if (info.subfolders.length > 0) grid.style.marginTop = "var(--space-6)";
   body.appendChild(grid);
   return body;
+}
+
+// 팝업 격자에 보일 북마크: 이 폴더에서 방금 지운 북마크는 뺀다 (입력 info.items는 고치지 않는다)
+// render.js가 다시 그리기 전의 tree에는 지운 북마크가 아직 있을 수 있다
+function visibleItems(info) {
+  if (!removed || removed.folderId !== info.id) return info.items;
+  const id = String(removed.saved.id);
+  return info.items.filter((bookmark) => bookmark.id !== id);
+}
+
+// 지운 앱 자리에 6초 동안 보이는 칸: "북마크를 지웠어요" + [되돌리기] (F15-09)
+// newtab.css에 되돌리기 칸 모양이 없어 공통 값만 인라인 (팀원 D에게 클래스 부탁). forgottenFolder.js의 되돌리기 줄과 같은 역할
+function removedTile(entry) {
+  const cell = document.createElement("div");
+  cell.setAttribute("role", "status");
+  cell.className = "bookmark--removed";
+  cell.style.display = "flex";
+  cell.style.flexDirection = "column";
+  cell.style.alignItems = "center";
+  cell.style.justifyContent = "center";
+  cell.style.gap = "var(--space-1)";
+  cell.style.padding = "var(--space-2)";
+  cell.style.background = "var(--color-surface)";
+  cell.style.borderRadius = "var(--radius-lg)";
+
+  const text = document.createElement("span");
+  text.style.fontSize = "var(--font-xs)";
+  text.style.color = "var(--color-text-faint)";
+  text.style.textAlign = "center";
+  text.textContent = "북마크를 지웠어요";
+
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "btn btn--ghost";
+  button.style.fontSize = "var(--font-sm)";
+  button.dataset.focusKey = "undo";
+  button.textContent = "되돌리기";
+  button.disabled = entry.undoing;
+  button.addEventListener("click", () => undoRemove(entry));
+
+  cell.append(text, button);
+  return cell;
 }
 
 // #dialog-folder를 하나만 두고 다시 쓴다. 처음 만들 때만 이벤트를 단다
@@ -815,6 +877,8 @@ function getPopup(host) {
   dialog.addEventListener("close", () => {
     // close 이벤트는 close() 뒤에 늦게 온다. 그사이 다른 폴더로 다시 열었으면 지우지 않는다
     if (dialog.open) return;
+    // 팝업을 닫으면 그 안의 되돌리기는 끝난다 (forgottenFolder.js의 clearUndoRows와 같음)
+    if (removed && removed.folderId !== null) dropRemoved();
     closeMenu();
     openFolderId = null;
     resetPopup();
@@ -1016,6 +1080,9 @@ function moveMenuFocus(key) {
   else if (key === "ArrowDown") next = (current + 1) % items.length;
   else next = current <= 0 ? items.length - 1 : current - 1;
   items[next].focus({ preventScroll: true });
+  // 폴더 목록이 길면 옮긴 항목이 목록 밖에 있을 수 있어 목록 안만 스크롤한다
+  // preventScroll은 그대로 둔다. 문서 전체가 스크롤되면 onScroll이 메뉴를 닫는다. 메뉴 안 목록의 스크롤로는 닫지 않는다
+  items[next].scrollIntoView({ block: "nearest" });
 }
 
 // 메뉴를 놓는다. 붙인 뒤 크기를 재서 화면 안에 들어오게 한다. 내용이 바뀌면 처음의 x, y 기준으로 다시 부른다
@@ -1086,7 +1153,31 @@ function buildMainPage() {
   menu.el.replaceChildren(menuItem("새 탭에서 열기", openInNewTab), pinItem());
   // F15-02 폴더로 이동. 관리자가 정한 북마크(F15-10)이거나 아직 tree가 없으면 그리지 않는다
   if (canChange(menu.bookmark) && latestTree) menu.el.appendChild(moveItem());
-  // F15-06 삭제: 팀원 A의 removeBookmark(N48)가 main에 들어오면 여기 맨 아래에 구분선과 함께 붉은 글자로 붙인다 (F15-10이면 숨김)
+  // F15-06 삭제: 맨 아래에 구분선으로 떼어 붉은 글자로 둔다. 관리자가 정한 북마크(F15-10)면 그리지 않는다
+  // 지우기에는 tree가 필요 없으므로 latestTree가 없어도 붙인다
+  if (canChange(menu.bookmark)) menu.el.append(menuSeparator(), deleteItem());
+}
+
+// 메뉴 항목 사이의 구분선. menuItems()는 [role="menuitem"]만 고르므로 화살표 이동에 끼지 않는다
+function menuSeparator() {
+  const line = document.createElement("div");
+  line.setAttribute("role", "separator");
+  line.className = "context-menu__sep";
+  line.style.height = "calc(var(--space-1) / 4)";
+  line.style.background = "var(--color-divider)";
+  line.style.margin = "var(--space-1) 0";
+  line.style.flexShrink = "0";
+  return line;
+}
+
+// 메인 화면의 "삭제" 항목 (F15-06)
+function deleteItem() {
+  const item = menuItem("삭제", removeIt);
+  item.dataset.menuItem = "delete";
+  item.classList.add("context-menu__item--danger");
+  // newtab.css에 붉은 글자 값이 아직 없다. 팀원 D가 --color-danger를 넣으면 그 색으로 바뀐다
+  item.style.color = "var(--color-danger, var(--color-amber-text))";
+  return item;
 }
 
 // 메인 화면으로 돌아간다 (고정 상태는 menu.pinned를 그대로 쓴다). focusKey 항목에 포커스, 없으면 첫 항목
@@ -1100,7 +1191,7 @@ function showMainPage(focusKey) {
 
 // 관리자가 정한 북마크는 크롬이 옮기거나 지우지 못하게 한다(move·remove 오류). 명세 v19는 N01의 unmodifiable로 가리지만
 // 지금 loadTree는 아직 붙이지 않아서 rootType "managed"로도 가린다. 관리자 북마크는 모두 관리자 폴더 아래에 있다
-// 삭제(F15-06)도 나중에 이 함수를 쓴다
+// 삭제(F15-06)도 이 함수로 숨긴다
 function canChange(bookmark) {
   return !bookmark.unmodifiable && bookmark.rootType !== "managed";
 }
@@ -1239,6 +1330,156 @@ async function moveTo(folder) {
   notify(ctx, `'${folder.title}' 폴더로 옮겼어요`);
 }
 
+// 우리 폴더 팝업 안에서 연 메뉴면, 그 앱이 팝업 격자에서 몇 번째 칸인지: { folderId, slot }. 아니면 null
+// 지운 뒤에는 tree에서 사라지므로 지우기 전에 읽어 둔다 (F15-09의 되돌리기 칸 자리)
+function popupSlotOf(ctx, id) {
+  if (!(ctx instanceof HTMLDialogElement) || ctx.id !== POPUP_ID || !ctx.open) return null;
+  if (popup.mode === "create" || openFolderId === null) return null;
+  const info = findFolder(latestTree, openFolderId);
+  if (!info) return null;
+  // 앞의 되돌리기 칸이 있는 상태에서 또 지워도 자리가 맞게, 화면에 보이는 목록에서 찾는다
+  const slot = visibleItems(info).findIndex((bookmark) => bookmark.id === id);
+  return slot === -1 ? null : { folderId: openFolderId, slot };
+}
+
+// "삭제"를 눌렀을 때 (F15-06, F15-11). 확인 창 없이 지운다
+// 지운 북마크가 사라진 화면은 render.js가 크롬 알림을 받아 showFolders를 다시 부르면 바뀐다. 다시 그리라고 부르지 않는다
+async function removeIt() {
+  const current = menu;
+  const ctx = current.container;
+  const id = String(current.bookmark.id);
+  const where = popupSlotOf(ctx, id);
+  current.busy = true;
+
+  // 기록을 먼저 읽어야 되돌릴 때 고정·연 시각을 이어 붙일 수 있다. 지운 뒤에는 cleanupMissing이 옛 ID 기록을 지운다 (N50)
+  let snap;
+  try {
+    snap = await snapshotStored(id);
+  } catch (error) {
+    console.warn("지우기 전 기록을 읽지 못했어요", error);
+    if (menu !== current) return;
+    current.busy = false;
+    menuMessage("지우지 못했어요");
+    return;
+  }
+
+  let saved;
+  try {
+    saved = await removeBookmark(id);
+  } catch (error) {
+    console.warn("북마크를 지우지 못했어요", error);
+    if (menu !== current) return;
+    current.busy = false;
+    menuMessage("지우지 못했어요");
+    return;
+  }
+
+  // 여기부터는 메뉴가 그사이 닫혔거나 바뀌었어도 멈추지 않는다. 이미 지웠기 때문에 되돌리기 안내는 꼭 보여 줘야 한다
+  if (menu === current) {
+    current.busy = false;
+    closeMenu({ restoreFocus: true });
+  }
+  if (!saved) {
+    // 그사이 이미 지워졌다 (N48은 null을 돌려준다, F15-11)
+    notify(ctx, "이미 지워진 북마크예요");
+    return;
+  }
+  // "북마크를 지웠어요" [되돌리기]를 6초 동안 보여 준다 (F15-06~09)
+  // saved(제목·주소)는 화면 메모리에만 두고 저장 항목에 쓰지 않는다 (F15-12)
+  startUndo(ctx, saved, snap, where);
+}
+
+// 지운 정보를 버린다. 우리 팝업 안의 되돌리기 칸이었으면 팝업을 다시 그려 칸을 지운다
+// showToast로 띄운 안내는 ui.js가 duration으로 지운다 (hideToast는 export되지 않는다)
+function dropRemoved() {
+  if (!removed) return;
+  const dropped = removed;
+  clearTimeout(dropped.timer);
+  removed = null;
+  if (dropped.folderId === null) return;
+  const dialog = document.getElementById(POPUP_ID);
+  if (dialog?.open) redrawPopup(dialog);
+}
+
+// 지운 뒤 6초 동안 [되돌리기]를 보여 준다 (F15-06, F15-09)
+// where: popupSlotOf의 출력. 우리 폴더 팝업 안에서 지웠으면 { folderId, slot }, 아니면 null
+function startUndo(ctx, saved, snap, where) {
+  // 6초 안에 또 지우면 앞의 것은 되돌릴 수 없다 (F15-06 마지막 하나만)
+  dropRemoved();
+  const entry = { saved, snap, folderId: null, slot: null, timer: null, undoing: false };
+  removed = entry;
+  // 6초가 지나면 지운 정보를 버린다 (F15-12). 새 탭을 닫으면 메모리와 함께 사라진다
+  entry.timer = setTimeout(() => {
+    if (removed === entry) dropRemoved();
+  }, UNDO_MS);
+
+  const dialog = document.getElementById(POPUP_ID);
+  if (where && dialog?.open && popup.mode !== "create" && openFolderId === where.folderId) {
+    entry.folderId = where.folderId;
+    entry.slot = where.slot;
+    // 지운 타일은 없어졌으므로 포커스는 [되돌리기]로 간다
+    popup.focusKey = "undo";
+    redrawPopup(dialog);
+    return;
+  }
+
+  // 잊고 있던 북마크 팝업 등 다른 파일의 팝업은 목록 안 '그 앱 자리'를 알 수 없고, 다시 그릴 때 목록을 새로 채우므로 팝업 안 안내로 띄운다 (F15-09)
+  // 열린 팝업이 있으면 그 안, 없으면 #toast (notifyAfterClose와 같은 규칙)
+  const options = { actionLabel: "되돌리기", onAction: () => undoRemove(entry), duration: UNDO_MS };
+  const openDialog = document.querySelector("dialog[open]");
+  if (openDialog) options.container = openDialog;
+  showToast("북마크를 지웠어요", options);
+}
+
+// [되돌리기]를 눌렀을 때 (F15-07, F15-08). restoreBookmark(N49) → restoreStored(N50) 순서로 되살린다
+// await 뒤에 팝업이 닫혔거나 다른 폴더로 갔어도 되살리기는 끝까지 한다. 안내를 보여 주는 곳만 바뀐다
+// 되살린 북마크는 새 ID다. 옛 ID로는 아무것도 쓰지 않는다. 되살린 앱은 render.js가 크롬 알림을 받아 다시 그린다
+async function undoRemove(entry) {
+  // 6초가 지났거나 그 뒤 또 지웠으면 되돌리지 않는다 (마지막 하나만, F15-06)
+  if (removed !== entry || entry.undoing) return;
+  entry.undoing = true;
+  clearTimeout(entry.timer);
+  // 우리 팝업 안 칸이면 [되돌리기]를 바로 끈다 (두 번 누름 방지). showToast 안내는 누르면 ui.js가 닫는다
+  if (entry.folderId !== null) {
+    const dialog = document.getElementById(POPUP_ID);
+    if (dialog?.open) redrawPopup(dialog);
+  }
+
+  let result;
+  try {
+    result = await restoreBookmark(entry.saved);
+  } catch (error) {
+    console.warn("북마크를 되살리지 못했어요", error);
+    finishUndo(entry, "되살리지 못했어요", true);
+    return;
+  }
+
+  // handledNew에 새 ID를 넣어야 '새로' 표시가 붙지 않는다 (F15-07). restoreStored가 handledNew를 가장 먼저 쓴다
+  // 되살릴 고정·연 시각·다시 안 볼 표시가 하나도 없어도 꼭 부른다
+  try {
+    await restoreStored(result.node.id, entry.snap);
+  } catch (error) {
+    // 북마크는 이미 되살아났으므로 안내는 성공으로 보여 준다
+    console.warn("고정·연 시각을 옮겨 적지 못했어요", error);
+  }
+
+  finishUndo(entry, result.fallback ? "원래 폴더가 없어 기타 북마크에 되살렸어요" : "북마크를 되살렸어요", false);
+}
+
+// 되돌리기가 끝났을 때: 지운 정보를 버리고 결과를 알린다 (타이머는 undoRemove가 이미 껐다)
+// 우리 팝업에서 그 폴더를 아직 보고 있으면 칸을 지우고 팝업 안 안내 줄에, 아니면 열린 팝업 안 또는 #toast에
+function finishUndo(entry, text, error) {
+  // 그사이 또 지웠으면 removed는 새 것이므로 건드리지 않는다
+  if (removed === entry) removed = null;
+  const dialog = document.getElementById(POPUP_ID);
+  if (entry.folderId !== null && dialog?.open && openFolderId === entry.folderId) {
+    popup.message = { text, error };
+    redrawPopup(dialog);
+    return;
+  }
+  notifyAfterClose(text, error);
+}
+
 // "새 탭에서 열기" (F15-03). 연 시각 기록은 openBookmark(N06)가 한다
 async function openInNewTab() {
   const current = menu;
@@ -1339,5 +1580,11 @@ function notify(container, text) {
     showToast(text);
     return;
   }
-  // 다른 화면 파일의 팝업 안에 글을 넣지 않는다. 그 팝업 안 안내는 F15-09 되돌리기 줄(삭제 PR)에서 팀원 B와 함께 정한다. 팝업 안에서는 #toast가 배경 뒤에 깔려 보이지 않는다
+  // 다른 화면 파일의 팝업에는 글을 직접 넣지 않고 ui.js showToast의 container로 띄운다 (#65). 팝업 안에서는 #toast가 배경 뒤에 깔린다
+  if (container instanceof HTMLDialogElement && container.open) {
+    showToast(text, { container });
+    return;
+  }
+  // 그 밖(문서에서 떨어진 container 등): 열려 있는 팝업이 있으면 그 안, 없으면 #toast
+  notifyAfterClose(text);
 }
