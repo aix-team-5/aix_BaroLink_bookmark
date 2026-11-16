@@ -1,9 +1,9 @@
 // 담당: 팀원 B · 이슈 #9 · 명세: N42 (F04)
 // 화면 파일끼리는 서로 부르지 않는다 (공통 조각은 ui.js). 크롬은 bookmarks.js와 store.js를 거친다.
-// 이 PR은 P1만 다룬다. [고정하기](F04-08), "N개 더 있어요 · 모두 보기", 우클릭 메뉴(F15)는 P2 브랜치에서 한다.
+// P2: [고정하기](F04-08), "N개 더 있어요 · 모두 보기", 되돌리기 줄 자리. 우클릭 메뉴(F15)는 folders.js의 showContextMenu가 합쳐진 뒤 붙인다.
 
 import { openBookmark } from "../bookmarks.js";
-import { load, dismiss, undismiss } from "../store.js";
+import { load, dismiss, undismiss, pin } from "../store.js";
 import { lastOpened } from "../forgotten.js";
 import { appIcon, icon, showToast } from "../ui.js";
 
@@ -12,21 +12,31 @@ const SLOT_ID = "forgotten-slot";
 const DIALOG_HOST_ID = "dialogs";
 const DIALOG_ID = "dialog-forgotten";
 
-// 한 번에 보여 주는 개수 (F04-04 배지, F04-05 팝업)
+// 한 번에 보여 주는 개수 (F04-04 배지, F04-05 팝업). 팝업은 "모두 보기"를 누르면 전부 보여 준다
 const MAX_SHOWN = 8;
 // [이제 안 봐도 됨]의 되돌리기 안내 시간 (F04-09, v9)
 const UNDO_MS = 6000;
+// 팝업 안 안내 문구("고정은 8개까지 할 수 있어요" 등)를 보여 주는 시간
+const NOTICE_MS = 4000;
 const DAY = 24 * 60 * 60 * 1000;
 
 // 마지막으로 받은 값. 팝업이 열려 있는 동안 다시 그릴 때 쓴다
 let current = { items: [], actions: {} };
 // 팝업 목록을 비동기로 채우는 중에 다시 불리면, 늦게 끝난 앞의 작업은 버린다
 let fillToken = 0;
-// [이제 안 봐도 됨]으로 뺀 북마크: ID → { index, timer }. 팝업 안 그 자리에 6초 동안 [되돌리기]를 보여 준다
+// [이제 안 봐도 됨]으로 뺀 북마크: ID → { time, above, timer }. 팝업 안 그 자리에 6초 동안 [되돌리기]를 보여 준다
 // 팝업은 showModal()이라 #toast가 어두운 배경 뒤에 깔려 누를 수 없기 때문이다. 팝업을 닫으면 비운다
+// 자리는 순번이 아니라 "마지막으로 연 시각"(time)으로 기억한다. 목록이 이 시각의 오래된 순이고(pickForgotten) 뺀 북마크의 시각은 바뀌지 않으므로,
+// 같은 기준으로 끼우면 다른 줄을 빼거나 열어도 제자리에 생긴다. 순번으로 기억하면 둘째로 뺀 줄이 한 칸 위에 생긴다 (#46 리뷰)
 const undoRows = new Map();
+// 팝업 목록에 마지막으로 그린 줄의 순서 [{ id, time }] (일반 줄과 되돌리기 줄). 같은 시각인 줄의 위아래를 기억하는 데 쓴다
+let shownOrder = [];
 // dismissed에 저장하는 중인 북마크 ID. 저장이 끝나기 전에 같은 줄을 다시 눌러도 한 번만 처리한다
 const dismissing = new Set();
+// "N개 더 있어요 · 모두 보기"를 눌렀는지. 누르면 8개를 넘는 후보도 모두 보여 준다. 팝업을 닫으면 다시 8개로 (F04-05 비고, P2)
+let showAll = false;
+// pinned에 저장하는 중인 북마크 ID. 저장이 끝나기 전에 [고정하기]를 다시 눌러도 한 번만 처리한다
+const pinning = new Set();
 
 // "N개월 전" 같은 지난 시간 문구. 한 달이 안 되면 일, 1년 이상도 개월로 센다 (시안의 문구)
 function ago(time, now) {
@@ -173,6 +183,7 @@ function openDialog() {
   });
   dialog.addEventListener("close", () => {
     clearUndoRows();
+    showAll = false;
     dialog.remove();
   });
 
@@ -181,11 +192,13 @@ function openDialog() {
   fillList(dialog);
 }
 
-// 목록을 앞의 8개로 채운다. "연 기록 없음"을 가리려면 우리 기록(lastOpenedByUs)이 필요해 저장 항목을 읽는다
+// 목록을 앞의 8개로 채운다("모두 보기"를 눌렀으면 전부). "연 기록 없음"을 가리려면 우리 기록(lastOpenedByUs)이 필요해 저장 항목을 읽는다
 // 방금 뺀 북마크는 render.js가 다시 그리기 전이라도 빼고, 그 자리에 [되돌리기] 줄을 끼워 넣는다
 async function fillList(dialog) {
   const token = ++fillToken;
-  const items = current.items.filter((bookmark) => !undoRows.has(String(bookmark.id))).slice(0, MAX_SHOWN);
+  const remaining = current.items.filter((bookmark) => !undoRows.has(String(bookmark.id)));
+  const items = showAll ? remaining : remaining.slice(0, MAX_SHOWN);
+  const hidden = remaining.length - items.length;
   let stored = {};
   try {
     stored = await load();
@@ -197,9 +210,13 @@ async function fillList(dialog) {
   const list = dialog.querySelector(".list");
   if (!list) return;
   const now = Date.now();
-  const rows = items.map((bookmark, index) => renderRow(bookmark, index, stored, now, dialog));
-  const pending = [...undoRows].sort((a, b) => a[1].index - b[1].index);
-  for (const [id, { index }] of pending) rows.splice(Math.min(index, rows.length), 0, renderUndoRow(id, dialog));
+  const rows = placeUndoRows(
+    items.map((bookmark) => {
+      const { time } = lastOpened(bookmark, stored);
+      return { id: String(bookmark.id), time, row: renderRow(bookmark, time, stored, now, dialog) };
+    }),
+    (id) => renderUndoRow(id, dialog),
+  );
   if (rows.length === 0) {
     const empty = document.createElement("div");
     empty.className = "dialog__subtitle";
@@ -207,7 +224,50 @@ async function fillList(dialog) {
     list.replaceChildren(empty);
     return;
   }
+  if (hidden > 0) rows.push(renderMoreRow(hidden, dialog));
   list.replaceChildren(...rows);
+}
+
+// 목록 아래 "N개 더 있어요 · 모두 보기" (확정 시안). 누르면 나머지 후보까지 모두 보여 준다
+function renderMoreRow(hidden, dialog) {
+  const row = document.createElement("div");
+  row.className = "dialog__subtitle";
+  row.append(
+    makeButton(`${hidden}개 더 있어요 · 모두 보기`, {
+      variant: "btn--ghost",
+      onClick: () => {
+        showAll = true;
+        fillList(dialog);
+      },
+    }),
+  );
+  return row;
+}
+
+// 일반 줄({ id, time, row }, 오래된 순)과 되돌리기 줄을 "마지막으로 연 시각" 순으로 합쳐 줄 목록을 돌려준다
+// 시각이 같은 줄끼리는 뺄 때 기억한 "같은 시각이면서 위에 있던 줄"(above)로 순서를 정한다
+// HTML로 가져온 북마크는 저장 시각이 초 단위라 같은 시각이 흔하다. 순번으로 기억하면 다시 그릴 때 당겨져 어긋난다 (#60 리뷰)
+// 그린 순서(ID·시각)는 shownOrder에 남겨, 다음에 뺄 때 위에 있던 줄을 찾는 데 쓴다
+function placeUndoRows(entries, makeUndoRow) {
+  const undo = [...undoRows]
+    .map(([id, { time, above }]) => ({ id, time, above }))
+    .sort((a, b) => a.time - b.time || (b.above.has(a.id) ? -1 : a.above.has(b.id) ? 1 : 0));
+  const rows = [];
+  const order = [];
+  let u = 0;
+  const pushUndo = () => {
+    const { id, time } = undo[u++];
+    rows.push(makeUndoRow(id));
+    order.push({ id, time });
+  };
+  for (const { id, time, row } of entries) {
+    while (u < undo.length && (undo[u].time < time || (undo[u].time === time && !undo[u].above.has(id)))) pushUndo();
+    rows.push(row);
+    order.push({ id, time });
+  }
+  while (u < undo.length) pushUndo();
+  shownOrder = order;
+  return rows;
 }
 
 // 뺀 북마크 자리에 6초 동안 보이는 줄: "목록에서 뺐어요" + [되돌리기] (F04-09)
@@ -231,7 +291,8 @@ function clearUndoRows() {
 }
 
 // 목록 한 줄: 앱 아이콘과 제목(누르면 열기) + 저장·연 시각 + [이제 안 봐도 됨] [어디 있는지 보기]
-function renderRow(bookmark, index, stored, now, dialog) {
+// time은 이 북마크를 마지막으로 연 시각(lastOpened). 뺐을 때 되돌리기 줄의 자리로 쓴다
+function renderRow(bookmark, time, stored, now, dialog) {
   const row = document.createElement("div");
   row.className = "list__row";
   const name = bookmark.title || bookmark.url;
@@ -259,8 +320,10 @@ function renderRow(bookmark, index, stored, now, dialog) {
 
   const buttons = document.createElement("span");
   buttons.className = "actions";
+  // 버튼 순서는 확정 시안대로 [고정하기] [이제 안 봐도 됨] [어디 있는지 보기]
   buttons.append(
-    makeButton("이제 안 봐도 됨", { variant: "btn--ghost", onClick: () => dismissItem(bookmark, index, dialog) }),
+    makeButton("고정하기", { variant: "btn--ghost", onClick: () => pinItem(bookmark, dialog) }),
+    makeButton("이제 안 봐도 됨", { variant: "btn--ghost", onClick: () => dismissItem(bookmark, time, dialog) }),
     makeButton("어디 있는지 보기", { variant: "btn--ghost", onClick: () => showLocation(bookmark, dialog) }),
   );
 
@@ -273,18 +336,47 @@ function renderRow(bookmark, index, stored, now, dialog) {
 async function openItem(bookmark, newTab, dialog) {
   try {
     const opened = await openBookmark(bookmark, { newTab });
-    if (opened === false) showToast("이 북마크는 열 수 없어요");
+    if (opened === false) showNotice(dialog, "이 북마크는 열 수 없어요");
     else if (!newTab) dialog.close();
   } catch (error) {
     console.warn("북마크를 열지 못했어요", error);
-    showToast("북마크를 열지 못했어요");
+    showNotice(dialog, "북마크를 열지 못했어요");
   }
 }
 
+// 안내 문구를 잠깐 보여 준다. 팝업이 열려 있으면 팝업 안에 띄운다 (ui.js showToast의 container, F02-04)
+// 팝업은 showModal()이라 #toast가 어두운 배경 뒤에 깔려 보이지 않기 때문이다. 팝업이 닫혔으면 #toast에 띄운다
+function showNotice(dialog, text) {
+  const container = dialog && dialog.isConnected && dialog.open ? dialog : null;
+  showToast(text, { container, duration: NOTICE_MS });
+}
+
+// [고정하기]: 독(pinned)에 추가한다 (F04-08). 고정한 북마크는 pickForgotten이 빼므로, 저장이 바뀌면 render.js가 다시 그려 후보에서 빠진다
+// 독이 이미 8개면 pin이 false를 돌려준다. 그때는 넣지 않고 "고정은 8개까지 할 수 있어요"를 보여 준다 (F08-06)
+async function pinItem(bookmark, dialog) {
+  const id = String(bookmark.id);
+  if (pinning.has(id)) return;
+  pinning.add(id);
+  let added;
+  try {
+    added = await pin(id);
+  } catch (error) {
+    console.warn("고정하지 못했어요", error);
+    showNotice(dialog, "고정하지 못했어요");
+    return;
+  } finally {
+    pinning.delete(id);
+  }
+  showNotice(dialog, added ? "고정됨에 추가했어요" : "고정은 8개까지 할 수 있어요");
+}
+
 // [이제 안 봐도 됨]: dismissed에 기록하고, 그 줄 자리에 6초 동안 [되돌리기]를 보여 준다 (F04-09)
-async function dismissItem(bookmark, index, dialog) {
+// time(마지막으로 연 시각)과, 누른 순간 같은 시각이면서 위에 보이던 줄들(above)로 자리를 기억한다
+async function dismissItem(bookmark, time, dialog) {
   const id = String(bookmark.id);
   if (dismissing.has(id) || undoRows.has(id)) return;
+  const at = shownOrder.findIndex((entry) => entry.id === id);
+  const above = new Set(shownOrder.slice(0, Math.max(at, 0)).filter((entry) => entry.time === time).map((entry) => entry.id));
   dismissing.add(id);
   try {
     await dismiss(id);
@@ -299,7 +391,7 @@ async function dismissItem(bookmark, index, dialog) {
     undoRows.delete(id);
     if (dialog.isConnected) fillList(dialog);
   }, UNDO_MS);
-  undoRows.set(id, { index, timer });
+  undoRows.set(id, { time, above, timer });
   fillList(dialog);
 }
 

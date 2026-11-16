@@ -108,12 +108,138 @@ export function makePlan(targets, categories) {
   return { type: "folders", folders, rest: targets.length - placed };
 }
 
+// 고정 후보의 최대 개수 (F09-03)
+// 독의 8개 상한은 여기서 보지 않는다. store.pin이 지킨다 (명세에 없어 정함)
+const PIN_MAX = 5;
+
+// http·https 주소의 호스트(소문자, 앞의 "www." 뗌). 그 밖의 주소·해석 못 하는 주소는 null
+// 호스트가 완전히 같을 때만 같은 사이트다. 하위 도메인은 다른 사이트이고, 포트는 보지 않는다
+function siteHost(url) {
+  if (typeof url !== "string") return null;
+  try {
+    const u = new URL(url.trim());
+    if (u.protocol !== "http:" && u.protocol !== "https:") return null;
+    return u.hostname.toLowerCase().replace(/^www\./, "");
+  } catch (e) {
+    return null;
+  }
+}
+
+// lastOpenedByUs[id]와 dateLastUsed 중 더 최근 값. 하나만 있으면 그 값, 둘 다 없으면 null(연 적 없음)
+// F04-03과 같은 기준
+// dateLastUsed도 연 시각으로 본다 (명세 N21에 없어 F04-03을 따라 정함). dateAdded로 대신하지 않는다
+function openedAt(bookmark, lastOpenedByUs) {
+  const id = String(bookmark.id);
+  const us = lastOpenedByUs && Object.hasOwn(lastOpenedByUs, id) ? lastOpenedByUs[id] : null;
+  const times = [us, bookmark.dateLastUsed].filter(Number.isFinite);
+  return times.length ? Math.max(...times) : null;
+}
+
 // N21: 고정 후보 최대 5개. 자주 방문한 사이트와 호스트가 같은 북마크 먼저, 부족하면 최근에 연 순
+// topSites는 계산에만 쓰고 저장하지 않는다 (F09-04)
 export function pickPinCandidates(bookmarks, topSites, stored) {
-  return [];
+  const lastOpenedByUs = (stored && stored.lastOpenedByUs) || {};
+  const pinned = new Set(((stored && Array.isArray(stored.pinned)) ? stored.pinned : []).map(String));
+
+  // 후보 모음: 입력 순서대로, 같은 id는 처음 것만
+  // 이미 고정한 것과 javascript: 북마크는 뺀다 (명세에 없어 정함)
+  const seenIds = new Set();
+  const pool = [];
+  for (const b of Array.isArray(bookmarks) ? bookmarks : []) {
+    if (!b || b.id == null) continue;
+    const id = String(b.id);
+    if (seenIds.has(id)) continue;
+    seenIds.add(id);
+    if (pinned.has(id)) continue;
+    if (typeof b.url === "string" && b.url.trim().toLowerCase().startsWith("javascript:")) continue;
+    pool.push({ b, host: siteHost(b.url), at: openedAt(b, lastOpenedByUs) });
+  }
+
+  const picked = [];
+  const pickedIds = new Set();
+  const take = (c) => {
+    picked.push(c.b);
+    pickedIds.add(String(c.b.id));
+  };
+
+  // ① 자주 방문한 사이트를 목록 순서대로. 호스트가 같은 후보 중 하나만 고른다
+  // 사이트 하나에 북마크 하나 (명세에 없어 정함): 최근에 연 것, 같거나 둘 다 없으면 입력 순서가 앞인 것
+  const seenHosts = new Set();
+  for (const site of Array.isArray(topSites) ? topSites : []) {
+    if (picked.length >= PIN_MAX) break;
+    const host = siteHost(site && site.url);
+    if (!host || seenHosts.has(host)) continue;
+    seenHosts.add(host);
+    let best = null;
+    for (const c of pool) {
+      if (c.host !== host || pickedIds.has(String(c.b.id))) continue;
+      if (!best || (c.at ?? -Infinity) > (best.at ?? -Infinity)) best = c;
+    }
+    if (best) take(best);
+  }
+
+  // ② 모자라면 아직 안 고른 후보 중 연 적 있는 것을 최근에 연 순(같으면 입력 순서)으로 채운다
+  // 연 적 없는 북마크는 넣지 않으므로 0개일 수 있다 (F09-09)
+  if (picked.length < PIN_MAX) {
+    const rest = pool
+      .map((c, i) => ({ c, i }))
+      .filter(({ c }) => c.at != null && !pickedIds.has(String(c.b.id)))
+      .sort((x, y) => y.c.at - x.c.at || x.i - y.i);
+    for (const { c } of rest) {
+      if (picked.length >= PIN_MAX) break;
+      take(c);
+    }
+  }
+
+  return picked;
 }
 
 // N37: 폴더 밖에 같은 카테고리가 3개 이상 모이면 새 폴더를 제안. 출력: [{ name, items }]
+// 명세 v19 F10-06: 우리가 만든 폴더(history의 createdFolderIds 중 남아 있는 것)와 합쳐 상한을 넘지 않게 제안한다
 export function suggestNewFolders(tree, stored, categories) {
-  return [];
+  const t = tree || {};
+  const folders = t.folders || [];
+  const bookmarks = t.bookmarks || [];
+
+  // ① 폴더 밖 정리 대상
+  // 명세에 없어 정함: 첫 정리와 같은 범위(기본 options). N37에는 now 입력이 없어 북마크바 최근 30일 보호는 하지 않는다
+  const targets = getTargets(t, stored, {});
+
+  // ② 우리가 만든 폴더: 모든 기록의 createdFolderIds 중 트리에 아직 있는 것. undoneAt은 보지 않는다
+  const folderIds = new Set(folders.map((f) => String(f.id)));
+  const ours = new Set();
+  for (const entry of (stored && stored.history) || []) {
+    for (const id of (entry && entry.createdFolderIds) || []) {
+      if (folderIds.has(String(id))) ours.add(String(id));
+    }
+  }
+
+  // ③ 상한
+  // F10-06 비고: 폴더 밖 정리 대상 + 우리 폴더 안 북마크의 수로 상한을 정한다. 우리 폴더 바로 아래만 센다(명세에 없어 정함)
+  const counted = new Set(targets.map((b) => String(b.id)));
+  for (const b of bookmarks) {
+    if (ours.has(String(b.parentId))) counted.add(String(b.id));
+  }
+  const room = folderLimit(counted.size) - ours.size;
+  if (room <= 0) return [];
+
+  // ④ 같은 이름의 폴더가 이미 있는 카테고리는 제안하지 않는다
+  // classify.js suggestForNew(N24)와 같은 기준: 관리자 폴더는 빼고 이름으로 찾는다. 기준이 다르면 추천도 제안도 못 받는 북마크가 생긴다
+  const taken = new Set(folders.filter((f) => f.rootType !== "managed").map((f) => f.title));
+
+  // ⑤ 묶기와 정렬은 makePlan과 같은 규칙이다 (null·"기타" 제외, 3개 이상, 개수가 많은 순 → 분류표 순서)
+  const groups = new Map();
+  for (const b of targets) {
+    const { category } = classify(b, categories);
+    if (category === null || category === "기타" || taken.has(category)) continue;
+    if (!groups.has(category)) groups.set(category, []);
+    groups.get(category).push(b);
+  }
+  const order = new Map(categories.categories.map((c, i) => [c.name, i]));
+  const candidates = [...groups.entries()]
+    .filter(([, items]) => items.length >= 3)
+    .sort((a, b) => b[1].length - a[1].length || order.get(a[0]) - order.get(b[0]));
+
+  // ⑥ 남은 칸 수까지만. items는 tree.bookmarks의 객체 그대로, targets 순서
+  return candidates.slice(0, room).map(([name, items]) => ({ name, items }));
 }

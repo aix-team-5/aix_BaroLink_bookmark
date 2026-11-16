@@ -1020,9 +1020,9 @@ await (async () => {
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N21 pickPinCandidates: 고정 후보 고르기 · P2
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (`feat/F09-pin-candidates`)
 - 파일·담당: plan.js · 팀원 C
-- 관련 요구사항: F09-03, F09-08, F09-09
+- 관련 요구사항: F09-03, F09-04, F09-08, F09-09
 - 안전 등급: 읽기만
 - 사전 조건: 2장 실행
 - 붙여 넣을 코드:
@@ -1052,11 +1052,52 @@ await (async () => {
     T.expect("F09-08 자주 방문한 사이트가 비면 최근에 연 순만", T.same(ids(r2), ["n1", "c1", "g1", "t1", "i1"]), ids(r2));
     const r3 = T.plan.pickPinCandidates(bms, [], T.emptyStored());
     T.expect("F09-09 연 적 있는 북마크도 없으면 0개", Array.isArray(r3) && r3.length === 0, ids(r3));
+    const bmsBar = [...bms, T.fakeBm("b1", "북마크바에서 연 것", "https://bar.example/", { dateLastUsed: now - 2 * d })];
+    const r4 = T.plan.pickPinCandidates(bmsBar, [], stored);
+    T.expect("F04-03 dateLastUsed도 연 시각으로 본다(n1 1일 전 → b1 2일 전 → c1 3일 전)", T.same(ids(r4).slice(0, 3), ["n1", "b1", "c1"]), ids(r4));
+    const r5 = T.plan.pickPinCandidates(bms, top, { ...stored, pinned: ["n1"] });
+    T.expect("이미 고정한 북마크는 뺀다", !ids(r5).includes("n1"), ids(r5));
+    const bmsDup = [...bms, T.fakeBm("g2", "깃허브 2", "https://github.com/b")];
+    const r6 = T.plan.pickPinCandidates(bmsDup, top, stored);
+    T.expect("자주 방문한 사이트 단계(①)에서는 사이트 하나에 북마크 하나: 앞 두 자리에 g1·g2 중 하나만", ids(r6).slice(0, 2).filter((x) => x === "g1" || x === "g2").length === 1, ids(r6));
+    T.expect("같은 사이트면 더 최근에 연 g1이 2번째 자리", ids(r6)[1] === "g1", ids(r6));
+    const beforeIn = JSON.stringify([bms, top, stored]);
+    T.plan.pickPinCandidates(bms, top, stored);
+    T.expect("입력을 바꾸지 않는다", JSON.stringify([bms, top, stored]) === beforeIn);
+    T.record("F09-04 저장소에 topSites 같은 키가 생기지 않았는지", Object.keys(await T.stored()).filter((k) => /top/i.test(k)));
     T.expect("같은 입력은 같은 결과", T.same(ids(r1), ids(T.plan.pickPinCandidates(bms, top, stored))));
   })();
   ```
-- 기대 결과: 자주 방문한 사이트와 호스트가 같은 북마크를 목록 순서대로 먼저 고르고, 모자라면 최근에 연 순으로 채워 최대 5개다. 연 적 없는 북마크는 후보가 아니어서 0개일 수 있다. (N21, F09-03, F09-08, F09-09)
-- 판단: "최근에 연 순"의 시각은 `lastOpenedByUs`만 넣어 확인했다. `dateLastUsed`를 함께 볼지는 명세에 없다.
+- 기대 결과: 자주 방문한 사이트와 호스트가 같은 북마크를 목록 순서대로 먼저 고르고, 모자라면 최근에 연 순으로 채워 최대 5개다. 연 적 없는 북마크는 후보가 아니어서 0개일 수 있다. (N21, F09-03, F09-08, F09-09) 자주 방문한 사이트 단계(①)에서는 사이트 하나에 북마크 하나만 고르고(②단계에서는 같은 사이트의 다른 북마크가 다시 들어올 수 있다), 이미 고정한 것과 javascript: 북마크는 뺀다. 연 시각은 lastOpenedByUs와 dateLastUsed 중 더 최근 값(F04-03).
+- 판단: 연 시각은 F04-03처럼 lastOpenedByUs와 dateLastUsed 중 더 최근 값으로 본다(명세 N21에 없어 정함, 4-3). 자주 방문한 사이트 단계(①)에서는 사이트 하나에 북마크 하나, 이미 고정한 것·javascript: 제외도 명세에 없어 정함.
+- 결과: 통과 / 실패 / 보류   확인자:   날짜:
+
+#### C-N21-실제 pickPinCandidates: 실제 북마크로 고정 후보 보기 · P2
+- 구현 상태: 구현됨 (`feat/F09-pin-candidates`)
+- 파일·담당: plan.js · 팀원 C
+- 관련 요구사항: F09-03, F09-08, F09-09
+- 안전 등급: 읽기만
+- 사전 조건: 2장 실행. `sample-under10.html` 또는 `sample-20.html`을 가져온 프로필(폴더 계획이 pin인 세트). topSites 권한은 아직 [고정하기] 화면이 없으므로 이 항목에서 요청하지 않는다. `chrome.topSites`가 있으면(이미 허락했으면) 쓰고, 없으면 `[]`로 본다.
+- 붙여 넣을 코드:
+  ```js
+  // C-N21-실제
+  await (async () => {
+    T.begin("C-N21-실제");
+    const tree = await T.bookmarks.loadTree();
+    const stored = { ...T.emptyStored(), ...(await chrome.storage.local.get(["pinned", "lastOpenedByUs"])) };
+    const top = (chrome.topSites ? await chrome.topSites.get() : []).filter((s) => /^https?:/i.test(s.url));
+    const r = T.plan.pickPinCandidates(tree.bookmarks, top, stored);
+    const host = (u) => { try { return new URL(u).hostname.replace(/^www\./, ""); } catch (e) { return ""; } };
+    const topHosts = new Set(top.map((s) => host(s.url)));
+    const allIds = new Set(tree.bookmarks.map((b) => b.id));
+    T.expect("결과가 배열이고 5개 이하", Array.isArray(r) && r.length <= 5, r);
+    T.expect("모든 결과가 tree.bookmarks 안의 북마크", (r || []).every((b) => allIds.has(b.id)), r);
+    T.expect("이미 고정한 북마크가 없다", (r || []).every((b) => !(stored.pinned || []).includes(b.id)), r);
+    T.record("topSites 개수", top.length);
+    T.record("결과 [제목, 고른 이유]", (r || []).map((b) => [b.title, topHosts.has(host(b.url)) ? "자주 방문" : "최근에 연 시각"]));
+  })();
+  ```
+- 기대 결과: 가져온 직후(아무것도 안 열었고 topSites가 없으면) 0개다(F09-09). 북마크바에서 2개를 열고 다시 돌리면 그 2개가 최근에 연 순으로 나온다(`dateLastUsed`). 아무것도 저장하지 않는다. (N21, F09-03, F09-08, F09-09)
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N22 applyPlan: 정리 적용 · P1
@@ -1663,11 +1704,11 @@ await (async () => {
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N37 suggestNewFolders: 새 폴더 제안 · P2
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (feat/F10-new-folders) · 코드와 대조함
 - 파일·담당: plan.js · 팀원 C
 - 관련 요구사항: F10-06
-- 안전 등급: 읽기만 (상한 확인에서 임시 폴더 하나를 만들었다 지운다)
-- 사전 조건: `sample-100`, 2장 실행. 사전 조건으로 C-N19, C-N20이 통과해야 한다.
+- 안전 등급: ⚠ 크롬 북마크를 바꿈 (임시 폴더 3개를 만들었다 지운다)
+- 사전 조건: `sample-100`, 2장 실행. 사전 조건으로 C-N19, C-N20이 통과해야 한다. 짝 확인(N24)은 PR #54가 합쳐진 뒤에만 돌고, 그 전에는 📝 기록으로 건너뛴다.
 - 붙여 넣을 코드:
   ```js
   // C-N37
@@ -1675,25 +1716,64 @@ await (async () => {
     T.begin("C-N37");
     const c = await T.cats();
     const names = c.categories.map((x) => x.name);
+    const empty = T.emptyStored();
+    const pairs = (list) => (list || []).map((x) => [x.name, x.items?.length]);
+    const hist = (ids) => ({ ...empty, history: [{ id: "검증-h", at: Date.now(), type: "first", createdFolderIds: ids, moves: [], fromOrder: {}, skipped: 0 }] });
     const tree = await T.tree();
-    const r = T.plan.suggestNewFolders(tree, T.emptyStored(), c) || [];
+    const r = T.plan.suggestNewFolders(tree, empty, c) || [];
+    T.record("제안 (이름, 개수)", pairs(r));
     T.expect("F10-06 우리 폴더가 없고 폴더 밖에 같은 카테고리가 3개 이상이면 제안한다", r.length > 0, r);
-    T.expect("제안마다 북마크 3개 이상", r.every((x) => x.items?.length >= 3), r.map((x) => [x.name, x.items?.length]));
+    T.expect("출력은 [{ name, items }]", r.every((x) => T.same(Object.keys(x).sort(), ["items", "name"])), r);
+    T.expect("제안마다 북마크 3개 이상", r.every((x) => x.items?.length >= 3), pairs(r));
     T.expect("제안 이름은 카테고리 이름이고 \"기타\"가 없다", r.every((x) => names.includes(x.name) && x.name !== "기타"), r.map((x) => x.name));
+    // 폴더 밖 = 북마크바·기타·모바일 바로 아래, 또는 그 바로 아래 "가져온 북마크" 폴더의 바로 아래
+    const rootIds = Object.values(tree.roots).filter(Boolean).map((x) => x.id);
+    const outside = new Set([...rootIds, ...tree.folders.filter((f) => rootIds.includes(f.parentId) && f.title === "가져온 북마크").map((f) => f.id)]);
+    T.expect("제안의 북마크는 모두 폴더 밖 (사용자 폴더 안의 것 없음)", r.every((x) => x.items.every((b) => outside.has(b.parentId))), r.map((x) => x.items.map((b) => b.parentId)));
+    const plan = T.plan.makePlan(T.plan.getTargets(tree, empty, {}, Date.now()), c);
+    T.expect("sample-100: 첫 정리 계획(makePlan)과 폴더·개수가 같다 (학교 12 · 영상 12 · 블로그·글 10 · 개발 10 · 온라인 강의 9)", plan.type === "folders" && T.same(pairs(r), pairs(plan.folders)), { 제안: pairs(r), 계획: pairs(plan.folders) });
     T.expect("정리 대상 90개면 상한 5개를 넘지 않는다", r.length <= 5, r.length);
-    const existing = new Set((tree?.folders || []).map((f) => f.title));
-    T.expect("같은 이름의 폴더가 이미 있으면 제안하지 않는다", r.every((x) => !existing.has(x.name)), r.map((x) => x.name));
-    // 우리가 만든 폴더(history.createdFolderIds 중 남아 있는 것)가 상한(5개)에 찼으면 빈 배열
-    const tmp = await T.mkFolder("상한 확인용");
-    const ours = [...["졸업프로젝트", "알바·취준", "자취템", "가져온 북마크"].map((n) => tree?.folders?.find((f) => f.title === n)?.id), tmp.id].filter(Boolean);
-    const stored = { ...T.emptyStored(), history: [{ id: "검증-h", at: Date.now(), type: "first", createdFolderIds: ours, moves: [], fromOrder: {}, skipped: 0 }] };
-    const full = T.plan.suggestNewFolders(await T.tree(), stored, c);
-    T.expect("상한에 찼으면 빈 배열", ours.length === 5 && T.same(full, []), { ours: ours.length, full });
-    await chrome.bookmarks.remove(tmp.id);
+    const taken = new Set(tree.folders.filter((f) => f.rootType !== "managed").map((f) => f.title));
+    T.expect("같은 이름의 폴더(관리자 폴더 제외)가 이미 있으면 제안하지 않는다", r.every((x) => !taken.has(x.name)), r.map((x) => x.name));
+    const made = [];
+    try {
+      // ① 제안 1번과 같은 이름의 폴더를 만들면 그 제안은 빠지고, 추천(N24)이 그 폴더를 고른다
+      const first = r[0];
+      if (first) {
+        const same = await chrome.bookmarks.create({ parentId: (await T.bar()).id, title: first.name });
+        made.push(same.id);
+        const t2 = await T.tree();
+        const r2 = T.plan.suggestNewFolders(t2, empty, c) || [];
+        T.expect(`"${first.name}" 폴더를 만들면 "${first.name}" 제안이 빠진다`, !r2.some((x) => x.name === first.name), r2.map((x) => x.name));
+        const n24 = T.classify.suggestForNew(first.items, t2.folders, c) || [];
+        if (n24.length === 0) T.record("N24 suggestForNew가 아직 뼈대(main에 PR #54가 안 합쳐짐)라 짝 확인은 건너뜀", n24);
+        else T.expect(`짝 확인: N24는 "${first.name}" 북마크들을 방금 만든 폴더로 추천한다 (추천도 제안도 못 받는 북마크가 없다)`, n24.every((x) => x.folderId === same.id), n24);
+        await chrome.bookmarks.remove(same.id);
+        made.splice(made.indexOf(same.id), 1);
+      }
+      // ② 남은 칸: 빈 임시 폴더 2개를 우리가 만든 폴더로 → 상한 5 - 2 = 3개까지만
+      const a = await T.mkFolder("상한 확인용 1");
+      made.push(a.id);
+      const b = await T.mkFolder("상한 확인용 2");
+      made.push(b.id);
+      const t3 = await T.tree();
+      const r3 = T.plan.suggestNewFolders(t3, hist([a.id, b.id]), c) || [];
+      T.expect("우리 폴더 2개면 남은 칸 3개까지만, 많은 것부터", T.same(r3.map((x) => x.name), r.slice(0, 3).map((x) => x.name)), r3.map((x) => x.name));
+      // ③ history에 있어도 지워진 폴더는 세지 않는다
+      const gone = [1, 2, 3, 4, 5, 6].map((n) => `검증-지워진-폴더-${n}`);
+      const r4 = T.plan.suggestNewFolders(t3, hist(gone), c) || [];
+      T.expect("createdFolderIds 중 지워진 폴더는 세지 않는다", T.same(r4.map((x) => x.name), r.map((x) => x.name)), r4.map((x) => x.name));
+      // ④ 상한에 참: 샘플 폴더 4개 + 임시 폴더 2개 = 6개 (가장 큰 상한) → 빈 배열
+      const sampleIds = ["졸업프로젝트", "알바·취준", "자취템", "가져온 북마크"].map((n) => t3.folders.find((f) => f.title === n)?.id).filter(Boolean);
+      const full = T.plan.suggestNewFolders(t3, hist([...sampleIds, a.id, b.id]), c);
+      T.expect("우리 폴더가 상한(6개)에 찼으면 빈 배열", sampleIds.length === 4 && T.same(full, []), { 우리폴더: sampleIds.length + 2, full });
+    } finally {
+      for (const id of made) await chrome.bookmarks.remove(id).catch(() => {});
+    }
   })();
   ```
 - 기대 결과: 폴더 밖에 같은 카테고리가 3개 이상 모였고, 우리가 만든 폴더 수(`history`의 `createdFolderIds` 중 남아 있는 것)가 상한보다 적을 때만 `[{ name, items }]`로 제안한다. 같은 이름의 폴더가 이미 있으면 제안하지 않고, 상한에 찼으면 빈 배열이다. (N37, F10-06)
-- 판단: 상한은 "폴더 밖 정리 대상 + 우리 폴더 안 북마크"의 수로 정한다(F10-06 비고). 샘플 폴더를 우리가 만든 폴더로 꾸며 넣었으므로, 그 안의 북마크 수가 상한 계산에 더해져도 90 + 10 = 100개로 상한이 6개가 될 수 있다. 이때 이 줄이 실패하면 담당과 상한 계산을 함께 본다.
+- 판단: 상한은 "폴더 밖 정리 대상 + 우리 폴더 바로 아래 북마크"의 수로 정한다(F10-06 비고). 상한 확인은 샘플 폴더 4개 + 임시 폴더 2개 = 6개(가장 큰 상한)로 꾸며서 대상 수와 상관없이 빈 배열이 나와야 한다. 같은 이름 폴더는 N24 suggestForNew와 같은 기준(관리자 폴더 제외)이다. N37에는 now 입력이 없어 북마크바 최근 30일 보호를 하지 않는다.
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N38 setFirstCard: 첫 정리 카드 상태 · P1
@@ -2025,7 +2105,7 @@ await (async () => {
 
 export는 모두 있지만(자동 검사가 확인한다), 몸체가 비어 있거나 빈 값만 돌려준다. `store.js`의 `load()`는 기본값 객체를 돌려주지만 `chrome.storage`를 읽지 않으므로 뼈대로 본다.
 
-2026-10-30 `main` `049b9be`: `bookmarks.js`·`store.js`가 합쳐져 N01~N03, N05~N10, N12~N16, N38, N40이 구현됐다. 이 두 파일에서 아직 뼈대인 것은 N04 `renameFolder`, N39 `markHandledNew`다. N11 `pin`·`unpin`은 `feat/F08-pin`에서 구현됐다. 아래 표는 작성 시점(`309b583`) 그대로 둔다.
+2026-10-30 `main` `049b9be`: `bookmarks.js`·`store.js`가 합쳐져 N01~N03, N05~N10, N12~N16, N38, N40이 구현됐다. 이 두 파일에서 아직 뼈대인 것은 N04 `renameFolder`, N39 `markHandledNew`다. N11 `pin`·`unpin`은 `feat/F08-pin`에서 구현됐다. N21 `pickPinCandidates`는 `feat/F09-pin-candidates`에서 구현됐다. 아래 표는 작성 시점(`309b583`) 그대로 둔다.
 
 | N | 함수 | 파일 | 담당 | 이슈 |
 |---|---|---|---|---|
@@ -2097,6 +2177,7 @@ export는 모두 있지만(자동 검사가 확인한다), 몸체가 비어 있�
 | N18 | `measure(samples, answers, …)`의 samples와 answers 형태 | 둘 다 `answer-key-100.json` 배열 | C-N18 |
 | N19 | options `{북마크바 제외, 포함할 사용자 폴더}`의 키 이름 | 명세 v17에서 `{ excludeBar, includeFolderIds }`(기본값 `{ excludeBar: false, includeFolderIds: [] }`)로 정해졌다. P2라 `{}`(기본값)만 확인 | C-N19 |
 | N20 | `rest`가 배열인지 개수인지, `reasons`의 형태, pin의 `reason` 값 | 명세 v17에서 정해졌다. `rest`는 개수(숫자), `reasons`는 폴더마다 items와 같은 순서·같은 길이의 `{ bookmarkId, step, rule, needsCheck }`, `reason`은 `"tooFew"`·`"noGroup"`. 처음에는 `rest`를 둘 다 받게 썼고 `reasons`는 기록만 했다 | C-N20, C-N20-예외, C-N31 |
+| N21 | "최근에 연" 시각, 같은 호스트 북마크가 여럿일 때, 이미 고정한 북마크 | `lastOpenedByUs`와 `dateLastUsed` 중 더 최근 값(F04-03), 자주 방문한 사이트 단계(①)에서는 사이트 하나에 북마크 하나(최근에 연 것. ②단계에서는 같은 사이트의 다른 북마크가 다시 들어올 수 있다), 이미 고정한 것·`javascript:` 제외 | C-N21, C-N21-실제 |
 | N22 | `folders[].items`의 원소(북마크 노드인지 ID인지), `keep`의 원소 | 크롬 북마크 노드 / 북마크 ID | C-N22, C-N22-예외 |
 | N24 | `folders`(현재 폴더)의 원소 | 크롬 폴더 노드처럼 `{ id, title }` | C-N24 |
 | N31 | `showPinPicker()`의 입력 (P2를 시작할 때 정한다, `docs/file-structure.md` 12번) | 입력 없이 부름 | C-N31 |
@@ -2134,7 +2215,7 @@ export는 모두 있지만(자동 검사가 확인한다), 몸체가 비어 있�
 | N18 | measure | P1 | 뼈대 | | | #7 |
 | N19 | getTargets (+ 예외) | P1 | 뼈대 | | | #11 |
 | N20 | makePlan (+ 예외) | P1 | 뼈대 | | | #11 |
-| N21 | pickPinCandidates | P2 | 뼈대 | | | #11 |
+| N21 | pickPinCandidates | P2 | 구현됨 | | | #11 |
 | N22 | applyPlan (+ 예외) | P1 | 뼈대 | | | #4 |
 | N23 | undo (+ 예외) | P1 | 뼈대 | | | #4 |
 | N24 | suggestForNew | P2 | 뼈대 | | | #7 |
@@ -2150,7 +2231,7 @@ export는 모두 있지만(자동 검사가 확인한다), 몸체가 비어 있�
 | N34 | onRemoved 처리 | P1 | 뼈대 | | | #6 |
 | N35 | suggestSubfolders | P3 | 뼈대 | | | #12 |
 | N36 | initDnd | P3 | 뼈대 | | | #19 |
-| N37 | suggestNewFolders | P2 | 뼈대 | | | #11 |
+| N37 | suggestNewFolders | P2 | 구현됨 | | | #11 |
 | N38 | setFirstCard | P1 | 뼈대 | | | #3 |
 | N39 | markHandledNew | P2 | 뼈대 | | | #3 |
 | N40 | addNew / removeNew / purgeWorkerKeys | P1·P2 | 뼈대 | | | #3 |
