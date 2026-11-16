@@ -863,7 +863,8 @@ a {
   white-space: nowrap;
 }
 
-.search-result__folder {
+.search-result__folder,
+.picker__folder {
   flex: 0 0 auto;
   max-width: 40%;
   overflow: hidden;
@@ -976,6 +977,46 @@ a {
   box-shadow: var(--shadow-sm);
 }
 
+/* 독의 앱 하나와 [고정 해제] 버튼 (F08-04). 해제 버튼은 마우스를 올리거나 키보드로 가면 보인다 */
+#dock .dock__slot {
+  position: relative;
+  flex: 0 0 auto;
+}
+
+#dock .dock__remove {
+  position: absolute;
+  top: -6px;
+  right: -6px;
+  display: none;
+  align-items: center;
+  justify-content: center;
+  width: 20px;
+  height: 20px;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: var(--color-dark);
+  color: var(--color-on-dark);
+  box-shadow: var(--shadow-md);
+  cursor: pointer;
+}
+
+#dock .dock__slot:hover .dock__remove,
+#dock .dock__slot:focus-within .dock__remove {
+  display: flex;
+}
+
+/* 독의 [+] 버튼 (F09-06) */
+#dock .dock__add {
+  background: var(--color-divider);
+  color: var(--color-text-muted);
+  box-shadow: none;
+}
+
+#dock .dock__add:hover {
+  color: var(--color-text-strong);
+}
+
 #dock .dock__divider {
   flex: 0 0 auto;
   width: 1px;
@@ -996,6 +1037,38 @@ a {
 
 #notice:empty {
   display: none;
+}
+
+/* 고정할 북마크 고르기 창 (view/cards.js의 showPinPicker). 누르면 고르고, 다시 누르면 푼다 */
+.picker__list {
+  max-height: 50vh;
+  overflow-y: auto;
+}
+
+.picker__row {
+  font: inherit;
+  color: inherit;
+}
+
+.picker__row[aria-pressed="true"] {
+  border-color: var(--color-primary);
+  background: var(--color-primary-soft);
+}
+
+.picker__row .list__text .meta {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.picker__check {
+  display: none;
+  flex: 0 0 auto;
+  color: var(--color-primary-text);
+}
+
+.picker__row[aria-pressed="true"] .picker__check {
+  display: inline-flex;
 }
 
 /* 정리 결과 안내 바 — 시안: 흰 바탕에 보라 테두리 (view/history.js가 채운다) */

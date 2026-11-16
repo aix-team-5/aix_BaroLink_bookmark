@@ -346,7 +346,7 @@ test("cleanupMissing: 노드 배열(children 포함)과 ID Set도 받는다", as
   assert.deepEqual(data.dismissed, { 3: 100 });
 });
 
-// 9. setFirstCard / addNew · removeNew · purgeWorkerKeys (markHandledNew는 P2에서 테스트한다)
+// 9. setFirstCard / addNew · removeNew · purgeWorkerKeys (markHandledNew는 10번)
 test("setFirstCard: 허용된 값만, 잘못된 값은 오류", async () => {
   await store.setFirstCard("done");
   assert.deepEqual(data.state, { firstCard: "done" });
@@ -372,4 +372,142 @@ test("addNew / removeNew / purgeWorkerKeys: 서비스 워커에서 동작", asyn
   await store.purgeWorkerKeys(["2", 4]);
   assert.deepEqual(data.newBookmarks, ["3"]);
   assert.deepEqual(data.manualMoves, {});
+});
+
+// 10. markHandledNew (N39, 명세 v20)
+test("markHandledNew: handledNew에 중복 없이 뒤에 붙이고, ID는 문자열로 맞춘다", async () => {
+  await store.markHandledNew(["3", 5, "3"]);
+  assert.deepEqual(data.handledNew, ["3", "5"]);
+  await store.markHandledNew(["5", "7"]);
+  assert.deepEqual(data.handledNew, ["3", "5", "7"]);
+});
+
+test("markHandledNew: 새로 넣을 ID가 없거나 빈 배열이면 저장하지 않는다", async () => {
+  data.handledNew = ["3"];
+  const set = chrome.storage.local.set;
+  let writes = 0;
+  chrome.storage.local.set = async (items) => {
+    writes++;
+    return set(items);
+  };
+  try {
+    await store.markHandledNew([]);
+    await store.markHandledNew(["3", 3]);
+  } finally {
+    chrome.storage.local.set = set;
+  }
+  assert.equal(writes, 0);
+  assert.deepEqual(data.handledNew, ["3"]);
+});
+
+test("markHandledNew: 배열이 아니거나 빈 ID면 오류, 서비스 워커에서 부르면 오류", async () => {
+  await assert.rejects(store.markHandledNew("3"));
+  await assert.rejects(store.markHandledNew(["3", ""]));
+  asWorker();
+  await assert.rejects(store.markHandledNew(["3"]), /새 탭만/);
+  assert.equal(data.handledNew, undefined);
+});
+
+// ---- N50 snapshotStored / restoreStored (F15-07) ----
+
+// 가짜 저장소에 쓴 키를 순서대로 모으면서 fn을 실행한다
+async function recordSets(fn) {
+  const local = globalThis.chrome.storage.local;
+  const set = local.set;
+  const keys = [];
+  local.set = async (items) => {
+    keys.push(...Object.keys(items));
+    return set(items);
+  };
+  try {
+    await fn();
+  } finally {
+    local.set = set;
+  }
+  return keys;
+}
+
+test("snapshotStored: 고정 자리·연 시각·다시 안 볼 시각을 읽고, 저장소에 쓰지 않는다", async () => {
+  data = { pinned: ["1", "2", "3"], lastOpenedByUs: { 2: 111 }, dismissed: { 2: 222 } };
+  const before = structuredClone(data);
+  assert.deepEqual(await store.snapshotStored(2), { pinnedIndex: 1, lastOpened: 111, dismissedAt: 222 });
+  assert.deepEqual(data, before);
+});
+
+test("snapshotStored: 기록이 없으면 각각 null (저장된 것이 아예 없어도)", async () => {
+  assert.deepEqual(await store.snapshotStored("9"), { pinnedIndex: null, lastOpened: null, dismissedAt: null });
+  data = { pinned: ["1"], lastOpenedByUs: { 1: 5 } };
+  assert.deepEqual(await store.snapshotStored("9"), { pinnedIndex: null, lastOpened: null, dismissedAt: null });
+});
+
+test("snapshotStored: 앞서 시작한 쓰기(pin)가 끝난 뒤의 값을 읽는다", async () => {
+  data = { pinned: ["1", "2"] };
+  const pinning = store.pin("7");
+  const snapshot = await store.snapshotStored("7");
+  await pinning;
+  assert.equal(snapshot.pinnedIndex, 2);
+});
+
+test("restoreStored: 새 ID로 고정 같은 자리·연 시각·다시 안 볼 시각을 옮겨 적고 handledNew에 넣는다", async () => {
+  data = { pinned: ["1", "2", "3"], lastOpenedByUs: { 2: 111 }, dismissed: { 2: 222 }, handledNew: ["8"] };
+  const snapshot = await store.snapshotStored("2");
+  // 지운 뒤 cleanupMissing이 옛 ID를 지운 상태
+  await store.cleanupMissing(new Set(["1", "3", "8"]));
+  await store.restoreStored(1000, snapshot);
+  assert.deepEqual(data.pinned, ["1", "1000", "3"]);
+  assert.deepEqual(data.lastOpenedByUs, { 1000: 111 });
+  assert.deepEqual(data.dismissed, { 1000: 222 });
+  assert.deepEqual(data.handledNew, ["8", "1000"]);
+});
+
+test("restoreStored: 고정 자리가 목록 길이보다 크면 맨 뒤", async () => {
+  data = { pinned: ["1"] };
+  await store.restoreStored("1000", { pinnedIndex: 5, lastOpened: null, dismissedAt: null });
+  assert.deepEqual(data.pinned, ["1", "1000"]);
+});
+
+test("restoreStored: 고정이 이미 8개면 고정만 되살리지 않는다 (나머지는 옮겨 적음)", async () => {
+  const full = ["1", "2", "3", "4", "5", "6", "7", "8"];
+  data = { pinned: [...full] };
+  await store.restoreStored("1000", { pinnedIndex: 0, lastOpened: 111, dismissedAt: 222 });
+  assert.deepEqual(data.pinned, full);
+  assert.deepEqual(data.lastOpenedByUs, { 1000: 111 });
+  assert.deepEqual(data.dismissed, { 1000: 222 });
+  assert.deepEqual(data.handledNew, ["1000"]);
+});
+
+test("restoreStored: 고정하지 않았던 북마크는 고정하지 않고, 기록이 없는 키는 쓰지 않는다", async () => {
+  data = { pinned: ["1"] };
+  const keys = await recordSets(() => store.restoreStored("1000", { pinnedIndex: null, lastOpened: null, dismissedAt: null }));
+  assert.deepEqual(keys, ["handledNew"]);
+  assert.deepEqual(data.pinned, ["1"]);
+  assert.equal(Object.hasOwn(data, "lastOpenedByUs"), false);
+  assert.equal(Object.hasOwn(data, "dismissed"), false);
+});
+
+test("restoreStored: handledNew에는 새 ID가 한 번만 들어간다 (두 번 불러도)", async () => {
+  const snapshot = { pinnedIndex: 0, lastOpened: 111, dismissedAt: null };
+  await store.restoreStored("1000", snapshot);
+  await store.restoreStored(1000, snapshot);
+  assert.deepEqual(data.handledNew, ["1000"]);
+  assert.deepEqual(data.pinned, ["1000"]);
+});
+
+test("restoreStored: handledNew를 가장 먼저 쓰고, 그다음 pinned → lastOpenedByUs → dismissed", async () => {
+  data = { pinned: ["1"] };
+  const keys = await recordSets(() => store.restoreStored("1000", { pinnedIndex: 0, lastOpened: 111, dismissedAt: 222 }));
+  assert.deepEqual(keys, ["handledNew", "pinned", "lastOpenedByUs", "dismissed"]);
+});
+
+test("restoreStored: 서비스 워커에서 부르면 오류이고 아무것도 쓰지 않는다", async () => {
+  asWorker();
+  await assert.rejects(store.restoreStored("1000", { pinnedIndex: 0, lastOpened: 111, dismissedAt: 222 }), /새 탭만 쓴다/);
+  assert.deepEqual(data, {});
+});
+
+test("restoreStored: snapshot이 없거나 객체가 아니면 오류이고 아무것도 쓰지 않는다", async () => {
+  await assert.rejects(store.restoreStored("1000"));
+  await assert.rejects(store.restoreStored("1000", "snapshot"));
+  await assert.rejects(store.restoreStored("", { pinnedIndex: 0, lastOpened: null, dismissedAt: null }));
+  assert.deepEqual(data, {});
 });
