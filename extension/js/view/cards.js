@@ -560,7 +560,7 @@ function showNewOrganizeDialog(host, plan, actions) {
 
       const badge = document.createElement("span");
       badge.className = "badge-new";
-      badge.textContent = "새로";
+      badge.textContent = "new"; // 팀 합의로 영문 표시 (명세 F10-01의 "새로" 표시)
 
       const select = document.createElement("select");
       select.className = "organize-new__select";

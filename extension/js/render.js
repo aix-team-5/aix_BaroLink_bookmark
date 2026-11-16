@@ -451,7 +451,7 @@ function renderBookmarkTile(bookmark, isNew = false) {
   if (isNew) {
     const badge = document.createElement("span");
     badge.className = "badge-new bookmark__new";
-    badge.textContent = "새로";
+    badge.textContent = "new"; // 팀 합의로 영문 표시 (명세 F10-01의 "새로" 표시)
     button.appendChild(badge);
   }
   button.appendChild(appIcon(bookmark, 56));
