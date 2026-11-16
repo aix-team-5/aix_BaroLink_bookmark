@@ -226,7 +226,10 @@ function renderFolderCard(slot, plan, actions) {
 
   const desc = document.createElement("div");
   desc.className = "suggestion__desc";
-  desc.textContent = planSummary(plan);
+  // 자세히 보기에서 고친 계획이 있으면 그 요약을 보인다 (F06-04)
+  desc.textContent = planSummary(currentPlan(plan));
+  cardPlan = plan;
+  cardDesc = desc;
 
   const note = document.createElement("div");
   note.className = "suggestion__note";
@@ -250,7 +253,8 @@ function renderFolderCard(slot, plan, actions) {
     }),
     makeButton("정리하기", {
       variant: "btn--primary",
-      onClick: (event) => runApply(plan, actions, event.currentTarget, slot),
+      // 자세히 보기에서 고쳤으면 고친 계획으로 정리한다 (F06-04)
+      onClick: (event) => runApply(currentPlan(plan), actions, event.currentTarget, slot),
     }),
   );
 
@@ -319,33 +323,55 @@ export function showOrganizeDialog(plan, actions) {
   closeButton.addEventListener("click", () => dialog.close());
   header.append(headText, closeButton);
 
-  // 본문: 폴더별 근거 + 북마크 목록
+  // 본문: 폴더별 근거 + 북마크 목록. 폴더 빼기·이름 바꾸기·북마크별 폴더 바꾸기를 할 수 있다 (F06-04)
+  // 고친 내용은 계획과 화면의 개수만 바꾸고 크롬 북마크는 바꾸지 않는다. [정리하기]를 눌러야 옮긴다
+  const draft = draftOf(plan);
   const body = document.createElement("div");
   body.className = "dialog__body";
-  for (const folder of plan.folders) {
-    body.appendChild(renderFolderBlock(folder));
-  }
 
-  // "나머지 N개는 그대로" 안내
-  const rest = restCount(plan);
-  if (rest > 0) {
-    const restNote = document.createElement("div");
-    restNote.className = "organize__rest";
-    restNote.textContent = `나머지 ${rest}개는 애매하게 분류하지 않고 지금 위치에 그대로 둘게요.`;
-    body.appendChild(restNote);
-  }
+  // 고칠 때마다 본문을 다시 그린다 (열린 창은 그대로 둔다)
+  function redraw() {
+    body.replaceChildren();
+    const edited = buildPlan(draft);
 
-  // 바닥 버튼 (오른쪽 정렬)
-  const footer = document.createElement("div");
-  footer.className = "actions actions--end organize__footer";
-  footer.append(
-    makeButton("취소", { variant: "btn--ghost", onClick: () => dialog.close() }),
-    makeButton("정리하기", {
+    draft.folders.forEach((folder, index) => {
+      body.appendChild(renderEditableFolder(draft, index, { dialog, onChange: changed }));
+    });
+    // "폴더에 넣지 않기"로 뺀 북마크. 여기서 다시 폴더를 고를 수 있다
+    if (draft.none.length > 0) body.appendChild(renderNoneBlock(draft, changed));
+
+    // "나머지 N개는 그대로" 안내. 뺀 폴더와 "폴더에 넣지 않기"로 둔 북마크도 여기에 센다
+    if (edited.rest > 0) {
+      const restNote = document.createElement("div");
+      restNote.className = "organize__rest";
+      restNote.textContent = `나머지 ${edited.rest}개는 애매하게 분류하지 않고 지금 위치에 그대로 둘게요.`;
+      body.appendChild(restNote);
+    }
+
+    // 바닥 버튼 (오른쪽 정렬). 만들 폴더가 하나도 없으면 [정리하기]를 누를 수 없다
+    const footer = document.createElement("div");
+    footer.className = "actions actions--end organize__footer";
+    const applyButton = makeButton("정리하기", {
       variant: "btn--primary",
-      onClick: (event) => runApply(plan, actions, event.currentTarget, document.getElementById(SLOT_ID)),
-    }),
-  );
-  body.appendChild(footer);
+      onClick: (event) => runApply(buildPlan(draft), actions, event.currentTarget, document.getElementById(SLOT_ID)),
+    });
+    if (edited.folders.length === 0) {
+      applyButton.disabled = true;
+      const none = document.createElement("div");
+      none.className = "organize__rest";
+      none.textContent = "만들 폴더가 없어요. 뺀 폴더를 [다시 넣기]로 되살려 주세요.";
+      body.appendChild(none);
+    }
+    footer.append(makeButton("취소", { variant: "btn--ghost", onClick: () => dialog.close() }), applyButton);
+    body.appendChild(footer);
+  }
+
+  // 고친 뒤: 본문을 다시 그리고, 첫 정리 카드의 요약도 맞춘다 (카드는 이 파일의 칸이다)
+  function changed() {
+    redraw();
+    if (cardPlan === plan && cardDesc && cardDesc.isConnected) cardDesc.textContent = planSummary(buildPlan(draft));
+  }
+  redraw();
 
   panel.append(header, body);
   dialog.appendChild(panel);
@@ -360,26 +386,139 @@ export function showOrganizeDialog(plan, actions) {
   dialog.showModal();
 }
 
-// 폴더 하나의 블록: 폴더 이름 · 개수 · 분류 근거(F06-03) + 북마크 목록(제목 키워드엔 "확인 필요" F06-05)
-// reasons는 folder 안에 있고 folder.items와 같은 길이다 (명세 N20)
-function renderFolderBlock(folder) {
+// ----- 자세히 보기 편집 (F06-04) -----
+// 고친 계획은 원래 계획(plan 객체)별로 기억한다. 북마크가 바뀌어 render.js가 새 계획으로 카드를 다시 그리면 새 계획으로 시작한다
+// draft = { base, folders: [{ name, removed, entries: [{ bookmark, reason }] }], none: [{ bookmark, reason }] }
+//   removed: [폴더 빼기]로 뺀 폴더. 북마크는 나머지(그대로)로 센다. [다시 넣기]로 되살린다
+//   none: 북마크별로 "폴더에 넣지 않기"를 고른 북마크
+const drafts = new WeakMap();
+let cardPlan = null; // 지금 첫 정리 카드에 그린 계획
+let cardDesc = null; // 그 카드의 요약 줄 (자세히 보기에서 고치면 같이 바꾼다)
+const NONE = ""; // 북마크별 폴더 바꾸기의 "폴더에 넣지 않기" 값
+
+function draftOf(plan) {
+  if (!drafts.has(plan)) {
+    drafts.set(plan, {
+      base: plan,
+      folders: plan.folders.map((folder) => {
+        const reasons = Array.isArray(folder.reasons) ? folder.reasons : [];
+        return {
+          name: folder.name,
+          removed: false,
+          entries: folder.items.map((bookmark, index) => ({ bookmark, reason: reasons[index] })),
+        };
+      }),
+      none: [],
+    });
+  }
+  return drafts.get(plan);
+}
+
+// 고친 계획이 있으면 그 계획을, 없으면 원래 계획을 돌려준다
+function currentPlan(plan) {
+  return drafts.has(plan) ? buildPlan(drafts.get(plan)) : plan;
+}
+
+// 고친 내용으로 applyPlan에 넘길 계획을 만든다 (N20과 같은 모양 { type: "folders", folders: [{ name, items, reasons }], rest })
+// 뺀 폴더와 비어 버린 폴더는 넣지 않고, 그 북마크는 rest에 센다
+function buildPlan(draft) {
+  const folders = [];
+  let rest = restCount(draft.base) + draft.none.length;
+  for (const folder of draft.folders) {
+    if (folder.removed) {
+      rest += folder.entries.length;
+      continue;
+    }
+    if (folder.entries.length === 0) continue;
+    folders.push({
+      name: folder.name,
+      items: folder.entries.map((entry) => entry.bookmark),
+      reasons: folder.entries.map((entry) => entry.reason),
+    });
+  }
+  return { type: "folders", folders, rest };
+}
+
+// 폴더 이름이 쓸 수 있는지. 쓸 수 없으면 안내 문구를 돌려준다
+function checkFolderName(draft, index, name) {
+  if (name === "") return "폴더 이름을 입력해 주세요";
+  const key = name.toLowerCase();
+  const taken = draft.folders.some((folder, i) => i !== index && !folder.removed && folder.name.trim().toLowerCase() === key);
+  return taken ? "같은 이름의 폴더가 이미 계획에 있어요" : null;
+}
+
+// 폴더 하나의 블록: 이름(바꿀 수 있음) · 개수 · [폴더 빼기] · 분류 근거(F06-03) + 북마크 목록(제목 키워드엔 "확인 필요" F06-05)
+function renderEditableFolder(draft, index, { dialog, onChange }) {
+  const folder = draft.folders[index];
   const block = document.createElement("div");
-  block.className = "organize__folder surface";
+  block.className = folder.removed ? "organize__folder organize__folder--removed surface" : "organize__folder surface";
 
   const head = document.createElement("div");
   head.className = "organize__folder-head";
-  const name = document.createElement("div");
-  name.className = "folder__name organize__folder-name";
-  name.textContent = folder.name;
+
+  // 뺀 폴더는 이름과 [다시 넣기]만 보인다
+  if (folder.removed) {
+    const name = document.createElement("div");
+    name.className = "folder__name organize__folder-name";
+    name.textContent = folder.name;
+    const note = document.createElement("div");
+    note.className = "folder__count";
+    note.textContent = `만들지 않아요 · ${folder.entries.length}개는 그대로`;
+    const restore = makeButton("다시 넣기", {
+      variant: "btn--ghost",
+      onClick: () => {
+        // 다시 넣을 때 이름이 다른 폴더와 겹치면 되살리지 않는다
+        const problem = checkFolderName(draft, index, folder.name.trim());
+        if (problem) {
+          showToast(problem, { container: dialog });
+          return;
+        }
+        folder.removed = false;
+        onChange();
+      },
+    });
+    head.append(name, note, restore);
+    block.append(head);
+    return block;
+  }
+
+  // 폴더 이름 바꾸기: 입력을 마치면(change) 반영한다. 빈 이름이나 겹치는 이름이면 되돌리고 안내한다
+  const nameInput = document.createElement("input");
+  nameInput.type = "text";
+  nameInput.className = "folder__name organize__folder-name organize__name-input";
+  nameInput.value = folder.name;
+  nameInput.maxLength = 40;
+  nameInput.setAttribute("aria-label", `${folder.name} 폴더 이름`);
+  nameInput.addEventListener("change", () => {
+    const next = nameInput.value.trim();
+    const problem = checkFolderName(draft, index, next);
+    if (problem) {
+      showToast(problem, { container: dialog });
+      nameInput.value = folder.name;
+      return;
+    }
+    if (next === folder.name) return;
+    folder.name = next;
+    onChange();
+  });
+
   const count = document.createElement("div");
   count.className = "folder__count";
-  count.textContent = `${folder.items.length}개 이동`;
-  head.append(name, count);
+  count.textContent = `${folder.entries.length}개 이동`;
 
+  const removeButton = makeButton("폴더 빼기", {
+    variant: "btn--ghost",
+    ariaLabel: `${folder.name} 폴더 빼기`,
+    onClick: () => {
+      folder.removed = true;
+      onChange();
+    },
+  });
+  head.append(nameInput, count, removeButton);
   block.append(head);
 
   // F06-03: 폴더별 분류 근거 요약
-  const summary = folderReasonSummary(folder);
+  const summary = folderReasonSummary({ reasons: folder.entries.map((entry) => entry.reason) });
   if (summary) {
     const reasonLine = document.createElement("div");
     reasonLine.className = "organize__reason";
@@ -389,17 +528,76 @@ function renderFolderBlock(folder) {
 
   const list = document.createElement("div");
   list.className = "list";
-  const reasons = Array.isArray(folder.reasons) ? folder.reasons : [];
-  for (const [itemIndex, bookmark] of folder.items.entries()) {
-    list.appendChild(renderBookmarkRow(bookmark, reasons[itemIndex]));
+  if (folder.entries.length === 0) {
+    const empty = document.createElement("p");
+    empty.className = "empty-note";
+    empty.textContent = "이 폴더에 넣을 북마크가 없어서 만들지 않아요";
+    list.appendChild(empty);
+  }
+  for (const entry of folder.entries) {
+    list.appendChild(renderBookmarkRow(entry.bookmark, entry.reason, moveSelect(draft, index, entry, onChange)));
   }
   block.append(list);
 
   return block;
 }
 
-// 북마크 한 줄: 아이콘 + 제목/주소 (+ "확인 필요"). 제목·주소는 textContent로만 넣는다 (innerHTML 금지)
-function renderBookmarkRow(bookmark, reason) {
+// "폴더에 넣지 않기"로 뺀 북마크 묶음. 각 줄에서 다시 폴더를 고를 수 있다
+function renderNoneBlock(draft, onChange) {
+  const block = document.createElement("div");
+  block.className = "organize__folder organize__folder--removed surface";
+  const head = document.createElement("div");
+  head.className = "organize__folder-head";
+  const name = document.createElement("div");
+  name.className = "folder__name organize__folder-name";
+  name.textContent = "폴더에 넣지 않는 북마크";
+  const count = document.createElement("div");
+  count.className = "folder__count";
+  count.textContent = `${draft.none.length}개는 그대로`;
+  head.append(name, count);
+  const list = document.createElement("div");
+  list.className = "list";
+  for (const entry of draft.none) {
+    list.appendChild(renderBookmarkRow(entry.bookmark, entry.reason, moveSelect(draft, null, entry, onChange)));
+  }
+  block.append(head, list);
+  return block;
+}
+
+// 북마크별 폴더 바꾸기: 계획 안의 다른 폴더 또는 "폴더에 넣지 않기"로 옮긴다. 근거(reason)도 함께 옮긴다
+// fromIndex가 null이면 지금 "폴더에 넣지 않기"에 있는 북마크다
+function moveSelect(draft, fromIndex, entry, onChange) {
+  const select = document.createElement("select");
+  select.className = "organize-new__select organize__move";
+  select.setAttribute("aria-label", `${entry.bookmark.title || entry.bookmark.url || "북마크"}을 넣을 폴더`);
+  draft.folders.forEach((folder, index) => {
+    if (folder.removed) return;
+    const option = document.createElement("option");
+    option.value = String(index);
+    option.textContent = folder.name;
+    select.appendChild(option);
+  });
+  const none = document.createElement("option");
+  none.value = NONE;
+  none.textContent = "폴더에 넣지 않기";
+  select.appendChild(none);
+  select.value = fromIndex === null ? NONE : String(fromIndex);
+
+  select.addEventListener("change", () => {
+    if (select.value === (fromIndex === null ? NONE : String(fromIndex))) return;
+    const from = fromIndex === null ? draft.none : draft.folders[fromIndex].entries;
+    const at = from.indexOf(entry);
+    if (at < 0) return;
+    from.splice(at, 1);
+    if (select.value === NONE) draft.none.push(entry);
+    else draft.folders[Number(select.value)].entries.push(entry);
+    onChange();
+  });
+  return select;
+}
+
+// 북마크 한 줄: 아이콘 + 제목/주소 (+ "확인 필요") (+ 폴더 고르기). 제목·주소는 textContent로만 넣는다 (innerHTML 금지)
+function renderBookmarkRow(bookmark, reason, control) {
   const row = document.createElement("div");
   row.className = "list__row";
 
@@ -422,6 +620,8 @@ function renderBookmarkRow(bookmark, reason) {
     flag.textContent = "확인 필요";
     row.appendChild(flag);
   }
+
+  if (control) row.appendChild(control);
 
   return row;
 }

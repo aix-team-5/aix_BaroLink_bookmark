@@ -652,6 +652,33 @@ a {
   font-weight: var(--weight-bold);
 }
 
+/* 자세히 보기 편집 (F06-04): 폴더 이름 입력칸, [폴더 빼기]로 뺀 폴더, 북마크별 폴더 고르기 */
+.organize__name-input {
+  flex: 1 1 auto;
+  min-width: 0;
+  padding: var(--space-1) var(--space-2);
+  border: 1px solid transparent;
+  border-radius: var(--radius-sm);
+  background: transparent;
+  color: inherit;
+  font: inherit;
+  font-weight: var(--weight-bold);
+}
+
+.organize__name-input:hover,
+.organize__name-input:focus {
+  border-color: var(--color-divider);
+  background: var(--color-surface-strong);
+}
+
+.organize__folder--removed {
+  opacity: 0.7;
+}
+
+.organize__folder .list__row {
+  flex-wrap: wrap;
+}
+
 /* "나머지 N개는 그대로" 안내 */
 .organize__rest {
   margin-top: var(--space-4);
