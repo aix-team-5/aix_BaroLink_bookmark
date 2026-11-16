@@ -57,7 +57,8 @@ async function loadCategories() {
 const actions = {
   openFolder: (folderId) => openFolderPopup(folderId),
   showResultNotice: (entry) => showResultNotice(entry),
-  showContextMenu: (bookmark) => showContextMenu(bookmark),
+  // { x, y, container }를 그대로 넘긴다 (명세 v19 N30·N41). 잊고 있던 북마크 팝업 안의 우클릭은 container로 그 팝업을 준다 (F15-09)
+  showContextMenu: (bookmark, options) => showContextMenu(bookmark, options),
 };
 
 // 뼈대 확인용 문구를 지운다 (화면을 그리기 시작하면 필요 없다)
@@ -465,7 +466,8 @@ function renderBookmarkTile(bookmark, isNew = false) {
   button.addEventListener("click", () => openWithNotice(bookmark));
   button.addEventListener("contextmenu", (event) => {
     event.preventDefault();
-    showContextMenu(bookmark);
+    // 메뉴를 누른 자리에 띄운다 (N41 { x, y }). 모든 북마크는 팝업 밖이라 container는 넘기지 않는다 (document.body)
+    showContextMenu(bookmark, { x: event.clientX, y: event.clientY });
   });
   return button;
 }
