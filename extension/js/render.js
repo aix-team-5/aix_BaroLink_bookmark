@@ -183,8 +183,11 @@ function renderHeader(stored) {
   organizeBtn.addEventListener("click", () => {
     if (!lastTree || !categories) return;
     const now = Date.now();
-    // 정리가 진행 중이면 아무것도 하지 않는다
-    if (isOrganizing(currentStored(), now)) return;
+    // 정리가 진행 중이거나 막 끝났으면(pendingMoves 1분) 열지 않고 이유를 알린다. 눌러도 반응이 없으면 고장으로 보인다 (리뷰 반영)
+    if (isOrganizing(currentStored(), now)) {
+      showToast("정리하는 중이에요. 잠시 뒤에 다시 눌러 주세요");
+      return;
+    }
     // 첫 정리를 마친 뒤의 [정리하기 · N]은 새 북마크 정리 창을 연다 (F10-04)
     if (currentStored()?.state?.firstCard === "done") {
       openNewOrganize();
