@@ -281,7 +281,13 @@ async function runApply(plan, actions, triggerButton, slot) {
 // N31: 자세히 보기와 [정리하기] 창
 export function showOrganizeDialog(plan, actions) {
   const host = document.getElementById(DIALOG_HOST_ID);
-  if (!host || !plan || plan.type !== "folders") return;
+  if (!host || !plan) return;
+  // 새 북마크 정리 창 (F10, 명세 v20): 같은 함수를 다시 쓰고 plan.type "new"로 나눈다
+  if (plan.type === "new") {
+    showNewOrganizeDialog(host, plan, actions);
+    return;
+  }
+  if (plan.type !== "folders") return;
 
   // 이미 열려 있으면 다시 만들지 않는다 (멱등)
   const existing = document.getElementById(ORGANIZE_DIALOG_ID);
@@ -418,6 +424,244 @@ function renderBookmarkRow(bookmark, reason) {
   }
 
   return row;
+}
+
+// ----- 새 북마크 정리 창 (F10-04·05·06·07) -----
+// plan = { type: "new", items: [{ bookmark, folderId }], folders: [{ id, title }], newFolders: [{ name, items }] } (file-structure.md 12번, 명세 v20)
+// - items: 새 북마크와 추천 폴더. folderId가 null이면 '그대로 두기'가 기본이다 (F10-07)
+// - folders: 고를 수 있는 기존 폴더 (loadTree의 폴더 항목). 관리자 폴더는 옮길 수 없어 목록에서 뺀다
+// - newFolders: "폴더로 만들까요?" 제안 (F10-06). 받아들이면 그 폴더를 새로 만들고, 제안에 든 북마크를 넣는다
+// [정리하기]는 applyPlan({ folders: [{ folderId 또는 name, items }], keep }, "new")를 부른다 (N22)
+const NEW_DIALOG_ID = "dialog-organize-new";
+const KEEP = ""; // '그대로 두기'의 값
+
+function showNewOrganizeDialog(host, plan, actions) {
+  const items = (Array.isArray(plan.items) ? plan.items : []).filter((item) => item && item.bookmark && item.bookmark.id != null);
+  const folders = (Array.isArray(plan.folders) ? plan.folders : []).filter(
+    (folder) => folder && folder.id != null && folder.rootType !== "managed",
+  );
+  const folderIds = new Set(folders.map((folder) => String(folder.id)));
+  const suggestions = (Array.isArray(plan.newFolders) ? plan.newFolders : []).filter(
+    (suggestion) => suggestion && typeof suggestion.name === "string" && suggestion.name.trim() && Array.isArray(suggestion.items),
+  );
+
+  // 이미 열려 있으면 새로 만든다 (멱등)
+  document.getElementById(NEW_DIALOG_ID)?.remove();
+
+  const dialog = document.createElement("dialog");
+  dialog.className = "dialog";
+  dialog.id = NEW_DIALOG_ID;
+
+  const panel = document.createElement("div");
+  panel.className = "dialog__panel";
+
+  // 머리말
+  const header = document.createElement("div");
+  header.className = "dialog__header";
+  const headText = document.createElement("div");
+  const title = document.createElement("div");
+  title.className = "dialog__title";
+  const titleLogo = document.createElement("span");
+  titleLogo.className = "brand__logo brand__logo--soft";
+  titleLogo.appendChild(icon("sparkles", 16));
+  title.append(titleLogo, document.createTextNode("새 북마크 정리"));
+  const subtitle = document.createElement("div");
+  subtitle.className = "dialog__subtitle";
+  subtitle.textContent = "추천 폴더를 확인하고 필요한 항목만 바꿔 주세요.";
+  headText.append(title, subtitle);
+  const closeButton = makeButton("", { variant: "btn--icon", ariaLabel: "창 닫기" });
+  closeButton.appendChild(icon("close", 20));
+  closeButton.addEventListener("click", () => dialog.close());
+  header.append(headText, closeButton);
+
+  const body = document.createElement("div");
+  body.className = "dialog__body";
+
+  // 새 북마크마다 고른 목적지. 값: "" (그대로 두기) | "f:<폴더 ID>" (기존 폴더) | "n:<이름>" (새 폴더)
+  const defaults = new Map();
+  const choice = new Map();
+  for (const { bookmark, folderId } of items) {
+    const id = String(bookmark.id);
+    // 추천 폴더가 없거나 고를 수 없는 폴더면 '그대로 두기' (F10-07)
+    const value = folderId != null && folderIds.has(String(folderId)) ? `f:${folderId}` : KEEP;
+    defaults.set(id, value);
+    choice.set(id, value);
+  }
+  const accepted = new Set(); // 받아들인 새 폴더 제안의 이름
+  const selects = new Map(); // 북마크 ID → <select>
+
+  if (items.length === 0) {
+    const none = document.createElement("p");
+    none.className = "empty-note";
+    none.textContent = "새로 정리할 북마크가 없어요";
+    body.appendChild(none);
+  } else {
+    // F10-06: "폴더로 만들까요?" 제안. 누르면 받아들이고, 다시 누르면 취소한다
+    if (suggestions.length > 0) {
+      const suggestBox = document.createElement("div");
+      suggestBox.className = "organize-new__suggest";
+      for (const suggestion of suggestions) {
+        const name = suggestion.name.trim();
+        const memberIds = suggestion.items.map((item) => String(item && typeof item === "object" ? item.id : item));
+        const toggle = document.createElement("button");
+        toggle.type = "button";
+        toggle.className = "list__row organize-new__suggest-row";
+        toggle.setAttribute("aria-pressed", "false");
+        const folderIcon = icon("folder", 18);
+        const text = document.createElement("div");
+        text.className = "list__text";
+        const line = document.createElement("span");
+        line.className = "title";
+        line.textContent = `"${name}" 폴더로 만들까요?`;
+        const meta = document.createElement("span");
+        meta.className = "meta";
+        meta.textContent = `같은 종류의 북마크 ${memberIds.length}개를 새 폴더에 모아요`;
+        text.append(line, meta);
+        const check = document.createElement("span");
+        check.className = "picker__check";
+        check.appendChild(icon("check", 18));
+        toggle.append(folderIcon, text, check);
+        toggle.addEventListener("click", () => {
+          const on = !accepted.has(name);
+          if (on) accepted.add(name);
+          else accepted.delete(name);
+          toggle.setAttribute("aria-pressed", String(on));
+          // 제안에 든 새 북마크는 받아들이면 그 새 폴더로, 취소하면 원래 기본값으로 돌린다
+          for (const id of memberIds) {
+            if (!choice.has(id)) continue;
+            if (on) choice.set(id, `n:${name}`);
+            else if (choice.get(id) === `n:${name}`) choice.set(id, defaults.get(id));
+          }
+          refreshSelects();
+        });
+        suggestBox.appendChild(toggle);
+      }
+      body.appendChild(suggestBox);
+    }
+
+    // F10-04: 새 북마크 목록. 추천 폴더가 미리 골라져 있다
+    const list = document.createElement("div");
+    list.className = "list";
+    for (const { bookmark } of items) {
+      const id = String(bookmark.id);
+      const row = document.createElement("div");
+      row.className = "list__row organize-new__row";
+      row.appendChild(appIcon(bookmark, 44));
+
+      const text = document.createElement("div");
+      text.className = "list__text";
+      const rowTitle = document.createElement("span");
+      rowTitle.className = "title";
+      rowTitle.textContent = bookmark.title || bookmark.url || "";
+      const meta = document.createElement("span");
+      meta.className = "meta";
+      meta.textContent = bookmark.url || "";
+      text.append(rowTitle, meta);
+
+      const badge = document.createElement("span");
+      badge.className = "badge-new";
+      badge.textContent = "새로";
+
+      const select = document.createElement("select");
+      select.className = "organize-new__select";
+      select.setAttribute("aria-label", `${bookmark.title || bookmark.url || "북마크"}을 넣을 폴더`);
+      select.addEventListener("change", () => choice.set(id, select.value));
+      selects.set(id, select);
+
+      row.append(text, badge, select);
+      list.appendChild(row);
+    }
+    body.appendChild(list);
+  }
+
+  // 고를 수 있는 목적지: 그대로 두기 → 받아들인 새 폴더 → 기존 폴더
+  function refreshSelects() {
+    for (const [id, select] of selects) {
+      const options = [{ value: KEEP, label: "그대로 두기" }];
+      for (const name of accepted) options.push({ value: `n:${name}`, label: `새 폴더: ${name}` });
+      for (const folder of folders) options.push({ value: `f:${folder.id}`, label: folder.title || "(이름 없음)" });
+      select.replaceChildren(
+        ...options.map(({ value, label }) => {
+          const option = document.createElement("option");
+          option.value = value;
+          option.textContent = label;
+          return option;
+        }),
+      );
+      // 고른 값이 목록에 없으면(받아들인 제안을 취소한 경우 등) 기본값으로 돌린다
+      if (!options.some((option) => option.value === choice.get(id))) choice.set(id, defaults.get(id));
+      select.value = choice.get(id);
+    }
+  }
+  refreshSelects();
+
+  // 바닥 버튼 (오른쪽 정렬). 정리할 새 북마크가 없으면 [정리하기]를 두지 않는다
+  const footer = document.createElement("div");
+  footer.className = "actions actions--end organize__footer";
+  footer.appendChild(makeButton("취소", { variant: "btn--ghost", onClick: () => dialog.close() }));
+  if (items.length > 0) {
+    footer.appendChild(
+      makeButton("정리하기", {
+        variant: "btn--primary",
+        onClick: (event) => runApplyNew(buildNewPlan(), actions, event.currentTarget, dialog),
+      }),
+    );
+  }
+  body.appendChild(footer);
+
+  // [정리하기]에 넘길 계획을 만든다
+  // - 새 북마크는 각자 고른 목적지로. '그대로 두기'는 keep에 넣는다
+  // - 받아들인 새 폴더 제안에 든, 새 북마크가 아닌 북마크(폴더 밖에 있던 같은 종류)도 그 새 폴더로 옮긴다 (F10-06)
+  function buildNewPlan() {
+    const groups = new Map();
+    const keep = [];
+    const add = (key, target, id) => {
+      if (!groups.has(key)) groups.set(key, { ...target, items: [] });
+      groups.get(key).items.push(id);
+    };
+    for (const [id, value] of choice) {
+      if (value === KEEP) keep.push(id);
+      else if (value.startsWith("f:")) add(value, { folderId: value.slice(2) }, id);
+      else if (value.startsWith("n:")) add(value, { name: value.slice(2) }, id);
+    }
+    for (const suggestion of suggestions) {
+      const name = suggestion.name.trim();
+      if (!accepted.has(name)) continue;
+      for (const item of suggestion.items) {
+        const id = String(item && typeof item === "object" ? item.id : item);
+        if (choice.has(id)) continue; // 새 북마크는 위에서 고른 목적지를 따른다
+        add(`n:${name}`, { name }, id);
+      }
+    }
+    return { folders: [...groups.values()], keep };
+  }
+
+  panel.append(header, body);
+  dialog.appendChild(panel);
+  // 바깥(backdrop) 클릭으로 닫기
+  dialog.addEventListener("click", (event) => {
+    if (event.target === dialog) dialog.close();
+  });
+  // 닫히면 DOM에서 치운다
+  dialog.addEventListener("close", () => dialog.remove());
+
+  host.appendChild(dialog);
+  dialog.showModal();
+}
+
+// [정리하기] (F10-05): 한 번에 옮기고, 결과 안내는 render.js가 넘겨 준 동작으로 띄운다
+// 모두 '그대로 두기'여서 기록이 남지 않아도 같은 모양의 결과가 오고, 안내 문구("새 북마크를 그대로 뒀어요")는 history.js가 정한다
+async function runApplyNew(newPlan, actions, triggerButton, dialog) {
+  if (triggerButton) triggerButton.disabled = true;
+  try {
+    const entry = await applyPlan(newPlan, "new");
+    if (dialog.open) dialog.close();
+    if (actions && typeof actions.showResultNotice === "function") actions.showResultNotice(entry);
+  } catch (error) {
+    console.error("새 북마크를 정리하지 못했어요", error);
+    showToast("정리하지 못했어요", { container: dialog.open ? dialog : null });
+    if (triggerButton) triggerButton.disabled = false;
+  }
 }
 
 // N31: 고정할 북마크 고르기 창 (F09-05·06, F08-06)

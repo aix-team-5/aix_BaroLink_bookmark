@@ -8,14 +8,15 @@
 
 import { loadTree, openBookmark } from "./bookmarks.js";
 import { load, cleanupMissing, unpin } from "./store.js";
-import { getTargets, makePlan } from "./plan.js";
+import { getTargets, makePlan, suggestNewFolders } from "./plan.js";
+import { suggestForNew } from "./classify.js";
 import { pickForgotten } from "./forgotten.js";
 import { appIcon, icon, showToast } from "./ui.js";
 import { runWebSearch, searchBookmarks } from "./search.js";
 import { showFolders, openFolderPopup, showContextMenu } from "./view/folders.js";
 import { showForgotten } from "./view/forgottenFolder.js";
 import { showResultNotice, showHistory } from "./view/history.js";
-import { showFirstCard, showPinPicker } from "./view/cards.js";
+import { showFirstCard, showOrganizeDialog, showPinPicker } from "./view/cards.js";
 
 // 고정됨(독)에 넣을 수 있는 최대 개수. store.js의 MAX_PINNED와 같다 (F08-06)
 const DOCK_MAX = 8;
@@ -163,8 +164,8 @@ function renderHeader(stored) {
     document.getElementById("all-bookmarks")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
 
-  // [정리하기 · N] — 정리 안 된 새 북마크 수
-  const newCount = Array.isArray(stored?.newBookmarks) ? stored.newBookmarks.length : 0;
+  // [정리하기 · N] — 정리 안 된 새 북마크 수 (F10-02). '그대로 두기'로 둔 것은 빼고 센다 (F10-05)
+  const newCount = newBookmarkIds(lastTree?.bookmarks ?? [], stored).size;
   const organizeBtn = document.createElement("button");
   organizeBtn.type = "button";
   organizeBtn.className = "btn";
@@ -182,8 +183,16 @@ function renderHeader(stored) {
   organizeBtn.addEventListener("click", () => {
     if (!lastTree || !categories) return;
     const now = Date.now();
-    // 첫 정리를 이미 했거나(done) 정리가 진행 중이면 P1에서는 아무것도 하지 않는다. 정리 뒤의 [정리하기]는 F10(P2)이다
-    if (currentStored()?.state?.firstCard === "done" || isOrganizing(currentStored(), now)) return;
+    // 정리가 진행 중이거나 막 끝났으면(pendingMoves 1분) 열지 않고 이유를 알린다. 눌러도 반응이 없으면 고장으로 보인다 (리뷰 반영)
+    if (isOrganizing(currentStored(), now)) {
+      showToast("정리하는 중이에요. 잠시 뒤에 다시 눌러 주세요");
+      return;
+    }
+    // 첫 정리를 마친 뒤의 [정리하기 · N]은 새 북마크 정리 창을 연다 (F10-04)
+    if (currentStored()?.state?.firstCard === "done") {
+      openNewOrganize();
+      return;
+    }
     const targets = safeCall(() => getTargets(lastTree, currentStored(), {}, now), []);
     const plan = safeCall(() => makePlan(targets, categories), null);
     if (!plan) return;
@@ -216,6 +225,40 @@ function makeHeaderButton(text, iconName, extraClass, onClick) {
 let lastStored = null;
 function currentStored() {
   return lastStored ?? {};
+}
+
+// "새로"로 보이는 북마크 ID = newBookmarks에서 handledNew('그대로 두기')를 뺀 것 (data-structure.txt 10번)
+// 크롬에서 이미 지워진 북마크는 세지 않는다
+function newBookmarkIds(bookmarks, stored) {
+  const handled = new Set((Array.isArray(stored?.handledNew) ? stored.handledNew : []).map(String));
+  const alive = new Set(bookmarks.map((bookmark) => String(bookmark.id)));
+  const ids = new Set();
+  for (const id of Array.isArray(stored?.newBookmarks) ? stored.newBookmarks : []) {
+    const key = String(id);
+    if (alive.has(key) && !handled.has(key)) ids.add(key);
+  }
+  return ids;
+}
+
+// 새 북마크 정리 창을 연다 (F10-04). 창에 넘기는 값은 file-structure.md 12번(명세 v20)의 형태다
+function openNewOrganize() {
+  const stored = currentStored();
+  const ids = newBookmarkIds(lastTree.bookmarks, stored);
+  if (ids.size === 0) {
+    // 정리할 새 북마크가 없을 때의 안내 (P2 계획 D5 제안 문구)
+    showToast("정리할 새 북마크가 없어요");
+    return;
+  }
+  const newBookmarks = lastTree.bookmarks.filter((bookmark) => ids.has(String(bookmark.id)));
+  const suggestions = safeCall(() => suggestForNew(newBookmarks, lastTree.folders, categories), []);
+  const folderOf = new Map(suggestions.map((suggestion) => [String(suggestion.bookmarkId), suggestion.folderId ?? null]));
+  const plan = {
+    type: "new",
+    items: newBookmarks.map((bookmark) => ({ bookmark, folderId: folderOf.get(String(bookmark.id)) ?? null })),
+    folders: lastTree.folders,
+    newFolders: safeCall(() => suggestNewFolders(lastTree, stored, categories), []),
+  };
+  showOrganizeDialog(plan, actions);
 }
 
 // ----- #web-search -----
@@ -275,8 +318,10 @@ function renderAllBookmarks(bookmarks, stored) {
 
   const grid = section.querySelector(".bookmark-grid");
   grid.replaceChildren();
+  // 새로 저장된 북마크에는 "새로" 표시를 붙인다 (F10-01). 정리하거나 '그대로 두기'로 두면 빠진다 (F10-05)
+  const newIds = newBookmarkIds(bookmarks, stored);
   for (const bookmark of bookmarks) {
-    grid.appendChild(renderBookmarkTile(bookmark));
+    grid.appendChild(renderBookmarkTile(bookmark, newIds.has(String(bookmark.id))));
   }
 
   // 결과 리스트는 다시 그린 북마크 목록으로 새로 찾는다 (검색 중에 북마크가 바뀌어도 맞게)
@@ -399,10 +444,16 @@ async function openWithNotice(bookmark) {
   if (opened === false) showToast("이 북마크는 새 탭에서 실행할 수 없어요");
 }
 
-function renderBookmarkTile(bookmark) {
+function renderBookmarkTile(bookmark, isNew = false) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "bookmark";
+  if (isNew) {
+    const badge = document.createElement("span");
+    badge.className = "badge-new bookmark__new";
+    badge.textContent = "새로";
+    button.appendChild(badge);
+  }
   button.appendChild(appIcon(bookmark, 56));
   const name = document.createElement("span");
   name.className = "bookmark__name";
