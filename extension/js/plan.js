@@ -195,6 +195,51 @@ export function pickPinCandidates(bookmarks, topSites, stored) {
 }
 
 // N37: 폴더 밖에 같은 카테고리가 3개 이상 모이면 새 폴더를 제안. 출력: [{ name, items }]
+// 명세 v19 F10-06: 우리가 만든 폴더(history의 createdFolderIds 중 남아 있는 것)와 합쳐 상한을 넘지 않게 제안한다
 export function suggestNewFolders(tree, stored, categories) {
-  return [];
+  const t = tree || {};
+  const folders = t.folders || [];
+  const bookmarks = t.bookmarks || [];
+
+  // ① 폴더 밖 정리 대상
+  // 명세에 없어 정함: 첫 정리와 같은 범위(기본 options). N37에는 now 입력이 없어 북마크바 최근 30일 보호는 하지 않는다
+  const targets = getTargets(t, stored, {});
+
+  // ② 우리가 만든 폴더: 모든 기록의 createdFolderIds 중 트리에 아직 있는 것. undoneAt은 보지 않는다
+  const folderIds = new Set(folders.map((f) => String(f.id)));
+  const ours = new Set();
+  for (const entry of (stored && stored.history) || []) {
+    for (const id of (entry && entry.createdFolderIds) || []) {
+      if (folderIds.has(String(id))) ours.add(String(id));
+    }
+  }
+
+  // ③ 상한
+  // F10-06 비고: 폴더 밖 정리 대상 + 우리 폴더 안 북마크의 수로 상한을 정한다. 우리 폴더 바로 아래만 센다(명세에 없어 정함)
+  const counted = new Set(targets.map((b) => String(b.id)));
+  for (const b of bookmarks) {
+    if (ours.has(String(b.parentId))) counted.add(String(b.id));
+  }
+  const room = folderLimit(counted.size) - ours.size;
+  if (room <= 0) return [];
+
+  // ④ 같은 이름의 폴더가 이미 있는 카테고리는 제안하지 않는다
+  // classify.js suggestForNew(N24)와 같은 기준: 관리자 폴더는 빼고 이름으로 찾는다. 기준이 다르면 추천도 제안도 못 받는 북마크가 생긴다
+  const taken = new Set(folders.filter((f) => f.rootType !== "managed").map((f) => f.title));
+
+  // ⑤ 묶기와 정렬은 makePlan과 같은 규칙이다 (null·"기타" 제외, 3개 이상, 개수가 많은 순 → 분류표 순서)
+  const groups = new Map();
+  for (const b of targets) {
+    const { category } = classify(b, categories);
+    if (category === null || category === "기타" || taken.has(category)) continue;
+    if (!groups.has(category)) groups.set(category, []);
+    groups.get(category).push(b);
+  }
+  const order = new Map(categories.categories.map((c, i) => [c.name, i]));
+  const candidates = [...groups.entries()]
+    .filter(([, items]) => items.length >= 3)
+    .sort((a, b) => b[1].length - a[1].length || order.get(a[0]) - order.get(b[0]));
+
+  // ⑥ 남은 칸 수까지만. items는 tree.bookmarks의 객체 그대로, targets 순서
+  return candidates.slice(0, room).map(([name, items]) => ({ name, items }));
 }

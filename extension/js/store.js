@@ -323,7 +323,15 @@ export async function setFirstCard(value) {
 }
 
 // N39: '그대로 두기'로 둔 새 북마크를 기록 (handledNew). 새 탭만 호출
-export async function markHandledNew(ids) {}
+// 이미 있는 ID는 다시 넣지 않는다. 새로 넣을 ID가 없으면 저장하지 않는다
+export async function markHandledNew(ids) {
+  const list = toIdList(ids);
+  if (list.length === 0) return;
+  await update("handledNew", (handled) => {
+    const added = [...new Set(list)].filter((id) => !handled.includes(id));
+    return added.length === 0 ? undefined : [...handled, ...added];
+  });
+}
 
 // N40: 새 북마크 목록에 추가 · 제거, 삭제된 ID 정리 (newBookmarks, manualMoves). 서비스 워커만 호출
 export async function addNew(id) {

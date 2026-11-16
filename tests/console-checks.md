@@ -1704,11 +1704,11 @@ await (async () => {
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N37 suggestNewFolders: 새 폴더 제안 · P2
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+- 구현 상태: 구현됨 (feat/F10-new-folders) · 코드와 대조함
 - 파일·담당: plan.js · 팀원 C
 - 관련 요구사항: F10-06
-- 안전 등급: 읽기만 (상한 확인에서 임시 폴더 하나를 만들었다 지운다)
-- 사전 조건: `sample-100`, 2장 실행. 사전 조건으로 C-N19, C-N20이 통과해야 한다.
+- 안전 등급: ⚠ 크롬 북마크를 바꿈 (임시 폴더 3개를 만들었다 지운다)
+- 사전 조건: `sample-100`, 2장 실행. 사전 조건으로 C-N19, C-N20이 통과해야 한다. 짝 확인(N24)은 PR #54가 합쳐진 뒤에만 돌고, 그 전에는 📝 기록으로 건너뛴다.
 - 붙여 넣을 코드:
   ```js
   // C-N37
@@ -1716,25 +1716,64 @@ await (async () => {
     T.begin("C-N37");
     const c = await T.cats();
     const names = c.categories.map((x) => x.name);
+    const empty = T.emptyStored();
+    const pairs = (list) => (list || []).map((x) => [x.name, x.items?.length]);
+    const hist = (ids) => ({ ...empty, history: [{ id: "검증-h", at: Date.now(), type: "first", createdFolderIds: ids, moves: [], fromOrder: {}, skipped: 0 }] });
     const tree = await T.tree();
-    const r = T.plan.suggestNewFolders(tree, T.emptyStored(), c) || [];
+    const r = T.plan.suggestNewFolders(tree, empty, c) || [];
+    T.record("제안 (이름, 개수)", pairs(r));
     T.expect("F10-06 우리 폴더가 없고 폴더 밖에 같은 카테고리가 3개 이상이면 제안한다", r.length > 0, r);
-    T.expect("제안마다 북마크 3개 이상", r.every((x) => x.items?.length >= 3), r.map((x) => [x.name, x.items?.length]));
+    T.expect("출력은 [{ name, items }]", r.every((x) => T.same(Object.keys(x).sort(), ["items", "name"])), r);
+    T.expect("제안마다 북마크 3개 이상", r.every((x) => x.items?.length >= 3), pairs(r));
     T.expect("제안 이름은 카테고리 이름이고 \"기타\"가 없다", r.every((x) => names.includes(x.name) && x.name !== "기타"), r.map((x) => x.name));
+    // 폴더 밖 = 북마크바·기타·모바일 바로 아래, 또는 그 바로 아래 "가져온 북마크" 폴더의 바로 아래
+    const rootIds = Object.values(tree.roots).filter(Boolean).map((x) => x.id);
+    const outside = new Set([...rootIds, ...tree.folders.filter((f) => rootIds.includes(f.parentId) && f.title === "가져온 북마크").map((f) => f.id)]);
+    T.expect("제안의 북마크는 모두 폴더 밖 (사용자 폴더 안의 것 없음)", r.every((x) => x.items.every((b) => outside.has(b.parentId))), r.map((x) => x.items.map((b) => b.parentId)));
+    const plan = T.plan.makePlan(T.plan.getTargets(tree, empty, {}, Date.now()), c);
+    T.expect("sample-100: 첫 정리 계획(makePlan)과 폴더·개수가 같다 (학교 12 · 영상 12 · 블로그·글 10 · 개발 10 · 온라인 강의 9)", plan.type === "folders" && T.same(pairs(r), pairs(plan.folders)), { 제안: pairs(r), 계획: pairs(plan.folders) });
     T.expect("정리 대상 90개면 상한 5개를 넘지 않는다", r.length <= 5, r.length);
-    const existing = new Set((tree?.folders || []).map((f) => f.title));
-    T.expect("같은 이름의 폴더가 이미 있으면 제안하지 않는다", r.every((x) => !existing.has(x.name)), r.map((x) => x.name));
-    // 우리가 만든 폴더(history.createdFolderIds 중 남아 있는 것)가 상한(5개)에 찼으면 빈 배열
-    const tmp = await T.mkFolder("상한 확인용");
-    const ours = [...["졸업프로젝트", "알바·취준", "자취템", "가져온 북마크"].map((n) => tree?.folders?.find((f) => f.title === n)?.id), tmp.id].filter(Boolean);
-    const stored = { ...T.emptyStored(), history: [{ id: "검증-h", at: Date.now(), type: "first", createdFolderIds: ours, moves: [], fromOrder: {}, skipped: 0 }] };
-    const full = T.plan.suggestNewFolders(await T.tree(), stored, c);
-    T.expect("상한에 찼으면 빈 배열", ours.length === 5 && T.same(full, []), { ours: ours.length, full });
-    await chrome.bookmarks.remove(tmp.id);
+    const taken = new Set(tree.folders.filter((f) => f.rootType !== "managed").map((f) => f.title));
+    T.expect("같은 이름의 폴더(관리자 폴더 제외)가 이미 있으면 제안하지 않는다", r.every((x) => !taken.has(x.name)), r.map((x) => x.name));
+    const made = [];
+    try {
+      // ① 제안 1번과 같은 이름의 폴더를 만들면 그 제안은 빠지고, 추천(N24)이 그 폴더를 고른다
+      const first = r[0];
+      if (first) {
+        const same = await chrome.bookmarks.create({ parentId: (await T.bar()).id, title: first.name });
+        made.push(same.id);
+        const t2 = await T.tree();
+        const r2 = T.plan.suggestNewFolders(t2, empty, c) || [];
+        T.expect(`"${first.name}" 폴더를 만들면 "${first.name}" 제안이 빠진다`, !r2.some((x) => x.name === first.name), r2.map((x) => x.name));
+        const n24 = T.classify.suggestForNew(first.items, t2.folders, c) || [];
+        if (n24.length === 0) T.record("N24 suggestForNew가 아직 뼈대(main에 PR #54가 안 합쳐짐)라 짝 확인은 건너뜀", n24);
+        else T.expect(`짝 확인: N24는 "${first.name}" 북마크들을 방금 만든 폴더로 추천한다 (추천도 제안도 못 받는 북마크가 없다)`, n24.every((x) => x.folderId === same.id), n24);
+        await chrome.bookmarks.remove(same.id);
+        made.splice(made.indexOf(same.id), 1);
+      }
+      // ② 남은 칸: 빈 임시 폴더 2개를 우리가 만든 폴더로 → 상한 5 - 2 = 3개까지만
+      const a = await T.mkFolder("상한 확인용 1");
+      made.push(a.id);
+      const b = await T.mkFolder("상한 확인용 2");
+      made.push(b.id);
+      const t3 = await T.tree();
+      const r3 = T.plan.suggestNewFolders(t3, hist([a.id, b.id]), c) || [];
+      T.expect("우리 폴더 2개면 남은 칸 3개까지만, 많은 것부터", T.same(r3.map((x) => x.name), r.slice(0, 3).map((x) => x.name)), r3.map((x) => x.name));
+      // ③ history에 있어도 지워진 폴더는 세지 않는다
+      const gone = [1, 2, 3, 4, 5, 6].map((n) => `검증-지워진-폴더-${n}`);
+      const r4 = T.plan.suggestNewFolders(t3, hist(gone), c) || [];
+      T.expect("createdFolderIds 중 지워진 폴더는 세지 않는다", T.same(r4.map((x) => x.name), r.map((x) => x.name)), r4.map((x) => x.name));
+      // ④ 상한에 참: 샘플 폴더 4개 + 임시 폴더 2개 = 6개 (가장 큰 상한) → 빈 배열
+      const sampleIds = ["졸업프로젝트", "알바·취준", "자취템", "가져온 북마크"].map((n) => t3.folders.find((f) => f.title === n)?.id).filter(Boolean);
+      const full = T.plan.suggestNewFolders(t3, hist([...sampleIds, a.id, b.id]), c);
+      T.expect("우리 폴더가 상한(6개)에 찼으면 빈 배열", sampleIds.length === 4 && T.same(full, []), { 우리폴더: sampleIds.length + 2, full });
+    } finally {
+      for (const id of made) await chrome.bookmarks.remove(id).catch(() => {});
+    }
   })();
   ```
 - 기대 결과: 폴더 밖에 같은 카테고리가 3개 이상 모였고, 우리가 만든 폴더 수(`history`의 `createdFolderIds` 중 남아 있는 것)가 상한보다 적을 때만 `[{ name, items }]`로 제안한다. 같은 이름의 폴더가 이미 있으면 제안하지 않고, 상한에 찼으면 빈 배열이다. (N37, F10-06)
-- 판단: 상한은 "폴더 밖 정리 대상 + 우리 폴더 안 북마크"의 수로 정한다(F10-06 비고). 샘플 폴더를 우리가 만든 폴더로 꾸며 넣었으므로, 그 안의 북마크 수가 상한 계산에 더해져도 90 + 10 = 100개로 상한이 6개가 될 수 있다. 이때 이 줄이 실패하면 담당과 상한 계산을 함께 본다.
+- 판단: 상한은 "폴더 밖 정리 대상 + 우리 폴더 바로 아래 북마크"의 수로 정한다(F10-06 비고). 상한 확인은 샘플 폴더 4개 + 임시 폴더 2개 = 6개(가장 큰 상한)로 꾸며서 대상 수와 상관없이 빈 배열이 나와야 한다. 같은 이름 폴더는 N24 suggestForNew와 같은 기준(관리자 폴더 제외)이다. N37에는 now 입력이 없어 북마크바 최근 30일 보호를 하지 않는다.
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N38 setFirstCard: 첫 정리 카드 상태 · P1
@@ -2192,7 +2231,7 @@ export는 모두 있지만(자동 검사가 확인한다), 몸체가 비어 있�
 | N34 | onRemoved 처리 | P1 | 뼈대 | | | #6 |
 | N35 | suggestSubfolders | P3 | 뼈대 | | | #12 |
 | N36 | initDnd | P3 | 뼈대 | | | #19 |
-| N37 | suggestNewFolders | P2 | 뼈대 | | | #11 |
+| N37 | suggestNewFolders | P2 | 구현됨 | | | #11 |
 | N38 | setFirstCard | P1 | 뼈대 | | | #3 |
 | N39 | markHandledNew | P2 | 뼈대 | | | #3 |
 | N40 | addNew / removeNew / purgeWorkerKeys | P1·P2 | 뼈대 | | | #3 |
