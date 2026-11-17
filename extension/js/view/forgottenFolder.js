@@ -1,6 +1,6 @@
 // 담당: 팀원 B · 이슈 #9 · 명세: N42 (F04)
 // 화면 파일끼리는 서로 부르지 않는다 (공통 조각은 ui.js). 크롬은 bookmarks.js와 store.js를 거친다.
-// P2: [고정하기](F04-08), "N개 더 있어요 · 모두 보기", 되돌리기 줄 자리. 우클릭 메뉴(F15)는 folders.js의 showContextMenu가 합쳐진 뒤 붙인다.
+// P2: [고정하기](F04-08), "N개 더 있어요 · 모두 보기", 되돌리기 줄 자리, 줄 우클릭 메뉴(F15-09, render.js의 actions.showContextMenu).
 
 import { openBookmark } from "../bookmarks.js";
 import { load, dismiss, undismiss, pin } from "../store.js";
@@ -79,7 +79,7 @@ function makeButton(label, { variant = "", onClick, ariaLabel } = {}) {
 }
 
 // N42: 잊고 있던 북마크 폴더(개수 배지)와 팝업을 #forgotten-slot 칸에 그린다. items는 pickForgotten의 결과, 앞의 8개만 보여 준다
-// actions는 render.js가 넘겨 주는 동작 묶음이다. [어디 있는지 보기]는 actions.openFolder(folderId)를 부른다
+// actions는 render.js가 넘겨 주는 동작 묶음이다. [어디 있는지 보기]는 actions.openFolder(folderId)를, 줄 우클릭은 actions.showContextMenu를 부른다
 export function showForgotten(items, actions) {
   current = { items: Array.isArray(items) ? items : [], actions: actions ?? {} };
   const slot = document.getElementById(SLOT_ID);
@@ -329,6 +329,15 @@ function renderRow(bookmark, time, stored, now, dialog) {
 
   text.append(title, meta, buttons);
   row.append(tile, text);
+
+  // 줄을 우클릭하면 브라우저 기본 메뉴 대신 우리 메뉴를 연다 (F15-01). 메뉴는 이 팝업 안에 붙인다 (F15-09)
+  // 팝업은 showModal()이라 팝업 밖에 붙이면 어두운 배경 뒤에 깔린다. 메뉴는 folders.js가 그리므로 render.js의 actions로 부른다
+  row.addEventListener("contextmenu", (event) => {
+    const showContextMenu = current.actions.showContextMenu;
+    if (typeof showContextMenu !== "function") return;
+    event.preventDefault();
+    showContextMenu(bookmark, { x: event.clientX, y: event.clientY, container: dialog });
+  });
   return row;
 }
 
