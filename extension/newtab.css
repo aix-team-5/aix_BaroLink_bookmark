@@ -654,6 +654,49 @@ a {
   font-weight: var(--weight-bold);
 }
 
+/* 자세히 보기의 정리 범위 (F06-04 북마크바 제외·사용자 폴더 포함) */
+.organize__scope {
+  margin-bottom: var(--space-4);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+}
+
+.organize__scope-title {
+  margin-bottom: var(--space-1);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-strong);
+}
+
+.organize__scope-sub {
+  margin-top: var(--space-3);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-soft);
+}
+
+.organize__scope-option {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-2);
+  font-size: var(--font-sm);
+  color: var(--color-text);
+  cursor: pointer;
+}
+
+.organize__scope-option input {
+  flex: 0 0 auto;
+  accent-color: var(--color-primary);
+}
+
+.organize__scope-option span {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 /* 자세히 보기 편집 (F06-04): 폴더 이름 입력칸, [폴더 빼기]로 뺀 폴더, 북마크별 폴더 고르기 */
 .organize__name-input {
   flex: 1 1 auto;
