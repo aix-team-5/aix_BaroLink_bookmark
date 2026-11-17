@@ -59,7 +59,39 @@ const actions = {
   showResultNotice: (entry) => showResultNotice(entry),
   // { x, y, container }를 그대로 넘긴다 (명세 v19 N30·N41). 잊고 있던 북마크 팝업 안의 우클릭은 container로 그 팝업을 준다 (F15-09)
   showContextMenu: (bookmark, options) => showContextMenu(bookmark, options),
+  // F06-04 북마크바 제외·사용자 폴더 포함: 범위를 바꿔 첫 정리 계획을 다시 세운다. cards.js는 plan.js를 부르지 않으므로 여기서 세운다
+  replan: (options) => replanFirst(options),
 };
+
+// actions.replan(options) → { plan, folders }
+// options: getTargets(N19)의 { excludeBar, includeFolderIds }. plan: makePlan(N20) 결과 (folders 또는 pin), 세울 수 없으면 null
+// folders: 범위에 넣을 수 있는 사용자 폴더 [{ id, title, path, count }]. count는 그 폴더를 넣으면 늘어나는 정리 대상 수
+function replanFirst(options) {
+  if (!lastTree || !categories) return null;
+  const now = Date.now();
+  const stored = currentStored();
+  const scope = {
+    excludeBar: Boolean(options?.excludeBar),
+    includeFolderIds: Array.isArray(options?.includeFolderIds) ? options.includeFolderIds.map(String) : [],
+  };
+  const targets = safeCall(() => getTargets(lastTree, stored, scope, now), []);
+  const plan = safeCall(() => makePlan(targets, categories), null);
+  return { plan, folders: includableFolders(stored, now) };
+}
+
+// 범위에 넣을 수 있는 사용자 폴더: 넣으면 정리 대상이 하나 이상 늘어나는 폴더만 (관리자 폴더·고르지 않은 루트·가져오기 폴더는 빠진다)
+// 무엇이 늘어나는지는 getTargets로 직접 세서, 가져오기 폴더처럼 이미 대상인 폴더나 고를 북마크가 없는 폴더가 목록에 나오지 않게 한다
+function includableFolders(stored, now) {
+  const base = new Set(safeCall(() => getTargets(lastTree, stored, {}, now), []).map((bookmark) => String(bookmark.id)));
+  const folders = [];
+  for (const folder of lastTree.folders) {
+    if (folder.rootType === "managed" || folder.rootChosen === false) continue;
+    const added = safeCall(() => getTargets(lastTree, stored, { includeFolderIds: [String(folder.id)] }, now), [])
+      .filter((bookmark) => !base.has(String(bookmark.id))).length;
+    if (added > 0) folders.push({ id: String(folder.id), title: folder.title, path: folder.path ?? [], count: added });
+  }
+  return folders;
+}
 
 // 뼈대 확인용 문구를 지운다 (화면을 그리기 시작하면 필요 없다)
 function removeSkeletonNote() {

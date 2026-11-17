@@ -226,10 +226,6 @@ function renderFolderCard(slot, plan, actions) {
 
   const desc = document.createElement("div");
   desc.className = "suggestion__desc";
-  // 자세히 보기에서 고친 계획이 있으면 그 요약을 보인다 (F06-04)
-  desc.textContent = planSummary(currentPlan(plan));
-  cardPlan = plan;
-  cardDesc = desc;
 
   const note = document.createElement("div");
   note.className = "suggestion__note";
@@ -251,14 +247,31 @@ function renderFolderCard(slot, plan, actions) {
       variant: "btn--ghost",
       onClick: () => showOrganizeDialog(plan, actions),
     }),
-    makeButton("정리하기", {
-      variant: "btn--primary",
-      // 자세히 보기에서 고쳤으면 고친 계획으로 정리한다 (F06-04)
-      onClick: (event) => runApply(currentPlan(plan), actions, event.currentTarget, slot),
-    }),
   );
+  const applyButton = makeButton("정리하기", {
+    variant: "btn--primary",
+    // 자세히 보기에서 고쳤으면 고친 계획으로 정리한다 (F06-04)
+    onClick: (event) => runApply(currentPlan(plan), actions, event.currentTarget, slot),
+  });
+  buttons.appendChild(applyButton);
 
   slot.append(logo, text, buttons);
+
+  // 자세히 보기에서 고친 계획이 있으면 그 요약을 보인다 (F06-04)
+  cardPlan = plan;
+  cardDesc = desc;
+  cardApply = applyButton;
+  updateCard();
+}
+
+// 첫 정리 카드의 요약과 [정리하기]를 지금 계획(고친 것 포함)에 맞춘다
+// 범위를 바꿔(F06-04 북마크바 제외·사용자 폴더 포함) 묶을 폴더가 없어지면 [정리하기]를 막는다
+function updateCard() {
+  if (!cardPlan || !cardDesc || !cardDesc.isConnected) return;
+  const plan = currentPlan(cardPlan);
+  const ready = plan && plan.type === "folders" && plan.folders.length > 0;
+  cardDesc.textContent = ready ? planSummary(plan) : "이 범위로는 묶을 폴더가 없어요. 자세히 보기에서 범위를 바꿔 주세요";
+  if (cardApply) cardApply.disabled = !ready;
 }
 
 // [정리하기]를 눌렀을 때: applyPlan으로 실제 정리 → 상태 저장 → 결과 안내 (actions.showResultNotice)
@@ -323,15 +336,51 @@ export function showOrganizeDialog(plan, actions) {
   closeButton.addEventListener("click", () => dialog.close());
   header.append(headText, closeButton);
 
-  // 본문: 폴더별 근거 + 북마크 목록. 폴더 빼기·이름 바꾸기·북마크별 폴더 바꾸기를 할 수 있다 (F06-04)
+  // 본문: 정리 범위 + 폴더별 근거 + 북마크 목록 (F06-04)
+  // 범위(북마크바 제외·사용자 폴더 포함)를 바꾸면 render.js가 넘긴 actions.replan으로 계획을 새로 세운다 (cards.js는 plan.js를 부르지 않는다)
+  // 폴더 빼기·이름 바꾸기·북마크별 폴더 바꾸기는 그 계획 위에서 고친다
   // 고친 내용은 계획과 화면의 개수만 바꾸고 크롬 북마크는 바꾸지 않는다. [정리하기]를 눌러야 옮긴다
-  const draft = draftOf(plan);
+  const base = plan;
+  const canReplan = Boolean(actions && typeof actions.replan === "function");
+  // 넣을 수 있는 사용자 폴더 목록은 창을 열 때 한 번 받는다
+  const includable = canReplan ? (scopeOf(base)?.folders ?? safeReplan(actions, DEFAULT_SCOPE)?.folders ?? []) : [];
   const body = document.createElement("div");
   body.className = "dialog__body";
+
+  // 범위를 바꾼다: 새 계획을 받아 기억하고 다시 그린다. 앞에서 고친 내용(빼기·이름·옮기기)은 새 계획에서 처음부터 시작한다
+  function setScope(next) {
+    const result = safeReplan(actions, next);
+    if (!result || !result.plan) {
+      showToast("정리 범위를 바꾸지 못했어요", { container: dialog });
+      return;
+    }
+    if (isDefaultScope(next)) scopes.delete(base);
+    else scopes.set(base, { options: next, plan: result.plan, folders: includable });
+    changed();
+  }
 
   // 고칠 때마다 본문을 다시 그린다 (열린 창은 그대로 둔다)
   function redraw() {
     body.replaceChildren();
+    if (canReplan) body.appendChild(renderScopeBox(scopeOf(base)?.options ?? DEFAULT_SCOPE, includable, setScope));
+
+    const current = effectivePlan(base);
+    // 바꾼 범위로는 폴더 계획이 안 나오면(정리 대상이 적거나 3개 이상 모인 종류가 없음) 정리할 수 없다
+    if (!current || current.type !== "folders" || current.folders.length === 0) {
+      const none = document.createElement("div");
+      none.className = "organize__rest";
+      none.textContent = "이 범위로는 묶을 폴더가 없어요. 위에서 범위를 바꿔 주세요.";
+      body.appendChild(none);
+      const footer = document.createElement("div");
+      footer.className = "actions actions--end organize__footer";
+      const blocked = makeButton("정리하기", { variant: "btn--primary" });
+      blocked.disabled = true;
+      footer.append(makeButton("취소", { variant: "btn--ghost", onClick: () => dialog.close() }), blocked);
+      body.appendChild(footer);
+      return;
+    }
+
+    const draft = draftOf(current);
     const edited = buildPlan(draft);
 
     draft.folders.forEach((folder, index) => {
@@ -369,7 +418,7 @@ export function showOrganizeDialog(plan, actions) {
   // 고친 뒤: 본문을 다시 그리고, 첫 정리 카드의 요약도 맞춘다 (카드는 이 파일의 칸이다)
   function changed() {
     redraw();
-    if (cardPlan === plan && cardDesc && cardDesc.isConnected) cardDesc.textContent = planSummary(buildPlan(draft));
+    if (cardPlan === base) updateCard();
   }
   redraw();
 
@@ -394,7 +443,90 @@ export function showOrganizeDialog(plan, actions) {
 const drafts = new WeakMap();
 let cardPlan = null; // 지금 첫 정리 카드에 그린 계획
 let cardDesc = null; // 그 카드의 요약 줄 (자세히 보기에서 고치면 같이 바꾼다)
+let cardApply = null; // 그 카드의 [정리하기] (바꾼 범위로 묶을 폴더가 없으면 막는다)
 const NONE = ""; // 북마크별 폴더 바꾸기의 "폴더에 넣지 않기" 값
+
+// ----- 정리 범위 (F06-04 북마크바 제외·사용자 폴더 포함) -----
+// 범위를 바꾸면 처음 계획(render.js가 기본 범위로 세운 것)별로 { options, plan, folders }를 기억한다
+// options: getTargets(N19)의 { excludeBar, includeFolderIds }. 기본 범위로 돌아오면 지운다
+const scopes = new WeakMap();
+const DEFAULT_SCOPE = { excludeBar: false, includeFolderIds: [] };
+
+function scopeOf(base) {
+  return scopes.get(base) ?? null;
+}
+
+function isDefaultScope(options) {
+  return !options.excludeBar && options.includeFolderIds.length === 0;
+}
+
+// 처음 계획에 범위를 적용한 계획 (범위를 안 바꿨으면 처음 계획 그대로)
+function effectivePlan(base) {
+  return scopeOf(base)?.plan ?? base;
+}
+
+// actions.replan(options) → { plan, folders }. 오류가 나도 창이 멈추지 않게 감싼다
+function safeReplan(actions, options) {
+  try {
+    return actions.replan(options);
+  } catch (error) {
+    console.warn("정리 범위를 바꾸지 못했어요", error);
+    return null;
+  }
+}
+
+// 정리 범위 상자: [ ] 북마크바 바로 아래 북마크는 빼기 / [ ] 사용자 폴더 (안의 북마크 N개도 함께 정리)
+// folders는 render.js가 고른 "넣을 수 있는 사용자 폴더" [{ id, title, path, count }]
+function renderScopeBox(options, folders, onChange) {
+  const box = document.createElement("div");
+  box.className = "organize__scope surface";
+
+  const head = document.createElement("div");
+  head.className = "organize__scope-title";
+  head.textContent = "정리 범위";
+  const hint = document.createElement("div");
+  hint.className = "organize__reason";
+  hint.textContent = "범위를 바꾸면 폴더 계획을 새로 세워요. 아래에서 고친 내용은 처음으로 돌아가요.";
+  box.append(head, hint);
+
+  const barLabel = document.createElement("label");
+  barLabel.className = "organize__scope-option";
+  const barCheck = document.createElement("input");
+  barCheck.type = "checkbox";
+  barCheck.checked = options.excludeBar;
+  barCheck.addEventListener("change", () => {
+    onChange({ excludeBar: barCheck.checked, includeFolderIds: [...options.includeFolderIds] });
+  });
+  const barText = document.createElement("span");
+  barText.textContent = "북마크바 바로 아래 북마크는 빼기";
+  barLabel.append(barCheck, barText);
+  box.appendChild(barLabel);
+
+  if (folders.length > 0) {
+    const sub = document.createElement("div");
+    sub.className = "organize__scope-sub";
+    sub.textContent = "직접 만든 폴더 안의 북마크도 함께 정리하기";
+    box.appendChild(sub);
+    for (const folder of folders) {
+      const label = document.createElement("label");
+      label.className = "organize__scope-option";
+      const check = document.createElement("input");
+      check.type = "checkbox";
+      check.checked = options.includeFolderIds.includes(folder.id);
+      check.addEventListener("change", () => {
+        const ids = options.includeFolderIds.filter((id) => id !== folder.id);
+        if (check.checked) ids.push(folder.id);
+        onChange({ excludeBar: options.excludeBar, includeFolderIds: ids });
+      });
+      const text = document.createElement("span");
+      const where = Array.isArray(folder.path) && folder.path.length > 0 ? `${folder.path.join(" › ")} › ` : "";
+      text.textContent = `${where}${folder.title || "(이름 없음)"} · ${folder.count}개`;
+      label.append(check, text);
+      box.appendChild(label);
+    }
+  }
+  return box;
+}
 
 function draftOf(plan) {
   if (!drafts.has(plan)) {
@@ -414,9 +546,11 @@ function draftOf(plan) {
   return drafts.get(plan);
 }
 
-// 고친 계획이 있으면 그 계획을, 없으면 원래 계획을 돌려준다
+// 고친 계획이 있으면 그 계획을, 없으면 원래 계획을 돌려준다. 범위를 바꿨으면 바꾼 범위의 계획에서 고친 것이다
 function currentPlan(plan) {
-  return drafts.has(plan) ? buildPlan(drafts.get(plan)) : plan;
+  const current = effectivePlan(plan);
+  if (!current || current.type !== "folders") return current;
+  return drafts.has(current) ? buildPlan(drafts.get(current)) : current;
 }
 
 // 고친 내용으로 applyPlan에 넘길 계획을 만든다 (N20과 같은 모양 { type: "folders", folders: [{ name, items, reasons }], rest })
