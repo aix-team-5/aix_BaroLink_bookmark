@@ -7,8 +7,8 @@ import { hasFavicon } from "./bookmarks.js";
 
 const SVG_NS = "http://www.w3.org/2000/svg";
 
-// 아이콘 12종 — 선으로 그린 공통 아이콘의 path 데이터
-// bookmark, check, chevron, clock, close, folder, grid, history, lock, plus, search, sparkles
+// 아이콘 13종 — 선으로 그린 공통 아이콘의 path 데이터
+// bookmark, check, chevron, clock, close, folder, grid, history, lock, plus, search, sparkles, user
 // 각 값은 <path d="..."> 한 개 이상을 그린다
 const ICON_PATHS = {
   bookmark: ["M6 4.5A1.5 1.5 0 0 1 7.5 3h9A1.5 1.5 0 0 1 18 4.5V21l-6-3.5L6 21V4.5Z"],
@@ -32,6 +32,7 @@ const ICON_PATHS = {
     "m5.5 13 .8 2.2 2.2.8-2.2.8L5.5 19l-.8-2.2-2.2-.8 2.2-.8.8-2.2Z",
     "m18.5 12 .7 1.8 1.8.7-1.8.7-.7 1.8-.7-1.8-1.8-.7 1.8-.7.7-1.8Z",
   ],
+  user: ["M12 12a4 4 0 1 0 0-8 4 4 0 0 0 0 8Z", "M4.5 20a7.5 7.5 0 0 1 15 0"],
 };
 
 // 타일 색은 newtab.css의 공통 값 --tile-1 ~ --tile-10을 쓴다 (색 코드를 이 파일에 직접 두지 않는다. AGENTS.md 3번)
@@ -218,5 +219,47 @@ function hideToast() {
   }
 }
 
+// 꾸미기 목록은 명세 v22 F18 그대로다. newtab.css의 :root[data-accent·data-font·data-wallpaper] 값과 같아야 한다
+const ACCENTS = ["violet", "navy", "blue", "sky", "teal", "green", "rose", "ink"];
+const WALLPAPERS = ["cloud", "dawn", "mint", "lavender", "peach", "mist", "photo"];
+const FONTS = ["system", "gothic", "serif"];
+const DEFAULT_ACCENT = "violet";
+const DEFAULT_WALLPAPER = "cloud";
+const DEFAULT_FONT = "system";
+
+// CSS url("...")에 그대로 넣을 수 있는 이미지 dataURL만 쓴다 (따옴표·괄호가 섞인 값은 막는다)
+const IMAGE_DATA_URL = /^data:image\/[a-z0-9.+-]+;base64,[a-z0-9+/=]+$/i;
+
+// 목록에 있는 문자열이면 그대로, 아니면 기본값 (F18-14)
+function pick(value, allowed, fallback) {
+  return typeof value === "string" && allowed.includes(value) ? value : fallback;
+}
+
 // N54(v22, P3): <html>에 data-accent·data-font를 붙이고 배경을 정한다. 목록에 없는 값은 기본값(violet·cloud·system)
-export function applyAppearance(appearance, photos) {}
+// 같은 값으로 여러 번 불려도 결과가 같다. 화면을 다시 그리지 않고 <html>의 속성과 CSS 변수만 바꾼다
+// appearance: { accent, wallpaper, font, avatarPreset } · photos: { profilePhoto, wallpaperPhoto } (둘 다 없거나 깨져도 기본값으로 그린다)
+// 배경이 "photo"인데 올린 사진이 없거나 형태가 맞지 않으면 cloud로 돌아간다
+export function applyAppearance(appearance, photos) {
+  const root = document.documentElement;
+  const source = appearance !== null && typeof appearance === "object" ? appearance : {};
+
+  const accent = pick(source.accent, ACCENTS, DEFAULT_ACCENT);
+  const font = pick(source.font, FONTS, DEFAULT_FONT);
+  let wallpaper = pick(source.wallpaper, WALLPAPERS, DEFAULT_WALLPAPER);
+
+  const photo = photos?.wallpaperPhoto;
+  const hasPhoto = typeof photo === "string" && IMAGE_DATA_URL.test(photo);
+  if (wallpaper === "photo" && !hasPhoto) wallpaper = DEFAULT_WALLPAPER;
+
+  root.dataset.accent = accent;
+  root.dataset.font = font;
+  root.dataset.wallpaper = wallpaper;
+  if (wallpaper === "photo") {
+    root.style.setProperty("--wallpaper-photo", `url("${photo}")`);
+  } else {
+    root.style.removeProperty("--wallpaper-photo");
+  }
+
+  // 꾸밈을 적용했으니 화면을 보여 준다 (F18-13. 적용 전에는 newtab.css가 숨긴다)
+  root.dataset.appearanceReady = "true";
+}
