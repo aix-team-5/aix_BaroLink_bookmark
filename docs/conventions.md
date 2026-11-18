@@ -142,7 +142,7 @@ GitHub Desktop을 써도 순서는 같다. `git rebase`와 `git push --force`는
 - 브랜치는 이슈 화면의 **Development → Create a branch**로, 항상 최신 `main`에서 만든다. 다른 사람의 브랜치에서 만들지 않는다. 아직 합쳐지지 않은 남의 작업이 필요하면, 그 사람에게 된 데까지 먼저 PR로 올려 달라고 한다(아래 "먼저 올리기").
 - 브랜치 하나는 PR 하나다. 그 이슈의 **P1 함수를 모두 끝낸 뒤** PR을 올린다. 작업 중에는 커밋을 여러 번 해도 되고, 며칠에 한 번은 `git pull origin main`으로 최신 `main`을 받아 합친다.
 - **P2·P3 함수는 P1 PR에 넣지 않는다.** P1 확인 목록(#22)이 닫힌 뒤, 같은 이슈에서 이름 끝에 `-p2`를 붙인 브랜치를 새로 만든다(예: `feat/F01-bookmarks-p2`, 9번). 이슈에 P1 함수만 있으면 브랜치는 하나로 끝난다.
-- **P3 함수는 이름 끝에 `-p3`를 붙인 새 브랜치에서 한다**(예: `feat/F01-store-p3`). `dnd.js`는 옛 빈 브랜치 `feat/F17-dnd`가 있으므로 `feat/F17-dnd-p3`, 새 파일 `profile.js`는 `feat/F18-profile`(명세 v22).
+- **P3 함수는 이름 끝에 `-p3`를 붙인 새 브랜치에서 한다**(예: `feat/F01-store-p3`). `dnd.js`는 `feat/F17-dnd`(PR #82), 새 파일 `profile.js`는 `feat/F18-profile`(명세 v22).
 - **먼저 올리기.** 다른 사람이 기다리는 함수(예: `bookmarks.js`의 `loadTree`, `store.js`의 `load`)는 이슈 전체가 끝나기를 기다리지 않는다. 팀 채팅에 알리고, 그 함수만 담은 브랜치를 이슈 브랜치 이름 끝에 짧은 말을 붙여 따로 만들어(예: `feat/F01-bookmarks-load-tree`) 먼저 PR을 올린다. 합쳐진 뒤 이슈 브랜치에서 `git pull origin main`으로 받는다.
 
 ---
