@@ -10,7 +10,6 @@
 - HTML, CSS, JavaScript (ES 모듈, 빌드 도구 없음)
 - 백그라운드 서비스 워커
 - `chrome.bookmarks`, `chrome.storage.local`, `chrome.search`, 파비콘, 선택 권한 `chrome.topSites`
-- SortableJS (P3에서 추가, 폴더에 파일로 포함)
 - GitHub Actions(PR 자동 검사), CodeRabbit(자동 코드 리뷰)
 
 서버, 데이터베이스, AI, React, CDN은 쓰지 않습니다.
@@ -46,7 +45,7 @@ aix_BaroLink_bookmark
 │   │   ├── ui.js              공통 화면 조각
 │   │   ├── search.js          웹 검색창, 북마크 검색
 │   │   ├── dnd.js             드래그 이동 (P3)
-│   │   └── view               cards, folders, forgottenFolder, history
+│   │   └── view               cards, folders, forgottenFolder, history, profile
 │   └── data
 │       └── categories.json    분류표
 ├── docs                       계획, 명세, 구조도, 규칙
@@ -63,7 +62,7 @@ aix_BaroLink_bookmark
 | 역할 | GitHub 아이디 | 맡는 파일 (`extension/` 아래) |
 | --- | --- | --- |
 | 팀원 A | | `manifest.json`, `js/bookmarks.js`, `js/store.js`, `js/organize.js`, `js/view/history.js` |
-| 팀원 B | | `background.js`, `js/classify.js`, `js/forgotten.js`, `js/view/forgottenFolder.js`, `data/categories.json` |
+| 팀원 B | | `background.js`, `js/classify.js`, `js/forgotten.js`, `js/view/forgottenFolder.js`, `js/view/profile.js`, `data/categories.json` |
 | 팀원 C | | `js/plan.js`, `js/topic.js`, `js/view/folders.js` |
 | 팀원 D | | `newtab.html`, `newtab.css`, `js/render.js`, `js/ui.js`, `js/view/cards.js`, `js/search.js`, `js/dnd.js` |
 
@@ -166,6 +165,9 @@ node .github/scripts/check.mjs
 | `manualMoves` | 사용자가 직접 옮긴 북마크 | 서비스 워커 |
 | `newBookmarks` | 폴더 밖에 새로 저장된 북마크 | 서비스 워커 |
 | `importing` | 크롬이 북마크를 가져오는 중이라는 표시 (10분 뒤 끝난 것으로 봄) | 서비스 워커 |
+| `appearance` | 고른 꾸미기: 색상·배경·글꼴·대체 이미지 (P3) | 새 탭 |
+| `profilePhoto` | 올린 프로필 사진 (128px로 줄인 것만, P3) | 새 탭 |
+| `wallpaperPhoto` | 올린 배경 사진 한 장 (긴 변 1920px 이하로 줄인 것만, P3) | 새 탭 |
 
 한 키는 한쪽(새 탭 또는 서비스 워커)만 씁니다. 양쪽이 같은 키를 쓰면 값이 사라집니다. 모든 저장은 `js/store.js`를 거칩니다.
 

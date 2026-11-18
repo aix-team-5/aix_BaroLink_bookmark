@@ -104,6 +104,8 @@ await (async () => {
   T.folders = await import("/js/view/folders.js");
   T.forgottenFolder = await import("/js/view/forgottenFolder.js");
   T.history = await import("/js/view/history.js");
+  // P3(명세 v22) 새 파일. 아직 없는 판에서도 2장이 멈추지 않게 감싼다
+  try { T.profile = await import("/js/view/profile.js"); } catch (e) { T.profile = null; console.warn("view/profile.js 없음", e); }
 
   T.day = 86400000;
   T.prefix = "[검증] ";
@@ -1656,8 +1658,8 @@ await (async () => {
 - 되돌리는 법: `await T.cleanup()`
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
-#### C-N35 suggestSubfolders: 세부 폴더 제안 · P3
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
+#### C-N35 suggestSubfolders: 세부 폴더 제안 · 제외
+- 구현 상태: **제외(명세 v22)**. F16을 하지 않기로 해 이 항목은 돌리지 않는다. 다시 하게 되면 쓰도록 남겨 둔다
 - 파일·담당: topic.js · 팀원 C
 - 관련 요구사항: F16-01, F16-03
 - 안전 등급: 읽기만
@@ -1681,26 +1683,35 @@ await (async () => {
 - 기대 결과: 제목에 반복되는 주제 단어 중 북마크 3개 이상·사이트 2곳 이상에 나타나는 단어로 `[{ word, items }]`를 돌려준다. 없으면 빈 배열이다. (N35, F16-01, F16-03)
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
-#### C-N36 initDnd: 드래그 이동 · P3
-- 구현 상태: 뼈대(미구현) · 명세 기준으로 작성, 코드와 대조하지 못함
-- 파일·담당: dnd.js · 팀원 D
-- 관련 요구사항: F17-01, F17-02, F17-03
+#### C-N36 makeDraggable / makeDropTarget / makeSortable: 드래그 이동 · P3
+- 구현 상태: 뼈대(미구현) · 명세 v22 기준으로 작성, 코드와 대조하지 못함. `initDnd`는 v21까지의 이름으로, D의 P3 PR에서 지운다
+- 파일·담당: dnd.js · 팀원 D (놓는 쪽을 부르는 곳은 view/folders.js · 팀원 C)
+- 관련 요구사항: F17-01 ~ F17-10
 - 안전 등급: 화면 · ⚠ 크롬 북마크를 바꿈
-- 사전 조건: `sample-100`, 새 탭 화면이 그려진 상태. 보통은 `render.js`가 부르므로 콘솔에서 따로 부를 필요가 없다. 부르지 않는다면: `T.dnd.initDnd(document.querySelector("#all-bookmarks"))`
+- 사전 조건: `sample-100`, 새 탭 화면이 그려진 상태, 내 폴더 줄에 앱 폴더가 2개 이상. 세 함수는 `render.js`(모든 북마크)와 `folders.js`(폴더 팝업)가 부르므로 콘솔에서 따로 부르지 않는다
 - 붙여 넣을 코드:
   ```js
   // C-N36
   await (async () => {
     T.begin("C-N36");
+    for (const name of ["makeDraggable", "makeDropTarget", "makeSortable"]) {
+      T.expect(`dnd.js가 ${name}을 내보낸다`, typeof T.dnd[name] === "function");
+    }
     T.before = await T.snap();
+    T.beforeStored = await T.stored();
     console.log("화면에서 아래 '눈으로 확인'대로 끌어 본 뒤, T.diff(T.before, await T.snap())로 바뀐 줄을 본다");
   })();
   ```
 - 눈으로 확인:
-  - 앱의 점 6개 손잡이로 앱을 끌어 앱 폴더 위에 놓으면 북마크가 그 폴더로 옮겨지고, 1~2초 뒤 `(await T.stored()).manualMoves`에 그 ID가 있다. (F17-01)
-  - 앱이나 폴더를 끌어 순서를 바꾸면 `chrome://bookmarks`에도 같은 순서로 보인다. 같은 폴더 안에서 뒤쪽으로 옮겨도 놓은 자리에 정확히 놓인다(한 칸 앞에 놓이지 않는다). (F17-02, C06)
-  - 놓을 수 없는 곳(검색창, 헤더)에 놓으면 앱이 원래 자리로 돌아가고 `T.diff`가 "(차이 없음)"이다. (F17-03)
-- 되돌리는 법: 옮긴 북마크를 `chrome://bookmarks`에서 원래 자리로 끌어 놓는다. `T.before`와 비교한다.
+  - 모든 북마크의 앱을 점 6개 손잡이로 끌어 내 폴더 줄의 앱 폴더 위에 놓으면 그 폴더 맨 뒤로 옮겨지고, 1~2초 뒤 `(await T.stored()).manualMoves`에 그 ID가 있다. 화면 위·아래 가장자리로 끌면 화면이 굴러간다. (F17-01)
+  - 폴더 팝업 안에서 앱을 끌어 다른 앱 사이에 놓으면 `chrome://bookmarks`에도 같은 순서로 보인다. 뒤쪽으로 옮겨도 놓은 자리에 정확히 놓인다(한 칸 앞에 놓이지 않는다). 하위 폴더가 있는 팝업에서도 놓은 자리가 맞는다. 순서만 바꾼 북마크는 `manualMoves`에 생기지 않는다. (F17-02, C06, C10)
+  - 팝업 안에서 앱을 하위 폴더 위에 놓으면 그 하위 폴더로 들어간다. (F17-02)
+  - 헤더, 검색창, 독, 잊고 있던 북마크 폴더, 검색 결과에 놓으면 앱이 원래 자리로 돌아가고 `T.diff`가 "(차이 없음)"이다. 그 위에서는 '놓을 수 없음' 마우스 모양이고 강조 표시가 없다. (F17-03, F17-09)
+  - 관리자가 정한 북마크와 북마크 검색 결과의 앱에는 손잡이가 없다. (F17-04)
+  - 지금 들어 있는 폴더에 놓으면 옮겨지지 않고 `manualMoves`도 그대로다. (F17-05)
+  - 끄는 동안 원래 자리가 흐려지고 놓을 수 있는 폴더에 점선 테두리가 생긴다. 폴더 위에서는 강조색 테두리로 커지고 "'폴더 이름'에 넣기"가 뜬다. 팝업 안에서는 놓일 자리에 세로 막대가 보인다. 놓거나 Esc를 누르면 표시가 모두 사라진다. (F17-06 ~ F17-08)
+  - 끄는 동안 다른 창의 `chrome://bookmarks`에서 북마크 하나의 이름을 바꿔도 끌기가 끊기지 않고, 놓은 뒤 화면에 바뀐 이름이 보인다. (F17-10)
+- 되돌리는 법: 옮긴 북마크를 `chrome://bookmarks`에서 원래 자리로 끌어 놓는다. `T.before`와 비교한다. `manualMoves`에 생긴 ID는 `T.beforeStored.manualMoves`와 비교해 확인만 한다(서비스 워커 키라 새 탭에서 지우지 않는다).
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N37 suggestNewFolders: 새 폴더 제안 · P2
@@ -2095,6 +2106,163 @@ await (async () => {
 - 기대 결과: 새 탭에서 `setImporting`을 부르면 "서비스 워커만 쓴다" 오류가 나고 값은 그대로다. `isImporting()`은 읽기만 하며, 값이 없거나 표시한 지 10분이 지났으면 `false`다. (N47, F01-07)
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
+#### C-N51 setAppearance: 꾸미기 저장 · P3
+- 구현 상태: 뼈대(미구현) · 명세 v22 기준으로 작성, 코드와 대조하지 못함
+- 파일·담당: store.js · 팀원 A
+- 관련 요구사항: F18-06, F18-07, F18-11, F18-12
+- 안전 등급: 저장 항목을 바꿈 (끝에 되돌림)
+- 사전 조건: 2장 실행
+- 붙여 넣을 코드:
+  ```js
+  // C-N51
+  await (async () => {
+    T.begin("C-N51");
+    const saved = await T.saveStore();
+    try {
+      await chrome.storage.local.remove("appearance");
+      const d = (await T.store.load()).appearance;
+      T.expect("값이 없으면 load()의 appearance는 기본값", T.same(d, { accent: "violet", wallpaper: "cloud", font: "system", avatarPreset: null }), d);
+      const r1 = await T.store.setAppearance({ accent: "teal" });
+      const a1 = (await T.stored()).appearance;
+      T.expect("넘긴 키만 바뀌고 나머지는 기본값", T.same(a1, { accent: "teal", wallpaper: "cloud", font: "system", avatarPreset: null }), a1);
+      T.expect("돌려준 값이 저장된 appearance 전체와 같다", T.same(r1, a1), r1);
+      await T.store.setAppearance({ wallpaper: "mint", font: "serif" });
+      const a2 = (await T.stored()).appearance;
+      T.expect("앞에서 고친 accent는 그대로", a2?.accent === "teal" && a2?.wallpaper === "mint" && a2?.font === "serif", a2);
+      const s = await T.stored();
+      T.expect("사진 키는 건드리지 않는다", T.same(s.profilePhoto ?? null, saved.profilePhoto ?? null) && T.same(s.wallpaperPhoto ?? null, saved.wallpaperPhoto ?? null));
+      T.record("목록에 없는 값을 넣었을 때(명세: 저장은 하고, 적용할 때 기본값을 쓴다. F18-14)", await T.throws(() => T.store.setAppearance({ accent: "zzz" })) ? "오류" : (await T.stored()).appearance);
+    } finally {
+      await T.restoreStore(saved);
+    }
+  })();
+  ```
+- 기대 결과: `appearance`에 넘긴 키만 합쳐 저장하고 고친 값 전체를 돌려준다. 값이 없으면 `load()`는 기본값 `{ accent: "violet", wallpaper: "cloud", font: "system", avatarPreset: null }`을 준다. (N51, N08)
+- 결과: 통과 / 실패 / 보류   확인자:   날짜:
+
+#### C-N52 setPhoto: 사진 저장·지우기 · P3
+- 구현 상태: 뼈대(미구현) · 명세 v22 기준으로 작성, 코드와 대조하지 못함
+- 파일·담당: store.js · 팀원 A
+- 관련 요구사항: F18-04, F18-05, F18-08, F18-10, F18-12
+- 안전 등급: 저장 항목을 바꿈 (끝에 되돌림)
+- 사전 조건: 2장 실행. 진짜 사진 대신 1px 그림의 dataURL을 쓴다
+- 붙여 넣을 코드:
+  ```js
+  // C-N52
+  await (async () => {
+    T.begin("C-N52");
+    const saved = await T.saveStore();
+    const px = "data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAQAAAC1HAwCAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII=";
+    try {
+      await T.store.setPhoto("profile", px);
+      T.expect("profile → profilePhoto에 저장", (await T.stored()).profilePhoto === px);
+      await T.store.setPhoto("wallpaper", px);
+      T.expect("wallpaper → wallpaperPhoto에 저장", (await T.stored()).wallpaperPhoto === px);
+      await T.store.setPhoto("profile", null);
+      const s = await T.stored();
+      T.expect("null이면 profilePhoto를 지운다(없거나 null)", s.profilePhoto === undefined || s.profilePhoto === null, s.profilePhoto);
+      T.expect("다른 키(wallpaperPhoto)는 그대로", s.wallpaperPhoto === px);
+      T.expect("다른 kind면 오류", await T.throws(() => T.store.setPhoto("avatar", px)));
+      T.record("저장 공간이 모자랄 때(F18-09)는 콘솔로 만들기 어렵다. C-N55에서 큰 사진을 올려 본다", "눈으로 확인");
+    } finally {
+      await T.restoreStore(saved);
+    }
+  })();
+  ```
+- 기대 결과: kind에 맞는 키에 저장하고, `null`이면 지운다. 다른 kind는 오류다. 줄이기는 부르는 쪽(`view/profile.js`)이 한다. (N52)
+- 결과: 통과 / 실패 / 보류   확인자:   날짜:
+
+#### C-N53 loadPhotos: 사진 읽기 · P3
+- 구현 상태: 뼈대(미구현) · 명세 v22 기준으로 작성, 코드와 대조하지 못함
+- 파일·담당: store.js · 팀원 A
+- 관련 요구사항: F18-01, F18-08, F18-13
+- 안전 등급: 저장 항목을 바꿈 (끝에 되돌림)
+- 사전 조건: 2장 실행
+- 붙여 넣을 코드:
+  ```js
+  // C-N53
+  await (async () => {
+    T.begin("C-N53");
+    const saved = await T.saveStore();
+    try {
+      await chrome.storage.local.remove(["profilePhoto", "wallpaperPhoto"]);
+      const empty = await T.store.loadPhotos();
+      T.expect("사진이 없으면 둘 다 null", T.same(empty, { profilePhoto: null, wallpaperPhoto: null }), empty);
+      await chrome.storage.local.set({ profilePhoto: "data:image/png;base64,AA==" });
+      const one = await T.store.loadPhotos();
+      T.expect("있는 사진만 값이 있다", one?.profilePhoto === "data:image/png;base64,AA==" && one?.wallpaperPhoto === null, one);
+      const all = await T.store.load();
+      T.expect("load()에는 사진 두 키가 없다", !("profilePhoto" in all) && !("wallpaperPhoto" in all), Object.keys(all));
+    } finally {
+      await T.restoreStore(saved);
+    }
+  })();
+  ```
+- 기대 결과: `{ profilePhoto, wallpaperPhoto }`를 돌려주고 없는 키는 `null`이다. `load()`에는 사진 두 키가 들어 있지 않다. (N53, N08)
+- 결과: 통과 / 실패 / 보류   확인자:   날짜:
+
+#### C-N54 applyAppearance: 꾸미기 적용 · P3
+- 구현 상태: 뼈대(미구현) · 명세 v22 기준으로 작성, 코드와 대조하지 못함
+- 파일·담당: ui.js · 팀원 D
+- 관련 요구사항: F18-06, F18-07, F18-08, F18-11, F18-13, F18-14
+- 안전 등급: 화면 (저장 항목은 바꾸지 않는다. 끝에 원래 꾸미기를 다시 적용)
+- 사전 조건: 2장 실행, 새 탭 화면이 그려진 상태
+- 붙여 넣을 코드:
+  ```js
+  // C-N54
+  await (async () => {
+    T.begin("C-N54");
+    const html = document.documentElement;
+    const now = (await T.store.load()).appearance;
+    const photos = await T.store.loadPhotos();
+    try {
+      T.ui.applyAppearance({ accent: "rose", wallpaper: "mint", font: "serif", avatarPreset: null }, { profilePhoto: null, wallpaperPhoto: null });
+      T.expect("data-accent가 rose", html.dataset.accent === "rose", html.dataset.accent);
+      T.expect("data-font가 serif", html.dataset.font === "serif", html.dataset.font);
+      T.ui.applyAppearance({ accent: "zzz", wallpaper: "zzz", font: "zzz", avatarPreset: null }, { profilePhoto: null, wallpaperPhoto: null });
+      T.expect("F18-14 목록에 없는 값이면 기본값(violet, system)", html.dataset.accent === "violet" && html.dataset.font === "system", { ...html.dataset });
+      T.record("배경은 눈으로 본다(민트 → 구름)", "눈으로 확인");
+    } finally {
+      T.ui.applyAppearance(now, photos);
+    }
+  })();
+  ```
+- 기대 결과: `<html>`의 `data-accent`·`data-font`와 배경이 바로 바뀌고, 목록에 없는 값은 기본값이다. 새 탭을 새로 열면 기본 배경·색이 잠깐 보이지 않는다(F18-13, 눈으로 확인). (N54)
+- 결과: 통과 / 실패 / 보류   확인자:   날짜:
+
+#### C-N55 showProfile: 내 정보 창 · P3
+- 구현 상태: 뼈대(미구현) · 명세 v22 기준으로 작성, 코드와 대조하지 못함
+- 파일·담당: view/profile.js · 팀원 B (헤더 동그라미는 render.js · 팀원 D)
+- 관련 요구사항: F18-01 ~ F18-05, F18-08 ~ F18-10, F18-12
+- 안전 등급: 화면 · 저장 항목을 바꿈 (창에서 고른 것은 끝에 되돌림)
+- 사전 조건: 2장 실행, 새 탭 화면이 그려진 상태. 아래 코드를 붙여 넣은 뒤 헤더의 계정 동그라미를 눌러 창을 연다
+- 붙여 넣을 코드:
+  ```js
+  // C-N55
+  await (async () => {
+    T.begin("C-N55");
+    T.savedBeforeProfile = await T.saveStore();
+    T.expect("view/profile.js를 불러왔다", !!T.profile && typeof T.profile.showProfile === "function");
+    const tree = await T.tree();
+    T.record("syncing(북마크바) — 동기화를 켠 크롬과 끈 크롬에서 각각 적는다(F18-03 확인 필요)", tree.roots?.bar?.syncing);
+    T.record("render.js가 넘길 info.photos는 저장 키 이름 { profilePhoto, wallpaperPhoto } (loadPhotos 결과와 같음)", await T.store.loadPhotos());
+    console.log("헤더의 계정 동그라미를 누른 뒤 아래 줄을 붙여 넣는다");
+    console.log('T.expect("F18-02 창이 #dialogs 안에 열려 있다", !!document.querySelector("#dialogs dialog[open]") && !document.querySelector("#header dialog"))');
+  })();
+  ```
+- 눈으로 확인:
+  - 헤더 맨 오른쪽에 계정 동그라미가 있고, 사진이 없으면 사람 모양 선 아이콘이다. (F18-01)
+  - 창에 "북마크 동기화 켜짐" 또는 "북마크가 이 PC에만 있어요", 북마크 수·폴더 수, 마지막 정리 날짜(없으면 "아직 정리하지 않았어요")가 보이고 이메일·이름은 없다. Esc·바깥 클릭으로 닫힌다. (F18-02, F18-03)
+  - 색을 고르면 바로 바뀌고 창은 닫히지 않는다. 창 안의 선택 테두리도 고른 색으로 옮겨 간다(profile.js가 저장 뒤 스스로 다시 그림). `(await T.stored()).appearance.accent`가 바뀐다. (F18-06, F18-02)
+  - 마지막 정리 날짜는 되돌리지 않은 가장 최근 정리의 날짜다. 가장 최근 정리를 되돌린 뒤 창을 다시 열면 그 앞의 정리 날짜(없으면 "아직 정리하지 않았어요")가 보인다. (F18-02)
+  - 사진을 고르면 동그라미에 바로 보이고 `(await T.stored()).profilePhoto`가 `data:image/`로 시작한다. 크기는 128×128이다. (F18-04)
+    `const i = new Image(); i.src = (await T.stored()).profilePhoto; await i.decode(); [i.width, i.height]`
+  - 배경 사진을 올리면 배경이 바뀌고 `appearance.wallpaper`가 `"photo"`, `wallpaperPhoto`의 긴 변이 1920 이하다(위 코드에서 `profilePhoto`를 `wallpaperPhoto`로). 다시 올리면 앞 사진이 바뀐다. [배경 사진 지우기]를 누르면 구름 배경으로 돌아간다. (F18-08, F18-10)
+  - 텍스트 파일이나 HEIC 파일을 고르면 "사진을 쓸 수 없어요"가 뜨고 저장 항목이 그대로다. (F18-09)
+  - 사진 고르는 곳에 "이 PC에만 저장돼요"가 있다. `await chrome.storage.sync.get(null)`이 빈 객체다. (F18-12)
+- 되돌리는 법: `await T.restoreStore(T.savedBeforeProfile)` 뒤 새 탭을 새로 연다.
+- 결과: 통과 / 실패 / 보류   확인자:   날짜:
+
 ---
 
 ## 4장. 아직 없는 것 · 명세와 다른 것
@@ -2143,8 +2311,8 @@ export는 모두 있지만(자동 검사가 확인한다), 몸체가 비어 있�
 | N32 | onCreated 처리 | background.js | 팀원 B | #6 |
 | N33 | onMoved 처리 | background.js | 팀원 B | #6 |
 | N34 | onRemoved 처리 | background.js | 팀원 B | #6 |
-| N35 | suggestSubfolders | topic.js | 팀원 C | #12 |
-| N36 | initDnd | dnd.js | 팀원 D | #19 |
+| N35 | suggestSubfolders (v22 제외) | topic.js | 팀원 C | #12 |
+| N36 | initDnd (v22: makeDraggable / makeDropTarget / makeSortable) | dnd.js | 팀원 D | #19 |
 | N37 | suggestNewFolders | plan.js | 팀원 C | #11 |
 | N38 | setFirstCard | store.js | 팀원 A | #3 |
 | N39 | markHandledNew | store.js | 팀원 A | #3 |
@@ -2155,6 +2323,11 @@ export는 모두 있지만(자동 검사가 확인한다), 몸체가 비어 있�
 | N44 | appIcon | ui.js | 팀원 D | #16 |
 | N45 | showToast | ui.js | 팀원 D | #16 |
 | N46 | icon | ui.js | 팀원 D | #16 |
+| N51 | setAppearance (v22) | store.js | 팀원 A | #3 |
+| N52 | setPhoto (v22) | store.js | 팀원 A | #3 |
+| N53 | loadPhotos (v22) | store.js | 팀원 A | #3 |
+| N54 | applyAppearance (v22) | ui.js | 팀원 D | #16 |
+| N55 | showProfile (v22) | view/profile.js | 팀원 B | #83 |
 
 `background.js`의 `onInstalled`(C03), `onImportBegan`·`onImportEnded`(C13)도 비어 있다. N 번호가 없는 크롬 알림 처리라 3장 항목은 없고, 가져오기 중 기록을 멈추는지는 C-N32의 첫 줄(F01-07)로 본다.
 
@@ -2229,8 +2402,8 @@ export는 모두 있지만(자동 검사가 확인한다), 몸체가 비어 있�
 | N32 | onCreated 처리 | P2 | 뼈대 | | | #6 |
 | N33 | onMoved 처리 | P1·P2 | 뼈대 | | | #6 |
 | N34 | onRemoved 처리 | P1 | 뼈대 | | | #6 |
-| N35 | suggestSubfolders | P3 | 뼈대 | | | #12 |
-| N36 | initDnd | P3 | 뼈대 | | | #19 |
+| N35 | suggestSubfolders | 제외 | 뼈대 | | | #12 · v22에서 제외 |
+| N36 | makeDraggable / makeDropTarget / makeSortable | P3 | 뼈대 | | | #19 |
 | N37 | suggestNewFolders | P2 | 구현됨 | | | #11 |
 | N38 | setFirstCard | P1 | 뼈대 | | | #3 |
 | N39 | markHandledNew | P2 | 뼈대 | | | #3 |
@@ -2242,6 +2415,11 @@ export는 모두 있지만(자동 검사가 확인한다), 몸체가 비어 있�
 | N45 | showToast | P1 | 뼈대 | | | #16 |
 | N46 | icon | P1 | 뼈대 | | | #16 |
 | N47 | setImporting / isImporting | P2 | 구현됨 | | | #3, #6 |
+| N51 | setAppearance | P3 | 뼈대 | | | #3 |
+| N52 | setPhoto | P3 | 뼈대 | | | #3 |
+| N53 | loadPhotos | P3 | 뼈대 | | | #3 |
+| N54 | applyAppearance | P3 | 뼈대 | | | #16 |
+| N55 | showProfile | P3 | 뼈대 | | | #83 |
 
 - 결과 칸에는 통과 / 실패 / 보류를 적고, 실패면 비고에 요구사항 번호와 `T.summary()`의 실패 이름을 적는다.
 - 우선순위는 그 함수가 받치는 요구사항 줄의 우선순위다('기능 명세' 시트). P1·P2는 두 우선순위의 줄을 함께 받친다는 뜻이다.
