@@ -1022,7 +1022,8 @@ a {
   align-items: center;
   gap: var(--space-2);
   max-width: calc(100vw - var(--space-8));
-  padding: 10px;
+  /* 둥근 모서리(32px)가 맨 끝 [고정 해제] 버튼을 자르지 않도록 여백을 14px로 둔다 */
+  padding: 14px;
   border-radius: var(--radius-2xl);
   background: rgba(255, 255, 255, 0.75);
   border: 1px solid var(--color-border);
@@ -1058,8 +1059,8 @@ a {
 
 #dock .dock__remove {
   position: absolute;
-  top: -6px;
-  right: -6px;
+  top: -4px;
+  right: -4px;
   display: none;
   align-items: center;
   justify-content: center;
@@ -1550,7 +1551,7 @@ a {
 @media (max-width: 639px) {
   #dock {
     gap: var(--space-1);
-    padding: var(--space-2);
+    padding: 12px;
   }
   #dock .dock__item {
     width: 40px;
