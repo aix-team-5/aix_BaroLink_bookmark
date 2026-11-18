@@ -183,7 +183,6 @@ graph TD
   CARDS --> PLAN
   CARDS --> BMJS
   FOLDERS --> BMJS
-  FOLDERS --> TOPIC
   FOLDERS --> DND
   FVIEW --> BMJS
   FVIEW --> STORE
@@ -381,6 +380,8 @@ sequenceDiagram
 - 그리기 함수는 여러 번 불려도 결과가 같아야 한다. 자기 칸을 비우고 다시 그린다.
 - 열려 있는 `<dialog>`는 다시 그릴 때 닫지 않는다.
 - 앱을 끄는 동안에는 다시 그리지 않는다. 북마크·저장 항목이 바뀌어도 끌기가 끝난 뒤 한 번만 그린다(명세 v22 F17-10). 끄는 중에 다시 그리면 끄던 타일이 사라져 끌기가 끊긴다.
+  - '끄는 중' 표시: `dnd.js`가 끌기를 시작하면 `document.documentElement`에 `is-dragging` 클래스를 붙이고, 끝나면(dragend, `document`의 drop, 끄던 타일이 빠져 dragend가 오지 않을 때를 위해 끌기 뒤 첫 pointerdown) 떼고 `document`에 `dnd:end` 이벤트를 보낸다.
+  - `render.js`와 `view/folders.js`는 다시 그리기 전에 이 클래스를 보고, 붙어 있으면 미뤘다가 `dnd:end`를 받으면 한 번 그린다(`folders.js`의 팝업 다시 그리기·삭제 뒤 6초 타이머 포함). 새 함수는 만들지 않는다.
 - 꾸미기(색상·배경·글꼴)는 `render.js`가 시작할 때 첫 그리기 전에 `applyAppearance`로 적용하고, `appearance`·사진 키가 바뀌면 다시 적용한다(F18-13). 사진은 `load()`가 아니라 `loadPhotos()`로 읽는다.
 
 ### 새 북마크 정리 창의 입력 (F10, 명세 v20)
