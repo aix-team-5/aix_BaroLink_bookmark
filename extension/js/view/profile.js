@@ -233,18 +233,23 @@ function notify(message) {
   showToast(message, { container: dialog && dialog.open ? dialog : null });
 }
 
+// 창을 연 회차. 창이 닫히면 1 늘린다. 닫기 전에 시작한 저장의 실패 안내가 다시 연 창에 뜨지 않게 한다
+let session = 0;
+
 // 저장 작업을 차례로 실행하고, 끝나면 창 안의 선택 표시를 다시 그린다
-// work는 view를 고칠 값을 돌려준다 { appearance?, photos? }. 실패하면 view를 바꾸지 않고 안내를 띄운다
+// work는 view를 고칠 값을 돌려준다 { appearance?, photos? }. null이면 할 일이 없어 건너뛴 것이다
+// 실패하면 view를 바꾸지 않고, 그 작업을 시작한 창이 아직 열려 있을 때만 안내를 띄운다
 function save(work, failMessage = TEXT.saveFailed) {
+  const startedIn = session;
   const run = async () => {
     try {
       const change = await work();
-      if (!view) return; // 그사이 창을 닫았다
-      if (change?.appearance) view.appearance = normalizeAppearance({ ...view.appearance, ...change.appearance });
-      if (change?.photos) view.photos = { ...view.photos, ...change.photos };
+      if (!view || !change) return; // 그사이 창을 닫았거나 건너뛴 작업
+      if (change.appearance) view.appearance = normalizeAppearance({ ...view.appearance, ...change.appearance });
+      if (change.photos) view.photos = { ...view.photos, ...change.photos };
     } catch (error) {
       console.warn("내 정보 창: 저장하지 못했어요", error);
-      notify(failMessage);
+      if (startedIn === session) notify(failMessage);
     }
     redraw();
   };
@@ -259,32 +264,34 @@ async function saveAppearance(patch) {
 }
 
 // 색상·배경·글꼴 고르기 (F18-06·07·11의 고르는 쪽). 화면 전체의 색·배경·글꼴은 저장소 알림을 받은 render.js가 바꾼다
+// 같은 값인지는 앞선 저장이 끝난 뒤에 본다. 빨리 여러 번 눌러도 마지막으로 누른 값이 남는다
 function chooseAppearance(patch) {
-  if (!view) return;
-  const same = Object.entries(patch).every(([key, value]) => view.appearance[key] === value);
-  if (same) return;
-  save(async () => ({ appearance: await saveAppearance(patch) }));
+  save(async () => {
+    if (view && Object.entries(patch).every(([key, value]) => view.appearance[key] === value)) return null;
+    // 그사이 올린 배경 사진을 지웠으면 '내 사진'을 고르지 않는다
+    if (patch.wallpaper === PHOTO_WALLPAPER && view && !view.photos.wallpaperPhoto) return null;
+    return { appearance: await saveAppearance(patch) };
+  });
 }
 
-// 대체 이미지 고르기 (F18-05). 동그라미는 올린 사진을 먼저 보여 주므로(F18-01) 올린 사진이 있으면 지운다
+// 대체 이미지 고르기 (F18-05). 동그라미는 올린 사진을 먼저 보여 주므로(F18-01) 올린 사진을 지운다
+// 꾸미기를 먼저 저장한다. 그게 실패하면 사진은 그대로 남아 다시 시도할 수 있다
 function choosePreset(id) {
-  if (!view || (view.appearance.avatarPreset === id && !view.photos.profilePhoto)) return;
   save(async () => {
-    if (view?.photos.profilePhoto) await setPhoto("profile", null);
-    return { appearance: await saveAppearance({ avatarPreset: id }), photos: { profilePhoto: null } };
+    if (view && view.appearance.avatarPreset === id && !view.photos.profilePhoto) return null;
+    const appearance = await saveAppearance({ avatarPreset: id });
+    await setPhoto("profile", null);
+    return { appearance, photos: { profilePhoto: null } };
   });
 }
 
 // [사진 지우기] → 기본 그림 (F18-05). 올린 사진과 고른 대체 이미지를 모두 지운다
+// 창이 그사이 닫혀도 누른 지우기는 끝까지 한다 (창의 view를 보지 않는다)
 function removeProfilePhoto() {
   save(async () => {
-    const change = {};
-    if (view?.photos.profilePhoto) {
-      await setPhoto("profile", null);
-      change.photos = { profilePhoto: null };
-    }
-    if (view?.appearance.avatarPreset) change.appearance = await saveAppearance({ avatarPreset: null });
-    return change;
+    const appearance = await saveAppearance({ avatarPreset: null });
+    await setPhoto("profile", null);
+    return { appearance, photos: { profilePhoto: null } };
   });
 }
 
@@ -298,6 +305,7 @@ function uploadProfilePhoto(file) {
 }
 
 // [사진 올리기]: 줄인 사진 한 장을 저장하고 배경으로 쓴다. 새로 올리면 앞의 사진을 바꾼다 (F18-08)
+// 여기서는 사진을 먼저 저장한다. 꾸미기("photo")를 먼저 저장했다가 사진 저장이 실패하면 사진 없는 "photo"가 남기 때문이다
 function uploadWallpaper(file) {
   save(async () => {
     const dataUrl = await shrinkWallpaper(file);
@@ -307,10 +315,12 @@ function uploadWallpaper(file) {
 }
 
 // [배경 사진 지우기]: 올린 사진을 지우고 기본 배경(구름)으로 (F18-10)
+// 배경을 먼저 구름으로 저장한다. 사진 지우기가 실패해도 배경은 구름이고 사진은 남아 다시 시도할 수 있다
 function removeWallpaper() {
   save(async () => {
+    const appearance = await saveAppearance({ wallpaper: DEFAULT_APPEARANCE.wallpaper });
     await setPhoto("wallpaper", null);
-    return { photos: { wallpaperPhoto: null }, appearance: await saveAppearance({ wallpaper: DEFAULT_APPEARANCE.wallpaper }) };
+    return { appearance, photos: { wallpaperPhoto: null } };
   });
 }
 
@@ -464,20 +474,11 @@ function drawWallpapers() {
     tiles.push(mine);
   }
 
-  // [사진 올리기]: 점선 칸 <label> 안에 파일 입력칸 (newtab.css #87)
-  const upload = el("label", `${CLS.wallpaper} ${CLS.wallpaperUpload}`);
-  upload.dataset.focusKey = "wallpaper:upload";
-  upload.tabIndex = 0;
+  // [사진 올리기]: 점선 칸 (newtab.css #87). 키보드·화면 읽기 도구에도 버튼으로 보이게 <button>으로 만들고 숨은 파일 입력칸을 연다
   const input = fileInput(uploadWallpaper);
-  upload.append(icon("plus", 18), el("span", "", TEXT.uploadWallpaper), input);
-  // 키보드로도 열 수 있게 (label은 Enter·Space로 눌리지 않는다)
-  upload.addEventListener("keydown", (event) => {
-    if (event.key === "Enter" || event.key === " ") {
-      event.preventDefault();
-      input.click();
-    }
-  });
-  tiles.push(upload);
+  const upload = button(`${CLS.wallpaper} ${CLS.wallpaperUpload}`, "wallpaper:upload", () => input.click());
+  upload.append(icon("plus", 18), el("span", "", TEXT.uploadWallpaper));
+  tiles.push(upload, input);
 
   // [배경 사진 지우기] (F18-10). 시안에 없어 배경 칸 아래 글자 버튼으로 둔다 (올린 사진이 있을 때만)
   const after = [];
@@ -523,10 +524,19 @@ function redraw() {
   );
 
   if (focusKey) {
-    const again = [...body.querySelectorAll("[data-focus-key]")].find((node) => node.dataset.focusKey === focusKey);
-    if (again && !again.disabled) again.focus();
+    const find = (key) => [...body.querySelectorAll("[data-focus-key]")].find((node) => node.dataset.focusKey === key);
+    let target = find(focusKey);
+    // 지운 뒤 버튼이 사라졌거나 누를 수 없게 되면, 다음에 누를 버튼으로 옮긴다
+    if (!target || target.disabled) target = find(FOCUS_FALLBACK[focusKey]);
+    if (target && !target.disabled) target.focus();
   }
 }
+
+// 다시 그린 뒤 원래 버튼에 포커스를 둘 수 없을 때 옮길 곳
+const FOCUS_FALLBACK = {
+  "photo:remove": "photo:change", // [사진 지우기] → [사진 바꾸기]
+  "wallpaper:remove": "wallpaper:upload", // [배경 사진 지우기] → [사진 올리기]
+};
 
 // #dialog-profile를 하나만 두고 다시 쓴다. 처음 만들 때만 틀과 이벤트를 단다
 function getProfileDialog(host) {
@@ -544,6 +554,7 @@ function getProfileDialog(host) {
     // close 이벤트는 close() 뒤에 늦게 온다. 그사이 다시 열었으면 지우지 않는다
     if (dialog.open) return;
     view = null;
+    session++; // 이 창에서 시작한 저장의 실패 안내는 다음에 연 창에 띄우지 않는다
     dialog.remove();
   });
 
