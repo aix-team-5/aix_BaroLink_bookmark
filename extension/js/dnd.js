@@ -1,5 +1,5 @@
 // 담당: 팀원 D · 이슈 #19 · 명세: N36 (F17, P3)
-// 드래그 이동. SortableJS는 쓰지 않고 크롬 기본 끌어 놓기(HTML drag and drop)로 한다 (P3 정리본 Q5)
+// 드래그 이동. SortableJS는 쓰지 않고 크롬 기본 끌어 놓기(HTML drag and drop)로 한다 (명세 v22 N36, Q5). v21까지의 initDnd는 v22에서 세 함수로 나눠 지웠다
 // - 앱만 끈다. 끄는 쪽(손잡이)은 makeDraggable, 놓는 쪽은 makeDropTarget(앱 폴더·하위 폴더)·makeSortable(폴더 팝업 안 순서)
 // - 놓으면 bookmarks.js의 moveBookmark(N03)만 부르고 DOM은 그대로 둔다. 화면은 크롬 onMoved 알림으로 render.js가 다시 그린다
 // - setPending을 부르지 않는다. 그래서 다른 폴더로 옮기면 서비스 워커가 manualMoves에 기록한다 (F17-01, F15-02와 같음)
@@ -19,9 +19,6 @@ const SCROLL_STEP = 18;
 const DRAG_TYPE = "application/x-barolink-bookmark";
 // F17-10: 끄는 동안 <html>에 붙이는 클래스. 끝나면 떼고 document에 "dnd:end"를 보낸다
 const DRAGGING_CLASS = "is-dragging";
-
-// N36(v21까지의 이름): 명세 v22에서 아래 세 함수로 나뉜다. 지금 명세와 자동 검사가 이 이름을 찾으므로 남겨 둔다 (하는 일 없음)
-export function initDnd(container) {}
 
 // 끄는 쪽: 앱 칸에 점 6개 손잡이를 붙이고, 손잡이로만 끌 수 있게 한다 (F17-01·02)
 // tile: 앱 하나를 감싸는 요소(손잡이를 그 안에 붙인다). bookmark: loadTree의 북마크 객체

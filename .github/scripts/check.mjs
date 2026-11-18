@@ -23,7 +23,7 @@ const EXPECTED = {
   "js/render.js": ["renderAll"],
   "js/ui.js": ["appIcon", "showToast", "icon", "applyAppearance"],
   "js/search.js": ["searchBookmarks", "isUrlLike", "runWebSearch"],
-  "js/dnd.js": ["initDnd", "makeDraggable", "makeDropTarget", "makeSortable"],
+  "js/dnd.js": ["makeDraggable", "makeDropTarget", "makeSortable"],
   "js/view/cards.js": ["showFirstCard", "showOrganizeDialog", "showPinPicker"],
   "js/view/folders.js": ["showFolders", "openFolderPopup", "showContextMenu"],
   "js/view/forgottenFolder.js": ["showForgotten"],
