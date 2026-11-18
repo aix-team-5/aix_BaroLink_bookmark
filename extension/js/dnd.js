@@ -17,6 +17,8 @@ const EDGE_PX = 64;
 const SCROLL_STEP = 18;
 // 우리 끌기인지 알아보는 데이터 종류 (다른 탭·파일 끌기와 섞이지 않게)
 const DRAG_TYPE = "application/x-barolink-bookmark";
+// F17-10: 끄는 동안 <html>에 붙이는 클래스. 끝나면 떼고 document에 "dnd:end"를 보낸다
+const DRAGGING_CLASS = "is-dragging";
 
 // N36(v21까지의 이름): 명세 v22에서 아래 세 함수로 나뉜다. 지금 명세와 자동 검사가 이 이름을 찾으므로 남겨 둔다 (하는 일 없음)
 export function initDnd(container) {}
@@ -103,7 +105,7 @@ export function makeSortable(listEl, parentId) {
       return;
     }
     const spot = spotAt(listEl, event);
-    if (!spot || isSameSpot(spot, folderId)) {
+    if (!spot || isSameSpot(listEl, spot, folderId)) {
       clearBar(listEl);
       return;
     }
@@ -120,10 +122,10 @@ export function makeSortable(listEl, parentId) {
   listEl.addEventListener("drop", (event) => {
     if (!drag || insideTarget(event.target, listEl)) return;
     const spot = spotAt(listEl, event);
-    if (!spot || isSameSpot(spot, folderId)) return;
+    if (!spot || isSameSpot(listEl, spot, folderId)) return;
     event.preventDefault();
     const bookmark = drag.bookmark;
-    const index = finalIndex(bookmark, folderId, spot);
+    const index = finalIndex(bookmark, folderId, listEl, spot);
     finish();
     move(bookmark, folderId, index, listEl);
   });
@@ -158,6 +160,12 @@ function start(event, tile, bookmark) {
     if (canDropInto(entry)) entry.tile.classList.add("dnd-candidate");
   }
   document.addEventListener("dragover", autoScroll);
+
+  // F17-10 '끄는 중' 표시: <html>에 is-dragging. render.js·folders.js는 이게 붙어 있으면 다시 그리기를 미룬다
+  document.documentElement.classList.add(DRAGGING_CLASS);
+  // 끝나는 때: dragend(손잡이), document의 drop, 그리고 끄던 칸이 DOM에서 빠져 dragend가 오지 않을 때를 위해 끌기 뒤 첫 pointerdown
+  document.addEventListener("drop", finish);
+  document.addEventListener("pointerdown", finish, { capture: true, once: true });
 }
 
 // 끄는 동안 마우스를 따라다니는 카드: 손잡이 점 + 앱 아이콘 + 이름 (시안). 화면 밖에 잠깐 그려 모양만 찍는다
@@ -177,6 +185,7 @@ function buildGhost(tile, bookmark) {
 }
 
 // 끌기가 끝나면(놓기·Esc·취소) 모든 표시를 지운다 (F17-06)
+// 여러 번 불려도 된다(놓기 → dragend → drop 순으로 겹쳐 온다). '끄는 중'을 뗄 때 한 번만 dnd:end를 보낸다 (F17-10)
 function finish() {
   if (drag) drag.tile.classList.remove("dnd-source");
   drag = null;
@@ -187,6 +196,14 @@ function finish() {
   }
   for (const list of document.querySelectorAll(".dnd-sortable")) clearBar(list);
   document.removeEventListener("dragover", autoScroll);
+  document.removeEventListener("drop", finish);
+  document.removeEventListener("pointerdown", finish, { capture: true });
+
+  const root = document.documentElement;
+  if (root.classList.contains(DRAGGING_CLASS)) {
+    root.classList.remove(DRAGGING_CLASS);
+    document.dispatchEvent(new CustomEvent("dnd:end"));
+  }
 }
 
 // 지금 끄는 앱을 이 폴더에 넣을 수 있는지. 이미 들어 있는 폴더면 옮기지 않는다 (F17-05)
@@ -228,20 +245,41 @@ function spotAt(listEl, event) {
   return { tile: el, bookmark, after: event.clientX > rect.left + rect.width / 2 };
 }
 
-// 원래 순서 번호로 끼워 넣을 자리 → moveBookmark에 넘길 '옮긴 뒤의 순서 번호'
-// 같은 폴더에서 뒤로 옮길 때 크롬이 번호를 하나 더 받는 것은 moveBookmark가 맞춘다 (F17-02 비고)
-function finalIndex(bookmark, folderId, spot) {
-  const insertAt = spot.bookmark.index + (spot.after ? 1 : 0);
-  if (String(bookmark.parentId) === folderId && insertAt > bookmark.index) return insertAt - 1;
-  return insertAt;
+// 놓을 자리 바로 오른쪽의 앱 칸 (명세 v22 F17-02·N36). 칸 앞에 놓으면 그 칸, 칸 뒤에 놓으면 목록에서 다음 앱 칸, 맨 끝이면 null
+// 앱 칸(.dnd-item)만 센다. 하위 폴더 타일과 되돌리기 칸(.bookmark--removed)은 앱이 아니므로 건너뛴다
+// 팝업은 하위 폴더를 앞에 따로 그리므로 화면 순번이 아니라 이 앱의 크롬 index를 기준으로 삼는다
+function rightApp(listEl, spot) {
+  if (!spot.after) return spot.bookmark;
+  const cells = [...listEl.querySelectorAll(".dnd-item")];
+  const next = cells[cells.indexOf(spot.tile) + 1];
+  return next ? items.get(next) ?? null : null;
 }
 
-// 끄는 앱 자신이나 바로 옆에 놓으면 순서가 그대로다
-function isSameSpot(spot, folderId) {
+// moveBookmark(N03)에 넘길 '옮긴 뒤 위치'. undefined면 index 없이 부른다(맨 뒤)
+// 오른쪽 앱 X가 있으면: 끄는 앱이 같은 폴더에 있고 그 index가 X.index보다 작으면 X.index - 1, 아니면 X.index
+// 같은 폴더 뒤쪽으로 옮길 때 크롬이 번호를 하나 더 받는 것은 moveBookmark가 맞춘다 (F17-02 비고)
+// 예: [A0,B1,C2,D3]에서 A를 B와 C 사이에 놓으면 오른쪽 앱 C(2) → 2 - 1 = 1 → [B,A,C,D]
+function finalIndex(bookmark, folderId, listEl, spot) {
+  const right = rightApp(listEl, spot);
+  if (!right || typeof right.index !== "number") return undefined;
+  if (String(bookmark.parentId) === folderId && bookmark.index < right.index) return right.index - 1;
+  return right.index;
+}
+
+// 순서가 그대로인 자리면 true (계산한 값이 지금 index와 같으면 부르지 않는다)
+// 맨 끝(오른쪽 앱 없음)은 끄는 앱이 이미 목록의 마지막 앱일 때 그대로다
+function isSameSpot(listEl, spot, folderId) {
   if (!drag) return true;
   const bookmark = drag.bookmark;
   if (String(spot.bookmark.id) === String(bookmark.id)) return true;
-  return String(bookmark.parentId) === folderId && finalIndex(bookmark, folderId, spot) === bookmark.index;
+  if (String(bookmark.parentId) !== folderId) return false;
+  const right = rightApp(listEl, spot);
+  if (!right) {
+    const cells = [...listEl.querySelectorAll(".dnd-item")];
+    const last = items.get(cells[cells.length - 1]);
+    return Boolean(last) && String(last.id) === String(bookmark.id);
+  }
+  return String(right.id) === String(bookmark.id) || finalIndex(bookmark, folderId, listEl, spot) === bookmark.index;
 }
 
 // F17-08: 놓일 자리에 세로 막대
