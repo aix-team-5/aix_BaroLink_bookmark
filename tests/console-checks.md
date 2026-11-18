@@ -1706,12 +1706,12 @@ await (async () => {
   - 모든 북마크의 앱을 점 6개 손잡이로 끌어 내 폴더 줄의 앱 폴더 위에 놓으면 그 폴더 맨 뒤로 옮겨지고, 1~2초 뒤 `(await T.stored()).manualMoves`에 그 ID가 있다. 화면 위·아래 가장자리로 끌면 화면이 굴러간다. (F17-01)
   - 폴더 팝업 안에서 앱을 끌어 다른 앱 사이에 놓으면 `chrome://bookmarks`에도 같은 순서로 보인다. 뒤쪽으로 옮겨도 놓은 자리에 정확히 놓인다(한 칸 앞에 놓이지 않는다). 하위 폴더가 있는 팝업에서도 놓은 자리가 맞는다. 순서만 바꾼 북마크는 `manualMoves`에 생기지 않는다. (F17-02, C06, C10)
   - 팝업 안에서 앱을 하위 폴더 위에 놓으면 그 하위 폴더로 들어간다. (F17-02)
-  - 헤더, 검색창, 독, 잊고 있던 북마크 폴더, 검색 결과에 놓으면 앱이 원래 자리로 돌아가고 `T.diff`가 "(차이 없음)"이다. 그 위에서는 '놓을 수 없음' 마우스 모양이고 강조 표시가 없다. (F17-03, F17-09)
+  - 놓기 직전에 `T.mid = await T.snap()`을 찍는다. 헤더, 검색창, 독, 잊고 있던 북마크 폴더, 검색 결과에 놓으면 앱이 원래 자리로 돌아가고 `T.diff(T.mid, await T.snap())`가 "(차이 없음)"이다(앞에서 옮긴 것이 있으니 `T.before`와 비교하지 않는다). 그 위에서는 '놓을 수 없음' 마우스 모양이고 강조 표시가 없다. (F17-03, F17-09)
   - 관리자가 정한 북마크와 북마크 검색 결과의 앱에는 손잡이가 없다. (F17-04)
   - 지금 들어 있는 폴더에 놓으면 옮겨지지 않고 `manualMoves`도 그대로다. (F17-05)
   - 끄는 동안 원래 자리가 흐려지고 놓을 수 있는 폴더에 점선 테두리가 생긴다. 폴더 위에서는 강조색 테두리로 커지고 "'폴더 이름'에 넣기"가 뜬다. 팝업 안에서는 놓일 자리에 세로 막대가 보인다. 놓거나 Esc를 누르면 표시가 모두 사라진다. (F17-06 ~ F17-08)
   - 끄는 동안 다른 창의 `chrome://bookmarks`에서 북마크 하나의 이름을 바꿔도 끌기가 끊기지 않고, 놓은 뒤 화면에 바뀐 이름이 보인다. (F17-10)
-- 되돌리는 법: 옮긴 북마크를 `chrome://bookmarks`에서 원래 자리로 끌어 놓는다. `T.before`와 비교한다. `manualMoves`에 생긴 ID는 `T.beforeStored.manualMoves`와 비교해 확인만 한다(서비스 워커 키라 새 탭에서 지우지 않는다).
+- 되돌리는 법: 옮긴 북마크를 `chrome://bookmarks`에서 원래 자리로 끌어 놓는다. `T.before`와 비교한다. `manualMoves`에 생긴 ID는 `T.beforeStored.manualMoves`와 비교해 확인만 한다(서비스 워커 키라 새 탭에서 지우지 않는다). 이 ID는 되돌린 뒤에도 남아, 다음 정리에서 그 북마크가 대상에서 빠진다(F07-07). 정리를 확인할 때(C-N19·C-N22 등)는 새 테스트용 프로필에서 한다.
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N37 suggestNewFolders: 새 폴더 제안 · P2
@@ -2221,12 +2221,14 @@ await (async () => {
       T.expect("data-font가 serif", html.dataset.font === "serif", html.dataset.font);
       T.ui.applyAppearance({ accent: "zzz", wallpaper: "zzz", font: "zzz", avatarPreset: null }, { profilePhoto: null, wallpaperPhoto: null });
       T.expect("F18-14 목록에 없는 값이면 기본값(violet, system)", html.dataset.accent === "violet" && html.dataset.font === "system", { ...html.dataset });
-      T.record("배경은 눈으로 본다(민트 → 구름)", "눈으로 확인");
     } finally {
       T.ui.applyAppearance(now, photos);
     }
   })();
   ```
+- 눈으로 확인 (배경은 위 코드 안에서 바로 원래대로 돌아가므로 두 단계로 따로 붙여 넣는다):
+  1. `T.nowLook = [(await T.store.load()).appearance, await T.store.loadPhotos()]; T.ui.applyAppearance({ accent: "rose", wallpaper: "mint", font: "serif", avatarPreset: null }, { profilePhoto: null, wallpaperPhoto: null })` → 민트 배경, 장미색 버튼, 명조 글꼴로 바뀐 것을 본다
+  2. `T.ui.applyAppearance(...T.nowLook)` → 원래 꾸미기로 돌아온 것을 본다
 - 기대 결과: `<html>`의 `data-accent`·`data-font`와 배경이 바로 바뀌고, 목록에 없는 값은 기본값이다. 새 탭을 새로 열면 기본 배경·색이 잠깐 보이지 않는다(F18-13, 눈으로 확인). (N54)
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
