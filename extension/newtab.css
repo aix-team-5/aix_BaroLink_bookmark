@@ -974,6 +974,115 @@ a {
   background: rgba(255, 255, 255, 0.7);
 }
 
+/* =========================================================================
+   드래그 이동 (js/dnd.js, F17). 클래스는 dnd.js가 붙이고 뗀다. 색은 강조색 변수를 따른다 (F17-07, F18 색상)
+   ========================================================================= */
+/* 앱 한 칸: 앱 버튼 + 끌기 손잡이 (render.js·folders.js가 감싼다) */
+.bookmark-cell {
+  position: relative;
+  min-width: 0;
+}
+
+.bookmark-cell > .bookmark {
+  width: 100%;
+}
+
+/* 점 6개 손잡이 (F17-01). 마우스를 올렸을 때만 보인다. 그림 파일 없이 점 6개를 배경으로 그린다 */
+.dnd-handle {
+  position: absolute;
+  top: var(--space-1);
+  left: var(--space-1);
+  z-index: 2;
+  width: 16px;
+  height: 22px;
+  border-radius: var(--radius-sm);
+  background-color: var(--color-surface-strong);
+  background-image: radial-gradient(circle, var(--color-text-muted) 1.5px, transparent 1.6px);
+  background-size: 8px 7px;
+  background-position: 0 1px;
+  box-shadow: var(--shadow-sm);
+  cursor: grab;
+  opacity: 0;
+  transition: opacity 0.15s ease;
+}
+
+.dnd-item:hover .dnd-handle,
+.dnd-item:focus-within .dnd-handle {
+  opacity: 1;
+}
+
+.dnd-handle:active {
+  cursor: grabbing;
+}
+
+/* F17-06: 끄는 앱의 원래 자리는 흐리게 */
+.dnd-source {
+  opacity: 0.35;
+}
+
+/* F17-06: 놓을 수 있는 폴더에 옅은 점선 테두리 */
+.dnd-candidate {
+  outline: 2px dashed var(--color-primary-soft);
+  outline-offset: 4px;
+  border-radius: var(--radius-xl);
+}
+
+/* F17-07: 끄는 앱이 위에 있는 폴더는 강조색 테두리로 커지고 "'폴더 이름'에 넣기"를 띄운다 */
+.dnd-target {
+  position: relative;
+  transition: transform 0.12s ease;
+}
+
+.dnd-over {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 4px;
+  border-radius: var(--radius-xl);
+  transform: scale(1.06);
+}
+
+/* 안내 글자는 data-drop-label을 글자로만 보인다 (dnd.js가 폴더 이름으로 채운다) */
+.dnd-over::after {
+  content: attr(data-drop-label);
+  position: absolute;
+  bottom: calc(100% + var(--space-2));
+  left: 50%;
+  z-index: 3;
+  max-width: 220px;
+  padding: var(--space-1) var(--space-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  color: var(--color-on-dark);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-bold);
+  transform: translateX(-50%);
+  pointer-events: none;
+}
+
+/* F17-08: 폴더 팝업 안에서 놓일 자리의 세로 막대 (칸의 왼쪽 또는 오른쪽) */
+.dnd-insert-before::before,
+.dnd-insert-after::before {
+  content: "";
+  position: absolute;
+  top: var(--space-1);
+  bottom: var(--space-1);
+  z-index: 2;
+  width: 3px;
+  border-radius: var(--radius-full);
+  background: var(--color-primary);
+  pointer-events: none;
+}
+
+.dnd-insert-before::before {
+  left: calc(-1 * var(--space-2));
+}
+
+.dnd-insert-after::before {
+  right: calc(-1 * var(--space-2));
+}
+
 .bookmark__icon {
   display: flex;
   align-items: center;

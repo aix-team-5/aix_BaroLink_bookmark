@@ -13,6 +13,7 @@ import { suggestForNew } from "./classify.js";
 import { pickForgotten } from "./forgotten.js";
 import { appIcon, icon, showToast } from "./ui.js";
 import { runWebSearch, searchBookmarks } from "./search.js";
+import { makeDraggable } from "./dnd.js";
 import { showFolders, openFolderPopup, showContextMenu } from "./view/folders.js";
 import { showForgotten } from "./view/forgottenFolder.js";
 import { showResultNotice, showHistory } from "./view/history.js";
@@ -477,7 +478,18 @@ async function openWithNotice(bookmark) {
   if (opened === false) showToast("이 북마크는 새 탭에서 실행할 수 없어요");
 }
 
+// 모든 북마크의 앱 한 칸. 앱 버튼 옆에 끌기 손잡이를 붙이므로 칸(div)으로 감싼다 (F17-01)
+// 손잡이는 버튼 안에 넣지 않는다: 버튼 안의 요소는 크롬에서 끌기를 시작하지 못한다
 function renderBookmarkTile(bookmark, isNew = false) {
+  const cell = document.createElement("div");
+  cell.className = "bookmark-cell";
+  cell.appendChild(renderBookmarkButton(bookmark, isNew));
+  // 관리자가 정한 북마크에는 손잡이를 붙이지 않는다 (F17-04는 makeDraggable이 본다)
+  makeDraggable(cell, bookmark);
+  return cell;
+}
+
+function renderBookmarkButton(bookmark, isNew) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "bookmark";
