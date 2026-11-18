@@ -11,23 +11,24 @@ const errors = [];
 const fail = (where, message) => errors.push(`${where}: ${message}`);
 const read = (path) => readFileSync(path, "utf8");
 
-// 명세 'API_내부 함수' 시트(v19)의 함수. 함수를 추가하거나 이름을 바꾸면 명세와 함께 이 목록도 고친다.
+// 명세 'API_내부 함수' 시트(v22)의 함수. 함수를 추가하거나 이름을 바꾸면 명세와 함께 이 목록도 고친다.
 const EXPECTED = {
   "js/bookmarks.js": ["loadTree", "createFolder", "moveBookmark", "renameFolder", "deleteFolderKeepChildren", "openBookmark", "faviconUrl", "hasFavicon", "removeBookmark", "restoreBookmark"],
-  "js/store.js": ["load", "update", "recordOpened", "pin", "unpin", "dismiss", "undismiss", "markManualMove", "setPending", "isPending", "addHistory", "markUndone", "cleanupMissing", "setFirstCard", "markHandledNew", "addNew", "removeNew", "purgeWorkerKeys", "setImporting", "isImporting", "snapshotStored", "restoreStored"],
+  "js/store.js": ["load", "update", "recordOpened", "pin", "unpin", "dismiss", "undismiss", "markManualMove", "setPending", "isPending", "addHistory", "markUndone", "cleanupMissing", "setFirstCard", "markHandledNew", "addNew", "removeNew", "purgeWorkerKeys", "setImporting", "isImporting", "snapshotStored", "restoreStored", "setAppearance", "setPhoto", "loadPhotos"],
   "js/organize.js": ["applyPlan", "undo"],
   "js/classify.js": ["classify", "measure", "suggestForNew"],
   "js/forgotten.js": ["lastOpened", "pickForgotten"],
   "js/plan.js": ["getTargets", "makePlan", "pickPinCandidates", "suggestNewFolders"],
   "js/topic.js": ["suggestSubfolders"],
   "js/render.js": ["renderAll"],
-  "js/ui.js": ["appIcon", "showToast", "icon"],
+  "js/ui.js": ["appIcon", "showToast", "icon", "applyAppearance"],
   "js/search.js": ["searchBookmarks", "isUrlLike", "runWebSearch"],
-  "js/dnd.js": ["initDnd"],
+  "js/dnd.js": ["initDnd", "makeDraggable", "makeDropTarget", "makeSortable"],
   "js/view/cards.js": ["showFirstCard", "showOrganizeDialog", "showPinPicker"],
   "js/view/folders.js": ["showFolders", "openFolderPopup", "showContextMenu"],
   "js/view/forgottenFolder.js": ["showForgotten"],
   "js/view/history.js": ["showResultNotice", "showHistory"],
+  "js/view/profile.js": ["showProfile"],
 };
 
 function listFiles(dir, ext) {

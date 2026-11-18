@@ -1,4 +1,4 @@
-// 담당: 팀원 A · 이슈 #3 · 명세: N08~N16, N38~N40, N47, N50 · 크롬 API: C14, C15
+// 담당: 팀원 A · 이슈 #3 · 명세: N08~N16, N38~N40, N47, N50~N53 · 크롬 API: C14, C15
 // 저장 항목을 읽고 쓰는 통로. 모든 저장은 이 파일을 거친다. 한 키는 한쪽(새 탭 또는 서비스 워커)만 쓴다.
 
 // 저장 항목 10개의 기본값. 밖으로 내보낼 때는 항상 복사본을 준다
@@ -412,3 +412,14 @@ export async function restoreStored(newId, snapshot) {
     });
   }
 }
+
+// ----- P3 (명세 v22, F18). 뼈대: 이름과 입력만 있는 빈 함수 -----
+
+// N51: 꾸미기(appearance)에 patch를 합쳐 저장하고 고친 값 전체를 돌려준다. 새 탭만 부른다
+export async function setAppearance(patch) { return {}; }
+
+// N52: 줄인 사진을 저장한다. kind "profile" → profilePhoto, "wallpaper" → wallpaperPhoto. null이면 지운다. 새 탭만 부른다
+export async function setPhoto(kind, dataUrl) {}
+
+// N53: 올린 사진 두 개를 읽는다. 사진 키는 load()에 넣지 않는다(수백 KB를 매번 읽지 않게)
+export async function loadPhotos() { return { profilePhoto: null, wallpaperPhoto: null }; }

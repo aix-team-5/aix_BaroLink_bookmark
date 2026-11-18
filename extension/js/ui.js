@@ -1,4 +1,4 @@
-// 담당: 팀원 D · 이슈 #16 · 명세: N44, N45, N46 (F02, F04, F12)
+// 담당: 팀원 D · 이슈 #16 · 명세: N44, N45, N46, N54 (F02, F04, F12, F18)
 // 모든 화면 파일이 함께 쓰는 공통 화면 조각. 화면 파일(render.js, view/*, search.js)은 이 파일을 불러 쓸 수 있다.
 // 이 파일은 화면 파일을 부르지 않는다. 색과 크기는 newtab.css의 공통 값(CSS 변수)을 쓴다.
 
@@ -217,3 +217,6 @@ function hideToast() {
     toastTimer = null;
   }
 }
+
+// N54(v22, P3): <html>에 data-accent·data-font를 붙이고 배경을 정한다. 목록에 없는 값은 기본값(violet·cloud·system)
+export function applyAppearance(appearance, photos) {}
