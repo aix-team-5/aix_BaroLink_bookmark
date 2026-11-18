@@ -99,7 +99,7 @@ m.classify({ title: "채용 공고", url: "https://example.com" }, categories);
 |---|---|---|---|
 | #1 | `manifest.json` | 팀원 A | — |
 | #2 | `js/bookmarks.js` | 팀원 A | 7 |
-| #3 | `js/store.js` | 팀원 A | 12 |
+| #3 | `js/store.js` | 팀원 A | 17 |
 | #4 | `js/organize.js` | 팀원 A | 2 |
 | #5 | `js/view/history.js` | 팀원 A | 1 |
 | #6 | `background.js` | 팀원 B | 3 |
@@ -108,14 +108,15 @@ m.classify({ title: "채용 공고", url: "https://example.com" }, categories);
 | #9 | `js/view/forgottenFolder.js` | 팀원 B | 1 |
 | #10 | `data/categories.json` | 팀원 B | — |
 | #11 | `js/plan.js` | 팀원 C | 4 |
-| #12 | `js/topic.js` | 팀원 C | 1 |
+| #12 | `js/topic.js` (v22에서 제외) | 팀원 C | 1 |
 | #13 | `js/view/folders.js` | 팀원 C | 1 |
 | #14 | `newtab.html`, `newtab.css` | 팀원 D | — |
 | #15 | `js/render.js` | 팀원 D | 1 |
-| #16 | `js/ui.js` | 팀원 D | 3 |
+| #16 | `js/ui.js` | 팀원 D | 4 |
 | #17 | `js/view/cards.js` | 팀원 D | 1 |
 | #18 | `js/search.js` | 팀원 D | 3 |
 | #19 | `js/dnd.js` | 팀원 D | 1 |
+| #83 | `js/view/profile.js` | 팀원 B | 1 |
 | #20 | 준비: 샘플 북마크 세트 (`tests/`) | 팀원 C, 팀원 B | — |
 | #21 | 준비: 저장소 설정 마무리 | 팀원 A | — |
 | #22 | 확인 목록 P1 (11주 중간 데모까지) | 모두 | — |

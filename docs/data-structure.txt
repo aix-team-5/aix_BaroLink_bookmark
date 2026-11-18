@@ -356,7 +356,7 @@ Chrome 북마크 데이터 + lastOpenedByUs + 고정 목록 + 다시 안 볼 목
 
 13. chrome.storage.local에 저장되는 데이터 정리
 
-최종적으로 chrome.storage.local에는 다음 10개의 서비스 전용 데이터가 들어간다.
+최종적으로 chrome.storage.local에는 다음 13개의 서비스 전용 데이터가 들어간다.
 
 저장 항목   이름   형태   쓰는 쪽   저장 목적
 정리 기록   history   기록의 목록   새 탭   자동 정리 전후의 위치를 저장하고 기록 확인 및 Undo에 사용
@@ -369,6 +369,9 @@ lastOpenedByUs   lastOpenedByUs   { 북마크ID: 시각 }   새 탭   새 탭에
 고정 목록   pinned   [북마크ID, …] (최대 8개)   새 탭   새 탭의 고정 영역에 표시할 북마크를 기억
 첫 정리 카드 상태   state   { firstCard: 상태 }   새 탭   첫 정리 카드를 처리했는지 기억
 가져오는 중 표시   importing   { at: 시각(ms) } 또는 null   서비스 워커   크롬이 북마크를 가져오는 중이라는 표시. onImportBegan에 기록하고 onImportEnded에 null로 지움. 기록한 지 10분이 지나면 끝난 것으로 봄(가져오는 도중 크롬이 꺼져 onImportEnded가 오지 않은 경우 대비). 읽는 쪽도 서비스 워커
+꾸미기   appearance   { accent, wallpaper, font, avatarPreset }   새 탭   고른 색상·배경·글꼴·대체 이미지. 없으면 기본값 { accent: "violet", wallpaper: "cloud", font: "system", avatarPreset: null }
+프로필 사진   profilePhoto   128px로 줄인 사진(dataURL) 또는 null   새 탭   올린 프로필 사진. load()에 넣지 않고 loadPhotos()로 읽음
+배경 사진   wallpaperPhoto   긴 변 1920px 이하로 줄인 사진(dataURL) 또는 null   새 탭   올린 배경 사진 한 장. 수백 KB라 load()에 넣지 않고 loadPhotos()로 읽음
 
 정리 기록 한 건의 형태
 { id, at, type, createdFolderIds, moves: [{ bookmarkId, title, fromParentId, fromIndex, toParentId }], fromOrder: { 원래 폴더ID: [북마크ID, …] }, skipped, undoneAt }
@@ -420,7 +423,11 @@ chrome.storage.local
 ├─ lastOpenedByUs
 ├─ 다시 안 볼 북마크 (dismissed)
 ├─ 고정 목록 (pinned)
-└─ 첫 정리 카드 상태 (state)
+├─ 첫 정리 카드 상태 (state)
+├─ 가져오는 중 표시 (importing)
+├─ 꾸미기 (appearance)
+├─ 프로필 사진 (profilePhoto)
+└─ 배경 사진 (wallpaperPhoto)
 
 따라서 Chrome 북마크 데이터 자체와 확장 프로그램의 관리 데이터가 섞이지 않는다.
 
@@ -466,3 +473,9 @@ Chrome 북마크 필드에 folderType과 syncing을 추가하고, dateLastUsed�
 
 Chrome 북마크 필드에 unmodifiable을 추가했다. 관리자가 정한 북마크는 옮기거나 지울 수 없으므로 우클릭 메뉴에서 뺀다 (2번)
 Chrome 북마크를 바꾸는 경우에 우클릭 "삭제"와 그 [되돌리기]를 더했다. 확장 프로그램이 스스로 북마크를 지우지 않는다는 원칙은 그대로다 (1번)
+
+20. 11월 18일 판에서 바뀐 점 (명세 v22)
+
+저장 항목이 10개에서 13개로 늘었다: 꾸미기(appearance), 프로필 사진(profilePhoto), 배경 사진(wallpaperPhoto). 셋 다 새 탭만 쓰고 읽는다 (13번)
+사진은 줄인 것만 저장하고 원본은 저장하지 않는다. 수백 KB라서 다른 키와 함께 한 번에 읽는 load()에 넣지 않고 loadPhotos()로 따로 읽는다
+꾸미기와 사진도 이 PC(storage.local)에만 저장한다. 다른 PC에서는 기본값이다 (14번 ③)

@@ -33,9 +33,10 @@ aix_BaroLink_bookmark/
 ├── extension/        크롬에 올리는 폴더. 코드만 둔다
 │   ├── manifest.json, background.js, newtab.html, newtab.css
 │   ├── js/           bookmarks, store, organize, classify, forgotten, plan, topic, render, ui, search, dnd
-│   │   └── view/     cards, folders, forgottenFolder, history
+│   │   └── view/     cards, folders, forgottenFolder, history, profile
 │   ├── data/         categories.json
-│   └── lib/          Sortable.min.js
+│   ├── fonts/        글꼴 파일 (P3)
+│   └── img/          배경 사진, wallpapers/, avatars/ (P3)
 ├── docs/             service-plan.md · spec.xlsx · file-structure.md · data-structure.txt · category-definitions.md · conventions.md · setup.md
 │   └── design/       확정 시안의 코드 (참고용)
 ├── tests/            샘플 북마크 세트 · 정답지 · 검증 목록
@@ -123,7 +124,7 @@ GitHub Desktop을 써도 순서는 같다. `git rebase`와 `git push --force`는
 | #9 | `js/view/forgottenFolder.js` | 팀원 B | `feat/F04-forgotten-folder` |
 | #10 | `data/categories.json` | 팀원 B | `feat/F05-categories` |
 | #11 | `js/plan.js` | 팀원 C | `feat/F05-plan` |
-| #12 | `js/topic.js` (P3) | 팀원 C | `feat/F16-topic` |
+| #12 | `js/topic.js` (P3, v22에서 제외) | 팀원 C | `feat/F16-topic` (만들지 않음) |
 | #13 | `js/view/folders.js` | 팀원 C | `feat/F03-folders` |
 | #14 | `newtab.html`, `newtab.css` | 팀원 D | `feat/F12-newtab` |
 | #15 | `js/render.js` | 팀원 D | `feat/F12-render` |
@@ -131,6 +132,7 @@ GitHub Desktop을 써도 순서는 같다. `git rebase`와 `git push --force`는
 | #17 | `js/view/cards.js` | 팀원 D | `feat/F06-cards` |
 | #18 | `js/search.js` | 팀원 D | `feat/F11-search` |
 | #19 | `js/dnd.js` (P3) | 팀원 D | `feat/F17-dnd` |
+| #83 | `js/view/profile.js` (P3) | 팀원 B | `feat/F18-profile` |
 | #20 | 샘플 북마크 세트 (`tests/`) | 팀원 C, 팀원 B | `test/sample-sets` |
 | #21 | 저장소 설정 마무리 | 팀원 A | `chore/repo-setup` |
 
@@ -140,6 +142,7 @@ GitHub Desktop을 써도 순서는 같다. `git rebase`와 `git push --force`는
 - 브랜치는 이슈 화면의 **Development → Create a branch**로, 항상 최신 `main`에서 만든다. 다른 사람의 브랜치에서 만들지 않는다. 아직 합쳐지지 않은 남의 작업이 필요하면, 그 사람에게 된 데까지 먼저 PR로 올려 달라고 한다(아래 "먼저 올리기").
 - 브랜치 하나는 PR 하나다. 그 이슈의 **P1 함수를 모두 끝낸 뒤** PR을 올린다. 작업 중에는 커밋을 여러 번 해도 되고, 며칠에 한 번은 `git pull origin main`으로 최신 `main`을 받아 합친다.
 - **P2·P3 함수는 P1 PR에 넣지 않는다.** P1 확인 목록(#22)이 닫힌 뒤, 같은 이슈에서 이름 끝에 `-p2`를 붙인 브랜치를 새로 만든다(예: `feat/F01-bookmarks-p2`, 9번). 이슈에 P1 함수만 있으면 브랜치는 하나로 끝난다.
+- **P3 함수는 이름 끝에 `-p3`를 붙인 새 브랜치에서 한다**(예: `feat/F01-store-p3`). `dnd.js`는 `feat/F17-dnd`(PR #82), 새 파일 `profile.js`는 `feat/F18-profile`(명세 v22).
 - **먼저 올리기.** 다른 사람이 기다리는 함수(예: `bookmarks.js`의 `loadTree`, `store.js`의 `load`)는 이슈 전체가 끝나기를 기다리지 않는다. 팀 채팅에 알리고, 그 함수만 담은 브랜치를 이슈 브랜치 이름 끝에 짧은 말을 붙여 따로 만들어(예: `feat/F01-bookmarks-load-tree`) 먼저 PR을 올린다. 합쳐진 뒤 이슈 브랜치에서 `git pull origin main`으로 받는다.
 
 ---
@@ -165,7 +168,7 @@ GitHub Desktop을 써도 순서는 같다. `git rebase`와 `git push --force`는
 
 ### 이슈
 
-- 할 일은 GitHub 이슈에 있다. **#1~#19는 파일 19개**이고(이슈 하나 = 파일 하나 = 담당 한 명), 그 파일에 만들 함수가 입력·출력·동작과 함께 체크 칸으로 들어 있다. 번호는 `spec.xlsx` '파일별 역할' 시트의 "이슈" 열에 있다. #20(샘플 세트)과 #21(저장소 설정)은 준비 작업이다.
+- 할 일은 GitHub 이슈에 있다. **#1~#19와 #83은 파일 20개**이고(#12 topic.js는 명세 v22에서 제외. 이슈 하나 = 파일 하나 = 담당 한 명), 그 파일에 만들 함수가 입력·출력·동작과 함께 체크 칸으로 들어 있다. 번호는 `spec.xlsx` '파일별 역할' 시트의 "이슈" 열에 있다. #20(샘플 세트)과 #21(저장소 설정)은 준비 작업이다.
 - 이슈는 모두 핵심 정책 → 세부 작업 → 완료 조건 → 테스트 → 참고 자료 순서로 적는다. 새 이슈를 만들 때도 이 순서를 따른다.
 - **#22~#24는 요구사항 확인 목록**이다(P1, P2, P3). 요구사항은 여러 파일이 함께 있어야 확인되므로 따로 모았다. 확인하는 사람이 눌러 보고 통과한 줄에 체크한다.
 - 브랜치가 이슈 하나에 하나이므로(3번), PR 본문에도 그 이슈 하나를 적는다. 그 PR로 이슈의 함수가 모두 끝나면 `Closes #8`을 쓴다. P2 함수가 남아 있는 P1 PR과 "먼저 올리기" PR은 `Refs #8`을 쓰고, 마지막 PR(보통 `-p2` 브랜치)에서 `Closes #8`을 쓴다. 요구사항 번호(`F04-01`)에는 `#`을 붙이지 않는다.
@@ -291,11 +294,11 @@ CodeRabbit보다 먼저 **자동 검사(`check`)** 가 돈다. PR마다 GitHub�
 | 담당 | 맡는 파일 (`extension/` 아래) |
 |---|---|
 | 팀원 A | `manifest.json`, `js/bookmarks.js`, `js/store.js`, `js/organize.js`, `js/view/history.js` |
-| 팀원 B | `background.js`, `js/classify.js`, `js/forgotten.js`, `js/view/forgottenFolder.js`, `data/categories.json` |
+| 팀원 B | `background.js`, `js/classify.js`, `js/forgotten.js`, `js/view/forgottenFolder.js`, `js/view/profile.js`, `data/categories.json` |
 | 팀원 C | `js/plan.js`, `js/topic.js`, `js/view/folders.js` |
-| 팀원 D | `newtab.html`, `newtab.css`, `js/render.js`, `js/ui.js`, `js/view/cards.js`, `js/search.js`, `js/dnd.js` |
+| 팀원 D | `newtab.html`, `newtab.css`, `js/render.js`, `js/ui.js`, `js/view/cards.js`, `js/search.js`, `js/dnd.js`, `fonts/`, `img/` |
 
-- `lib/Sortable.min.js`는 받아 온 파일이라 아무도 고치지 않는다. 넣는 것은 팀원 D가 P3를 시작할 때 한다.
+- P3(명세 v22) 담당: A는 명세·`store.js`·`check.mjs`·문서, B는 `view/profile.js`(새 파일), C는 `view/folders.js`(F17 놓는 쪽), D는 `dnd.js`·`render.js`·`ui.js`·`newtab.css`와 글꼴·배경·대체 이미지 파일. SortableJS는 쓰지 않는다(크롬 기본 끌어 놓기).
 - `docs/`와 `tests/`는 누구나 고칠 수 있다. 단, 샘플 세트는 팀원 C, 정답지는 팀원 B에게 먼저 말한다.
 - 저장소 설정 파일(`.gitignore`, `.gitattributes`, `.coderabbit.yaml`, `.github/`, `.vscode/`, `README.md`, `AGENTS.md`, `CLAUDE.md`)은 팀원 A가 맡는다(제안).
 
@@ -363,7 +366,7 @@ AI 도구(Claude Code, Cursor, Copilot 등)가 지킬 규칙은 저장소 맨 �
 2. `docs/spec-v15` 같은 브랜치에서 해당 줄을 고치고, '개요' 시트의 판 번호를 올리고 무엇이 바뀌었는지 한 줄 적는다. 파일 이름에는 판 번호를 넣지 않는다.
 3. PR을 올린다. **그 함수를 부르는 파일의 담당**이 승인한다(누가 부르는지는 `file-structure.md` 4번 그림). 부르는 사람이 여럿이면 한 명이 승인하고, 나머지에게는 팀 채팅으로 알린다. 명세 PR은 그날 안에 합친다.
 4. 합쳐진 뒤에 코드를 바꾸는 PR을 올린다.
-5. 함수의 입력·출력을 바꿨으면 그 파일의 이슈(#1~#19)를, 요구사항 문장을 바꿨으면 확인 목록(#22~#24)을 같게 고친다.
+5. 함수의 입력·출력을 바꿨으면 그 파일의 이슈(#1~#19, #83)를, 요구사항 문장을 바꿨으면 확인 목록(#22~#24)을 같게 고친다.
 
 함수 안쪽의 동작만 바꾸고 입력·출력이 그대로면 이 절차는 필요 없다.
 
