@@ -9,7 +9,8 @@ export function initDnd(container) {}
 export function makeDraggable(tile, bookmark) {}
 
 // 놓는 쪽: 앱 폴더·하위 폴더 타일. 위에 놓으면 그 폴더 맨 뒤로 옮긴다 (folders.js가 부름)
-export function makeDropTarget(tile, folderId) {}
+// options.name: "…에 넣기" 안내에 쓸 폴더 이름. 없으면 타일 안 .folder__name 글자 (F17-07)
+export function makeDropTarget(tile, folderId, options = {}) {}
 
 // 놓는 쪽: 폴더 팝업 안의 앱 목록. 앱 사이에 놓으면 그 자리로 순서를 바꾼다 (folders.js가 부름)
 export function makeSortable(listEl, parentId) {}
