@@ -13,6 +13,7 @@ import { suggestForNew } from "./classify.js";
 import { pickForgotten } from "./forgotten.js";
 import { appIcon, icon, showToast } from "./ui.js";
 import { runWebSearch, searchBookmarks } from "./search.js";
+import { makeDraggable } from "./dnd.js";
 import { showFolders, openFolderPopup, showContextMenu } from "./view/folders.js";
 import { showForgotten } from "./view/forgottenFolder.js";
 import { showResultNotice, showHistory } from "./view/history.js";
@@ -477,7 +478,18 @@ async function openWithNotice(bookmark) {
   if (opened === false) showToast("이 북마크는 새 탭에서 실행할 수 없어요");
 }
 
+// 모든 북마크의 앱 한 칸. 앱 버튼 옆에 끌기 손잡이를 붙이므로 칸(div)으로 감싼다 (F17-01)
+// 손잡이는 버튼 안에 넣지 않는다: 버튼 안의 요소는 크롬에서 끌기를 시작하지 못한다
 function renderBookmarkTile(bookmark, isNew = false) {
+  const cell = document.createElement("div");
+  cell.className = "bookmark-cell";
+  cell.appendChild(renderBookmarkButton(bookmark, isNew));
+  // 관리자가 정한 북마크에는 손잡이를 붙이지 않는다 (F17-04는 makeDraggable이 본다)
+  makeDraggable(cell, bookmark);
+  return cell;
+}
+
+function renderBookmarkButton(bookmark, isNew) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "bookmark";
@@ -595,9 +607,18 @@ function scheduleRerender() {
   if (rerenderTimer !== null) return;
   rerenderTimer = setTimeout(() => {
     rerenderTimer = null;
+    // F17-10: 앱을 끄는 동안에는 다시 그리지 않는다. 격자를 비우면 끄던 칸이 사라져 끌기가 끊긴다
+    // dnd.js가 끄는 동안 <html>에 is-dragging을 붙이고, 끝나면 "dnd:end"를 보낸다. 그때 한 번 그린다
+    if (document.documentElement.classList.contains("is-dragging")) {
+      rerenderAfterDrag = true;
+      return;
+    }
     refresh().catch((error) => console.warn("다시 그리기 실패", error));
   }, RERENDER_DELAY_MS);
 }
+
+// 끄는 동안 미뤄 둔 다시 그리기가 있는지 (F17-10)
+let rerenderAfterDrag = false;
 
 // 크롬 북마크와 저장 항목을 다시 읽어 화면을 그린다
 async function refresh() {
@@ -614,6 +635,11 @@ async function refresh() {
   }
   // 정리하는 동안에도 더 나중의 읽기가 시작됐을 수 있다
   if (seq !== refreshSeq) return;
+  // 읽는 사이에 끌기가 시작됐으면 그리지 않고 끌기가 끝난 뒤로 미룬다 (F17-10)
+  if (document.documentElement.classList.contains("is-dragging")) {
+    rerenderAfterDrag = true;
+    return;
+  }
   renderAll(tree, stored);
 }
 
@@ -630,6 +656,12 @@ function registerListeners() {
   // 서비스 워커가 저장 항목을 바꾸면(새 북마크·직접 옮김) 새 탭이 알아챈다
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName === "local") scheduleRerender();
+  });
+  // F17-10: 끌기가 끝나면, 끄는 동안 미룬 다시 그리기를 한 번 한다
+  document.addEventListener("dnd:end", () => {
+    if (!rerenderAfterDrag) return;
+    rerenderAfterDrag = false;
+    scheduleRerender();
   });
 }
 
