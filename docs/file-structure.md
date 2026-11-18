@@ -6,7 +6,7 @@
 > 그림: 구조_이미지.png (이 문서와 다른 곳은 9번 참고)
 > 코드: 프로토타입 코드는 쓰지 않고 처음부터 새로 만든다(10월 6일 확정). 프로토타입을 돌려서 알아낸 사실은 이 문서와 명세에 "실행 확인"으로 남아 있다.
 
-- 기술 스택: Manifest V3 (크롬 134 이상) · HTML / CSS / JavaScript (빌드 도구 없음, ES 모듈) · 백그라운드 서비스 워커 · SortableJS (폴더에 파일로 포함, CDN 사용 불가) · 서버·DB·AI 없음
+- 기술 스택: Manifest V3 (크롬 134 이상) · HTML / CSS / JavaScript (빌드 도구 없음, ES 모듈) · 백그라운드 서비스 워커 · 서버·DB·AI 없음
 - 권한: `bookmarks`, `storage`, `favicon`, `search` · 선택 권한 `topSites`
 - 두 부분으로 구성: **새 탭 화면**(새 탭이 열려 있을 때만 동작) + **서비스 워커**(새 탭이 닫혀 있어도 북마크 알림을 받음)
 
@@ -62,20 +62,24 @@ aix_BaroLink_bookmark/
 │   │   ├── classify.js        분류 규칙 · 정확도 측정 · 새 북마크 추천 (계산만)      담당 B
 │   │   ├── forgotten.js       잊고 있던 북마크 고르기 (계산만, 화면은 8개까지)      담당 B
 │   │   ├── plan.js            정리 대상(북마크바 포함) · 폴더 계획 · 고정 후보       담당 C
-│   │   ├── topic.js           세부 폴더 제안 (P3)                                   담당 C
+│   │   ├── topic.js           세부 폴더 제안 (P3, v22에서 제외)                     담당 C
 │   │   ├── render.js          화면 시작 · 전체 다시 그리기 · 헤더 · 고정됨 · 모든 북마크  담당 D
-│   │   ├── ui.js              공통 화면 조각: 앱 아이콘 · 안내 문구 · 선 아이콘      담당 D
+│   │   ├── ui.js              공통 화면 조각: 앱 아이콘 · 안내 문구 · 선 아이콘 · 꾸미기 적용  담당 D
 │   │   ├── view/
 │   │   │   ├── cards.js           첫 정리 카드 · 고정 제안 · 정리 창 · 고르기 창     담당 D
 │   │   │   ├── folders.js         내 폴더 줄 · 폴더 팝업 · 우클릭 메뉴               담당 C
 │   │   │   ├── forgottenFolder.js 잊고 있던 북마크 폴더와 팝업                       담당 B
-│   │   │   └── history.js         정리 결과 안내 · 정리 기록 화면                    담당 A
+│   │   │   ├── history.js         정리 결과 안내 · 정리 기록 화면                    담당 A
+│   │   │   └── profile.js         내 정보 창 · 사진 고르기·줄이기 · 꾸미기 고르기 (P3)  담당 B
 │   │   ├── search.js          웹 검색창 + 북마크 검색                               담당 D
-│   │   └── dnd.js             드래그 이동 (P3, SortableJS)                          담당 D
+│   │   └── dnd.js             드래그 이동 (P3, 크롬 기본 끌어 놓기)                 담당 D
 │   ├── data/
 │   │   └── categories.json    사이트 분류표 · 제목 키워드 · 분류하지 않는 사이트     담당 B
-│   └── lib/
-│       └── Sortable.min.js    SortableJS 파일 (CDN 금지라 폴더에 포함)
+│   ├── fonts/                 Pretendard · 나눔명조 글꼴 파일과 OFL 라이선스 (P3, CDN 금지)  담당 D
+│   └── img/
+│       ├── cloud-background.jpg  기본 배경 사진                                       담당 D
+│       ├── wallpapers/        미리 넣은 배경 (P3)                                    담당 D
+│       └── avatars/           계정 동그라미의 대체 이미지 6개 (P3, 직접 만든 SVG)     담당 D
 ├── docs/                      서비스 계획 · 명세 · 이 구조도 · 데이터 구조 · 카테고리 정의 · 저장소 규칙 · 준비하는 법
 │   └── design/                확정 시안의 코드 (참고용. 복사하지 않는다)
 └── tests/                     샘플 북마크 세트 · 정답지 · 검증 목록
@@ -92,20 +96,21 @@ aix_BaroLink_bookmark/
 | `manifest.json` | 권한, 새 탭을 `newtab.html`로 바꾸기, 서비스 워커(`type: module`) 등록 | — | C01, C02 | A |
 | `background.js` | 새 탭이 닫혀 있어도 북마크 알림을 받아 기록. 새 북마크는 `newBookmarks`, 우리 정리가 아닌 이동은 `manualMoves`에 기록. 가져오기 중엔 멈춤 | onCreated·onMoved·onRemoved 처리 (N32–N34) | bookmarks 알림, runtime.onInstalled (C03, C09, C10, C12, C13) | B |
 | `js/bookmarks.js` | 크롬 북마크를 읽고 바꾸는 통로. 전체 읽기(기타 북마크가 두 개면 동기화되는 쪽), 폴더 만들기·이름·삭제(안의 북마크는 꺼냄), 옮기기, 열기, 북마크 삭제·되살리기, 파비콘 | loadTree, createFolder, moveBookmark, renameFolder, deleteFolderKeepChildren, openBookmark, faviconUrl, removeBookmark, restoreBookmark (N01–N07, N48, N49) | bookmarks, tabs, favicon (C04–C08, C18, C22) | A |
-| `js/store.js` | 저장 항목을 읽고 쓰는 통로. 읽고→고치고→쓰기를 한 함수로 묶어 순서대로 처리 | load, update, recordOpened, pin, dismiss, markManualMove, setPending/isPending, addHistory, cleanupMissing, setFirstCard, markHandledNew, addNew/removeNew/purgeWorkerKeys, setImporting/isImporting, snapshotStored/restoreStored (N08–N16, N38–N40, N47, N50) | storage.local (C14, C15) | A |
+| `js/store.js` | 저장 항목을 읽고 쓰는 통로. 읽고→고치고→쓰기를 한 함수로 묶어 순서대로 처리 | load, update, recordOpened, pin, dismiss, markManualMove, setPending/isPending, addHistory, cleanupMissing, setFirstCard, markHandledNew, addNew/removeNew/purgeWorkerKeys, setImporting/isImporting, snapshotStored/restoreStored, setAppearance, setPhoto, loadPhotos (N08–N16, N38–N40, N47, N50–N53). 사진 두 키는 `load()`에 넣지 않고 `loadPhotos()`로 읽음 | storage.local (C14, C15) | A |
 | `js/organize.js` | 정리 적용: 원래 위치 읽기 → 북마크바 맨 뒤에 폴더 만들기 → '옮기는 중' 저장 → 옮기기 → 정리 기록. 되돌리기: 원래 바로 앞에 있던 북마크의 뒤에 놓아 순서를 복원, 직접 옮긴 것은 건너뜀 | applyPlan, undo (N22, N23) | bookmarks.js · store.js 경유 | A |
 | `js/classify.js` | 분류표 → 주소 끝 → 제목 키워드 순으로 카테고리 하나. 정답지로 적용률·정확도 측정. 새 북마크 추천 폴더 | classify, measure, suggestForNew (N17, N18, N24) | 없음 | B |
 | `js/forgotten.js` | 마지막으로 연 시각(우리 기록·dateLastUsed 중 최근 → 저장 시각) 계산, 30일 넘게 안 연 북마크를 오래 안 연 순으로 고르기. 화면은 앞의 8개만 보여 줌 | lastOpened, pickForgotten (N25, N26) | 없음 | B |
 | `js/plan.js` | 정리 대상 고르기(북마크바·기타·모바일과 크롬 가져오기 폴더의 바로 아래에 흩어진 북마크. 사용자 폴더와 최근 30일 안에 북마크바에서 연 북마크는 제외), 폴더 개수·계획, 못 만들면 고정 후보 5개, 새 북마크가 모이면 새 폴더 제안 | getTargets, makePlan, pickPinCandidates, suggestNewFolders (N19–N21, N37) | 없음 (자주 방문한 사이트 목록은 view/cards.js가 받아서 넘겨 줌) | C |
-| `js/topic.js` | 큰 폴더 안 반복 주제 단어(북마크 3개+, 사이트 2곳+)로 세부 폴더 제안 (P3) | suggestSubfolders (N35) | 없음 | C |
-| `js/render.js` | 화면의 시작점. 북마크·저장소 알림을 받아 전체를 다시 그리고, 각 화면 파일의 그리기 함수를 부름. 헤더·날짜·화면 아래의 고정됨(독)·모든 북마크는 직접 그림 | renderAll (N30) | bookmarks 알림, storage.onChanged (C09–C12, C16) | D |
-| `js/ui.js` | 모든 화면 파일이 함께 쓰는 공통 화면 조각. 앱 아이콘(색 타일 위의 파비콘, 없으면 첫 글자), 짧은 안내 문구, 선 아이콘 12종 | appIcon, showToast, icon (N44–N46) | bookmarks.js 경유 (파비콘) | D |
+| `js/topic.js` | 큰 폴더 안 반복 주제 단어(북마크 3개+, 사이트 2곳+)로 세부 폴더 제안 (P3, v22에서 제외. 파일과 뼈대는 그대로) | suggestSubfolders (N35) | 없음 | C |
+| `js/render.js` | 화면의 시작점. 북마크·저장소 알림을 받아 전체를 다시 그리고, 각 화면 파일의 그리기 함수를 부름. 헤더(오른쪽 끝 계정 동그라미 포함)·날짜·화면 아래의 고정됨(독)·모든 북마크는 직접 그림. 시작할 때 꾸미기를 먼저 적용, 끄는 동안에는 다시 그리기를 미룸 | renderAll (N30) | bookmarks 알림, storage.onChanged (C09–C12, C16) | D |
+| `js/ui.js` | 모든 화면 파일이 함께 쓰는 공통 화면 조각. 앱 아이콘(색 타일 위의 파비콘, 없으면 첫 글자), 짧은 안내 문구, 선 아이콘 13종(v22: user 추가), 꾸미기 적용(`<html>`의 data-accent·data-font, 배경) | appIcon, showToast, icon, applyAppearance (N44–N46, N54) | bookmarks.js 경유 (파비콘) | D |
 | `js/view/cards.js` | 첫 정리 카드, 고정 제안 카드, 자세히 보기와 [정리하기] 창, 고정할 북마크 고르기 창. 고정 제안의 권한 요청과 자주 방문한 사이트 읽기 | showFirstCard, showOrganizeDialog, showPinPicker (N31) | permissions, topSites (C19–C21) | D (고정 제안은 C와 협업) |
 | `js/view/folders.js` | 내 폴더 줄, 폴더 팝업(폴더 안의 폴더 포함), 폴더 만들기·이름 바꾸기·삭제, 우클릭 메뉴(폴더로 이동·북마크 삭제) | showFolders, openFolderPopup, showContextMenu (N41) | bookmarks.js 경유 | C |
 | `js/view/forgottenFolder.js` | 잊고 있던 북마크 폴더(개수 배지)와 팝업. 8개까지 표시, 열기·고정하기·이제 안 봐도 됨·어디 있는지 보기 | showForgotten (N42) | bookmarks.js · store.js 경유 | B |
 | `js/view/history.js` | 정리 결과 안내([되돌리기], 12초)와 정리 기록 화면 | showResultNotice, showHistory (N43) | organize.js · store.js 경유 | A |
+| `js/view/profile.js` | 내 정보 창(P3). 동기화 상태, 북마크 수·폴더 수, 마지막 정리 날짜, 프로필 사진·대체 이미지, 색상·배경·글꼴 고르기. 사진을 줄여 저장 | showProfile (N55) | store.js 경유 | B |
 | `js/search.js` | 웹 검색(위쪽 검색창. 주소면 이동, 아니면 기본 검색엔진)과 북마크 검색(모든 북마크 영역의 검색창. 제목·주소 부분 일치). 두 검색창은 연동하지 않음 | searchBookmarks, isUrlLike, runWebSearch (N27–N29) | search, tabs (C17, C18) | D |
-| `js/dnd.js` | 끌어서 순서 바꾸기, 폴더 위에 놓기는 직접 구현 | initDnd (N36) | bookmarks.js 경유 | D |
+| `js/dnd.js` | 앱만 끈다. 모든 북마크 → 앱 폴더에 넣기, 폴더 팝업 안 순서 바꾸기·하위 폴더에 넣기. 크롬 기본 끌어 놓기로 만들고 놓을 곳을 표시 | makeDraggable, makeDropTarget, makeSortable (N36) | bookmarks.js 경유 | D (놓는 쪽 부르기는 C) |
 | `data/categories.json` | 카테고리 9개의 사이트 분류표, 주소 끝 규칙, 제목 키워드, 분류하지 않는 사이트. 내용의 기준은 `docs/category-definitions.md` 10번 | — | — | B |
 | `newtab.html` / `newtab.css` | 화면 뼈대와 모양. 스크립트는 모두 `.js` 파일에 두고 `addEventListener`로 연결 (MV3 제한). `newtab.css` 맨 위에 공통 값(색, 간격, 글자 크기, 둥글기)과 공통 모양(팝업 틀, 버튼, 목록 줄)을 둔다 | — | — | D |
 
@@ -135,6 +140,7 @@ graph TD
     FOLDERS["view/folders.js (C)"]
     FVIEW["view/forgottenFolder.js (B)"]
     HVIEW["view/history.js (A)"]
+    PVIEW["view/profile.js (B)"]
     SEARCH["search.js (D)"]
     DND["dnd.js (D)"]
     UIJS["ui.js (D) · 공통 조각"]
@@ -163,6 +169,7 @@ graph TD
   RENDER --> FOLDERS
   RENDER --> FVIEW
   RENDER --> HVIEW
+  RENDER --> PVIEW
   RENDER --> SEARCH
   RENDER --> DND
   RENDER --> PLAN
@@ -176,21 +183,22 @@ graph TD
   CARDS --> PLAN
   CARDS --> BMJS
   FOLDERS --> BMJS
-  FOLDERS --> TOPIC
+  FOLDERS --> DND
   FVIEW --> BMJS
   FVIEW --> STORE
   HVIEW --> ORG
+  PVIEW --> STORE
   PLAN --> CLS
   BMJS --> STORE
   ORG --> BMJS
   ORG --> STORE
   DND --> BMJS
-  DND --> SORT["lib/Sortable.min.js"]
   RENDER --> UIJS
   CARDS --> UIJS
   FOLDERS --> UIJS
   FVIEW --> UIJS
   HVIEW --> UIJS
+  PVIEW --> UIJS
   SEARCH --> UIJS
   UIJS --> BMJS
   SW --> STORE
@@ -338,7 +346,7 @@ sequenceDiagram
 
 | 칸 | 그리는 파일 | 내용 |
 |---|---|---|
-| `#header` | `render.js` | 이동 버튼, [정리하기], 정리 기록 버튼 |
+| `#header` | `render.js` | 이동 버튼, [정리하기], 정리 기록 버튼, 오른쪽 끝 계정 동그라미(누르면 `showProfile`, v22) |
 | `#web-search` | `render.js` (`search.js` 사용) | 날짜, 웹 검색창 |
 | `#organize-suggestion` | `view/cards.js` | 첫 정리 카드, 고정 제안 카드 |
 | `#my-folders` | — | 내 폴더 구역. 아래 두 칸을 담는다 |
@@ -348,7 +356,7 @@ sequenceDiagram
 | `#dock` | `render.js` | 고정됨 |
 | `#notice` | `view/history.js` | 정리 결과 안내 |
 | `#toast` | `ui.js` | 짧은 안내 문구 |
-| `#dialogs` | 각 화면 파일 | 각자의 `<dialog>`를 여기에 붙인다 |
+| `#dialogs` | 각 화면 파일 | 각자의 `<dialog>`를 여기에 붙인다. `view/profile.js`의 내 정보 창도 여기에 둔다(헤더 안에 두면 헤더를 다시 그릴 때 닫힘, 명세 v22 F18-02) |
 
 `#forgotten-slot`과 `#folder-list`는 화면에서 한 줄로 이어져 보여야 한다(시안에서는 같은 격자 안에 있다). 두 칸을 한 줄로 잇는 것은 `newtab.css`의 일이다.
 
@@ -371,6 +379,10 @@ sequenceDiagram
 - 북마크나 저장 항목이 바뀌면 알림이 `render.js`로 오고, `renderAll`이 그리기 함수들을 다시 부른다. 화면 파일은 "다시 그려 달라"고 요청하지 않는다. 예: [고정하기]는 `store.js`의 `pin`만 부르면 되고, 독은 알림을 받은 `render.js`가 다시 그린다.
 - 그리기 함수는 여러 번 불려도 결과가 같아야 한다. 자기 칸을 비우고 다시 그린다.
 - 열려 있는 `<dialog>`는 다시 그릴 때 닫지 않는다.
+- 앱을 끄는 동안에는 다시 그리지 않는다. 북마크·저장 항목이 바뀌어도 끌기가 끝난 뒤 한 번만 그린다(명세 v22 F17-10). 끄는 중에 다시 그리면 끄던 타일이 사라져 끌기가 끊긴다.
+  - '끄는 중' 표시: `dnd.js`가 끌기를 시작하면 `document.documentElement`에 `is-dragging` 클래스를 붙이고, 끝나면(dragend, `document`의 drop, 끄던 타일이 빠져 dragend가 오지 않을 때를 위해 끌기 뒤 첫 pointerdown) 떼고 `document`에 `dnd:end` 이벤트를 보낸다.
+  - `render.js`와 `view/folders.js`는 다시 그리기 전에 이 클래스를 보고, 붙어 있으면 미뤘다가 `dnd:end`를 받으면 한 번 그린다(`folders.js`의 팝업 다시 그리기·삭제 뒤 6초 타이머 포함). 새 함수는 만들지 않는다.
+- 꾸미기(색상·배경·글꼴)는 `render.js`가 시작할 때 첫 그리기 전에 `applyAppearance`로 적용하고, `appearance`·사진 키가 바뀌면 다시 적용한다(F18-13). 사진은 `load()`가 아니라 `loadPhotos()`로 읽는다.
 
 ### 새 북마크 정리 창의 입력 (F10, 명세 v20)
 

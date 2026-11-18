@@ -44,6 +44,7 @@ AI 코딩 도구(Claude Code, Cursor, Copilot, Codex 등)가 이 저장소에서
 | #17 | `js/view/cards.js` | 팀원 D |
 | #18 | `js/search.js` | 팀원 D |
 | #19 | `js/dnd.js` | 팀원 D |
+| #83 | `js/view/profile.js` | 팀원 B |
 
 이슈는 이렇게 읽는다. `gh`가 없으면 사용자에게 이슈 내용을 붙여 달라고 한다.
 
@@ -73,7 +74,7 @@ gh issue view 8 --repo aix-team-5/aix_BaroLink_bookmark
 
 **화면을 그릴 때** (자세한 것은 `docs/file-structure.md` 12번)
 
-- 각 파일은 `newtab.html`의 자기 칸 안만 그린다: `cards.js`는 `#organize-suggestion`, `forgottenFolder.js`는 `#forgotten-slot`, `folders.js`는 `#folder-list`, `history.js`는 `#notice`, `ui.js`는 `#toast`, `render.js`는 `#header`·`#web-search`·`#all-bookmarks`·`#dock`. 팝업은 자기 `<dialog>`를 `#dialogs`에 붙인다.
+- 각 파일은 `newtab.html`의 자기 칸 안만 그린다: `cards.js`는 `#organize-suggestion`, `forgottenFolder.js`는 `#forgotten-slot`, `folders.js`는 `#folder-list`, `history.js`는 `#notice`, `ui.js`는 `#toast`, `render.js`는 `#header`·`#web-search`·`#all-bookmarks`·`#dock`. 팝업은 자기 `<dialog>`를 `#dialogs`에 붙인다. `profile.js`의 내 정보 창도 헤더 안이 아니라 `#dialogs`에 둔다.
 - 다른 화면 파일의 동작이 필요하면 `import`하지 않고, `render.js`가 넘겨 준 `actions`(`openFolder`, `showResultNotice`, `showContextMenu`)를 부른다. 필요한 동작이 `actions`에 없으면 멈추고 사용자에게 알린다.
 - 그리기 함수는 여러 번 불려도 결과가 같아야 한다. 자기 칸을 비우고 다시 그리고, 열려 있는 팝업은 닫지 않는다. 다시 그려 달라고 요청하는 코드를 만들지 않는다(데이터가 바뀌면 `render.js`가 다시 부른다).
 - 모양은 `docs/design/App.tsx`(확정 시안의 참고용 사본)를 본다. 그 코드는 React라서 `extension/`에 복사하지 않고, HTML·CSS·JavaScript로 다시 쓴다.
