@@ -6,7 +6,7 @@
 // - 표시(F17-06~09)는 드래그 이벤트에서 CSS 클래스만 붙이고 뗀다. 모양은 newtab.css의 .dnd-*
 
 import { moveBookmark } from "./bookmarks.js";
-import { showToast } from "./ui.js";
+import { appIcon, showToast } from "./ui.js";
 
 // 끄는 동안의 상태 { bookmark, tile }. 끄지 않을 때는 null
 let drag = null;
@@ -139,8 +139,14 @@ function start(event, tile, bookmark) {
   if (event.dataTransfer) {
     event.dataTransfer.effectAllowed = "move";
     event.dataTransfer.setData(DRAG_TYPE, String(bookmark.id));
-    // 손잡이가 아니라 앱 칸 전체가 끌려가는 모양으로 보인다
-    if (typeof event.dataTransfer.setDragImage === "function") event.dataTransfer.setDragImage(tile, 24, 24);
+    // 손잡이가 아니라, 앱 아이콘과 이름이 든 작은 카드가 끌려가는 모양으로 보인다 (시안)
+    if (typeof event.dataTransfer.setDragImage === "function") {
+      const ghost = buildGhost(tile, bookmark);
+      document.body.appendChild(ghost);
+      event.dataTransfer.setDragImage(ghost, 36, 36);
+      // 크롬은 dragstart 안에서 모양을 찍어 두므로 바로 치워도 된다
+      setTimeout(() => ghost.remove(), 0);
+    }
   }
   // F17-06: 끄는 앱의 원래 자리를 흐리게, 놓을 수 있는 폴더에 점선 테두리
   tile.classList.add("dnd-source");
@@ -152,6 +158,22 @@ function start(event, tile, bookmark) {
     if (canDropInto(entry)) entry.tile.classList.add("dnd-candidate");
   }
   document.addEventListener("dragover", autoScroll);
+}
+
+// 끄는 동안 마우스를 따라다니는 카드: 손잡이 점 + 앱 아이콘 + 이름 (시안). 화면 밖에 잠깐 그려 모양만 찍는다
+// 아이콘은 칸에 이미 그려진 것을 복사한다(파비콘을 다시 받지 않게). 없으면 새로 그린다. 이름은 textContent로만 넣는다
+function buildGhost(tile, bookmark) {
+  const ghost = document.createElement("div");
+  ghost.className = "dnd-ghost";
+  const grip = document.createElement("span");
+  grip.className = "dnd-ghost__grip";
+  const drawn = tile.querySelector(".app-icon");
+  const iconEl = drawn && typeof drawn.cloneNode === "function" ? drawn.cloneNode(true) : appIcon(bookmark, 48);
+  const name = document.createElement("span");
+  name.className = "dnd-ghost__name";
+  name.textContent = bookmark.title || bookmark.url || "";
+  ghost.append(grip, iconEl, name);
+  return ghost;
 }
 
 // 끌기가 끝나면(놓기·Esc·취소) 모든 표시를 지운다 (F17-06)

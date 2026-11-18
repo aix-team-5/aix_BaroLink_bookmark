@@ -987,6 +987,11 @@ a {
   width: 100%;
 }
 
+/* 손잡이 위에 있어도 앱 칸이 흰 카드로 보인다 (시안) */
+.bookmark-cell:hover > .bookmark {
+  background: rgba(255, 255, 255, 0.7);
+}
+
 /* 점 6개 손잡이 (F17-01). 마우스를 올렸을 때만 보인다. 그림 파일 없이 점 6개를 배경으로 그린다 */
 .dnd-handle {
   position: absolute;
@@ -1015,36 +1020,55 @@ a {
   cursor: grabbing;
 }
 
-/* F17-06: 끄는 앱의 원래 자리는 흐리게 */
+/* F17-06: 끄는 앱의 원래 자리는 흐리게 하고, 빈자리처럼 회색 점선으로 둘러 둔다 (시안) */
 .dnd-source {
+  outline: 2px dashed var(--color-divider);
+  outline-offset: -2px;
+  border-radius: var(--radius-lg);
+}
+
+.dnd-source > * {
   opacity: 0.35;
 }
 
-/* F17-06: 놓을 수 있는 폴더에 옅은 점선 테두리 */
-.dnd-candidate {
-  outline: 2px dashed var(--color-primary-soft);
-  outline-offset: 4px;
+/* F17-06: 놓을 수 있는 폴더에 옅은 점선 테두리. 폴더 타일이면 미리보기 칸(.folder__thumb)에 두른다 (시안) */
+.dnd-candidate:not(:has(.folder__thumb)),
+.dnd-candidate .folder__thumb {
+  outline: 2px dashed var(--color-primary);
+  outline-offset: 3px;
+}
+
+.dnd-candidate:not(:has(.folder__thumb)) {
   border-radius: var(--radius-xl);
 }
 
-/* F17-07: 끄는 앱이 위에 있는 폴더는 강조색 테두리로 커지고 "'폴더 이름'에 넣기"를 띄운다 */
+/* F17-07: 끄는 앱이 위에 있는 폴더는 강조색 테두리·옅은 강조 바탕으로 조금 커지고 "'폴더 이름'에 넣기"를 띄운다 */
 .dnd-target {
   position: relative;
-  transition: transform 0.12s ease;
 }
 
-.dnd-over {
-  outline: 2px solid var(--color-primary);
-  outline-offset: 4px;
-  border-radius: var(--radius-xl);
+.dnd-target .folder__thumb,
+.dnd-target:not(:has(.folder__thumb)) {
+  transition: transform 0.12s ease, background 0.12s ease;
+}
+
+.dnd-over:not(:has(.folder__thumb)),
+.dnd-over .folder__thumb {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 2px;
+  background: var(--color-primary-soft);
   transform: scale(1.06);
 }
 
-/* 안내 글자는 data-drop-label을 글자로만 보인다 (dnd.js가 폴더 이름으로 채운다) */
+.dnd-over:not(:has(.folder__thumb)) {
+  border-radius: var(--radius-xl);
+}
+
+/* 안내 글자는 data-drop-label을 글자로만 보인다 (dnd.js가 폴더 이름으로 채운다). 폴더 위쪽 모서리에 걸쳐 띄운다 (시안) */
 .dnd-over::after {
   content: attr(data-drop-label);
   position: absolute;
-  bottom: calc(100% + var(--space-2));
+  bottom: calc(100% - var(--space-3));
   left: 50%;
   z-index: 3;
   max-width: 220px;
@@ -1066,12 +1090,13 @@ a {
 .dnd-insert-after::before {
   content: "";
   position: absolute;
-  top: var(--space-1);
-  bottom: var(--space-1);
+  top: 0;
+  bottom: 0;
   z-index: 2;
-  width: 3px;
+  width: 4px;
   border-radius: var(--radius-full);
   background: var(--color-primary);
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
   pointer-events: none;
 }
 
@@ -1081,6 +1106,56 @@ a {
 
 .dnd-insert-after::before {
   right: calc(-1 * var(--space-2));
+}
+
+/* 끄는 동안 마우스를 따라다니는 카드 (dnd.js가 dragstart 때 잠깐 그려 모양을 찍는다). 화면 밖에 그린다 */
+.dnd-ghost {
+  position: fixed;
+  top: -1000px;
+  left: -1000px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: var(--space-2);
+  width: 120px;
+  padding: var(--space-3) var(--space-2);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-strong);
+  box-shadow: var(--shadow-lg);
+  transform: rotate(-4deg);
+  pointer-events: none;
+}
+
+.dnd-ghost__grip {
+  position: absolute;
+  top: var(--space-2);
+  left: var(--space-2);
+  width: 8px;
+  height: 14px;
+  background-image: radial-gradient(circle, var(--color-text-muted) 1.5px, transparent 1.6px);
+  background-size: 8px 7px;
+}
+
+.dnd-ghost__name {
+  width: 100%;
+  overflow: hidden;
+  text-align: center;
+  font-size: var(--font-xs);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-strong);
+  display: -webkit-box;
+  -webkit-line-clamp: 2;
+  -webkit-box-orient: vertical;
+}
+
+/* 폴더 팝업 아래의 끌기 안내 줄 (시안: "놓으면 크롬 북마크의 순서도 같이 바뀌어요…"). folders.js가 붙여 쓴다 */
+.dnd-hint {
+  margin-top: var(--space-6);
+  padding: var(--space-3) var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-suggestion-bg);
+  color: var(--color-text-soft);
+  font-size: var(--font-sm);
 }
 
 .bookmark__icon {
