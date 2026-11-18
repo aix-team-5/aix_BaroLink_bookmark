@@ -148,6 +148,19 @@
   font-family: var(--font-system);
 }
 
+/* 꾸미기를 적용하기 전에는 화면을 숨겨 기본 색이 잠깐 보이지 않게 한다 (F18-13)
+   render.js가 적용을 끝내면 <html>에 data-appearance-ready가 붙는다. 스크립트가 멈춰도 1.5초 뒤에는 보인다 */
+html:not([data-appearance-ready]) body {
+  visibility: hidden;
+  animation: appearance-reveal 0s 1.5s forwards;
+}
+
+@keyframes appearance-reveal {
+  to {
+    visibility: visible;
+  }
+}
+
 /* -------------------------------------------------------------------------
    꾸미기 (F18-06·07·11). ui.js의 applyAppearance가 <html>에 data-accent·data-wallpaper·data-font를 붙인다
    JS에는 색 값을 두지 않는다. 강조색 변수 5개를 색마다 한 벌씩 둔다 (기본 violet은 위 :root 값)
