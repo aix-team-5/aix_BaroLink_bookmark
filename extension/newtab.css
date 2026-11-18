@@ -123,10 +123,97 @@
   --layout-max: 1152px;   /* 본문 최대 너비 (max-w-6xl) */
   --layout-min: 480px;    /* 최소 너비 (F12-02) */
 
-  color-scheme: light;
-  /* 웹 글꼴을 불러오지 않고 시스템 글꼴만 쓴다 */
-  font-family: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
+  /* 글꼴 (F18-11). ID system·gothic·serif. <html data-font>로 바꾼다 (ui.js의 applyAppearance)
+     웹 글꼴을 밖에서 불러오지 않는다. Pretendard·나눔명조 파일을 fonts/에 넣기 전에는 깔린 글꼴이 없으면 대신 쓸 글꼴로 보인다 */
+  --font-system: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Noto Sans KR", "Malgun Gothic", sans-serif;
+  --font-gothic: "Pretendard", "Pretendard Variable", "Noto Sans KR", "Malgun Gothic", sans-serif;
+  --font-serif: "Nanum Myeongjo", "NanumMyeongjo", "Noto Serif KR", "Batang", serif;
+
+  /* 색상 고르기의 동그라미 색 (F18-06, 내 정보 창). 강조색 한 벌의 대표색이다 */
+  --swatch-violet: #7c3aed;
+  --swatch-navy: #4f46e5;
+  --swatch-blue: #2563eb;
+  --swatch-sky: #0369a1;
+  --swatch-teal: #0f766e;
+  --swatch-green: #15803d;
+  --swatch-rose: #e11d48;
+  --swatch-ink: #334155;
+
+  /* 동기화 상태 점 (F18-03) */
+  --color-sync-on: #10b981;   /* emerald-500 */
+  --color-sync-off: #94a3b8;  /* slate-400 */
+
+  color-scheme: light;
+  font-family: var(--font-system);
+}
+
+/* -------------------------------------------------------------------------
+   꾸미기 (F18-06·07·11). ui.js의 applyAppearance가 <html>에 data-accent·data-wallpaper·data-font를 붙인다
+   JS에는 색 값을 두지 않는다. 강조색 변수 5개를 색마다 한 벌씩 둔다 (기본 violet은 위 :root 값)
+   ------------------------------------------------------------------------- */
+:root[data-accent="navy"] {
+  --color-primary: #4f46e5;
+  --color-primary-strong: #4338ca;
+  --color-primary-soft: #e0e7ff;
+  --color-primary-text: #4338ca;
+  --color-suggestion-bg: #eef2ff;
+}
+
+:root[data-accent="blue"] {
+  --color-primary: #2563eb;
+  --color-primary-strong: #1d4ed8;
+  --color-primary-soft: #dbeafe;
+  --color-primary-text: #1d4ed8;
+  --color-suggestion-bg: #eff6ff;
+}
+
+:root[data-accent="sky"] {
+  --color-primary: #0369a1;
+  --color-primary-strong: #075985;
+  --color-primary-soft: #e0f2fe;
+  --color-primary-text: #075985;
+  --color-suggestion-bg: #f0f9ff;
+}
+
+:root[data-accent="teal"] {
+  --color-primary: #0f766e;
+  --color-primary-strong: #115e59;
+  --color-primary-soft: #ccfbf1;
+  --color-primary-text: #0f766e;
+  --color-suggestion-bg: #f0fdfa;
+}
+
+:root[data-accent="green"] {
+  --color-primary: #15803d;
+  --color-primary-strong: #166534;
+  --color-primary-soft: #dcfce7;
+  --color-primary-text: #15803d;
+  --color-suggestion-bg: #f0fdf4;
+}
+
+:root[data-accent="rose"] {
+  --color-primary: #e11d48;
+  --color-primary-strong: #be123c;
+  --color-primary-soft: #ffe4e6;
+  --color-primary-text: #be123c;
+  --color-suggestion-bg: #fff1f2;
+}
+
+:root[data-accent="ink"] {
+  --color-primary: #334155;
+  --color-primary-strong: #1e293b;
+  --color-primary-soft: #e2e8f0;
+  --color-primary-text: #1e293b;
+  --color-suggestion-bg: #f8fafc;
+}
+
+:root[data-font="gothic"] {
+  font-family: var(--font-gothic);
+}
+
+:root[data-font="serif"] {
+  font-family: var(--font-serif);
 }
 
 /* -------------------------------------------------------------------------
@@ -140,6 +227,14 @@ html,
 body {
   margin: 0;
   padding: 0;
+}
+
+/* 버튼·입력칸은 글꼴을 물려받지 않으므로 고른 글꼴(F18-11)이 모든 글자에 가게 한다 */
+button,
+input,
+select,
+textarea {
+  font-family: inherit;
 }
 
 body {
@@ -156,6 +251,36 @@ body {
   line-height: 1.5;
   /* 가로 스크롤 금지 (F12-02) */
   overflow-x: hidden;
+}
+
+/* 배경 (F18-07·08). ID cloud·dawn·mint·lavender·peach·mist·photo. 기본은 위의 구름(cloud)
+   미리 넣은 사진은 img/wallpapers/ID.jpg, 고르기 칸의 작은 그림은 img/wallpapers/thumb/ID.jpg */
+:root[data-wallpaper="dawn"] body {
+  background-image: url("img/wallpapers/dawn.jpg");
+}
+
+:root[data-wallpaper="mint"] body {
+  background-image: url("img/wallpapers/mint.jpg");
+}
+
+:root[data-wallpaper="lavender"] body {
+  background-image: url("img/wallpapers/lavender.jpg");
+}
+
+:root[data-wallpaper="mist"] body {
+  background-image: url("img/wallpapers/mist.jpg");
+}
+
+/* 복숭아(노을)는 위쪽이 진해서, 위에서 아래로 옅어지는 흰 막을 깔아 헤더 글자가 읽히게 한다 (Q6) */
+:root[data-wallpaper="peach"] body {
+  background-image:
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.15) 45%, rgba(255, 255, 255, 0) 70%),
+    url("img/wallpapers/peach.jpg");
+}
+
+/* 올린 사진: ui.js가 <html>에 --wallpaper-photo: url("data:…")를 넣는다. 사진이 없으면 구름 그대로 */
+:root[data-wallpaper="photo"] body {
+  background-image: var(--wallpaper-photo, url("img/cloud-background.jpg"));
 }
 
 a {
@@ -1592,5 +1717,392 @@ a {
 @media (min-width: 1280px) {
   #all-bookmarks .bookmark-grid {
     grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+}
+
+/* =========================================================================
+   내 정보와 꾸미기 (F18, 명세 v22). 모양만 여기 둔다
+   - 헤더의 계정 동그라미 .account — render.js(D)가 그린다
+   - 내 정보 창 .profile — view/profile.js(B)가 그린다. 아래 이름(클래스)을 붙여 쓴다
+     <dialog class="dialog profile">
+       .dialog__panel > .dialog__header(.dialog__title "내 정보" + 닫기 .btn.btn--icon)
+       .profile__me > .profile__avatar(img 또는 icon("user")) + .profile__me-side
+         > .profile__photo-actions(.btn.profile__photo-btn "사진 바꾸기", .btn.btn--ghost "사진 지우기")
+         > .profile__presets > button.profile__preset[data-value][aria-pressed] > img(img/avatars/ID.svg)
+       .profile__info > .profile__sync(.profile__sync--on|--off) · .profile__counts(<strong>) · .profile__last
+       hr.profile__divider
+       .profile__section-title "색상" > .profile__swatches > button.profile__swatch[data-value][aria-pressed] (안에 icon("check"))
+       .profile__section-title "배경" > .profile__wallpapers > button.profile__wallpaper[data-value][aria-pressed] > .profile__wallpaper-label
+                                                          + label.profile__wallpaper.profile__wallpaper--upload (+ 사진 올리기, input[type=file])
+       .profile__section-title "글꼴" > .profile__fonts > button.profile__font[data-value][aria-pressed] > .profile__font-sample + .profile__font-name
+       .profile__note (icon("lock") + "꾸미기와 사진은 이 PC에만 저장돼요")
+   - 고른 칸은 aria-pressed="true"로 표시한다 (테두리는 강조색이라 색을 바꾸면 함께 바뀐다)
+   ========================================================================= */
+
+/* 헤더 맨 오른쪽 계정 동그라미 (F18-01). 올린 사진 → 대체 이미지 → 사람 모양 선 아이콘 순 */
+.account {
+  display: inline-flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 36px;
+  height: 36px;
+  padding: 2px;
+  overflow: hidden;
+  border: 2px solid var(--color-primary);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-strong);
+  color: var(--color-text-soft);
+  cursor: pointer;
+}
+
+.account img {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+}
+
+/* 아무것도 고르지 않았을 때(기본 그림): 회색 테두리 + 선 아이콘 (시안 5쪽 3번) */
+.account--empty {
+  border-color: var(--color-divider);
+}
+
+.account:hover {
+  box-shadow: 0 0 0 3px var(--color-primary-soft);
+}
+
+/* 내 정보 창 틀 (시안 2쪽) */
+.dialog.profile {
+  width: min(440px, calc(100vw - var(--space-8)));
+}
+
+.profile .dialog__body,
+.profile__me {
+  margin-top: var(--space-5);
+}
+
+/* 프로필 사진 + 사진 버튼 + 대체 이미지 */
+.profile__me {
+  display: flex;
+  align-items: center;
+  gap: var(--space-5);
+}
+
+.profile__avatar {
+  display: flex;
+  flex: 0 0 auto;
+  align-items: center;
+  justify-content: center;
+  width: 88px;
+  height: 88px;
+  padding: 3px;
+  overflow: hidden;
+  border: 3px solid var(--color-primary);
+  border-radius: var(--radius-full);
+  background: var(--color-surface-strong);
+  color: var(--color-text-soft);
+}
+
+.profile__avatar img {
+  width: 100%;
+  height: 100%;
+  border-radius: var(--radius-full);
+  object-fit: cover;
+}
+
+.profile__avatar--empty {
+  border-color: var(--color-divider);
+}
+
+.profile__me-side {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: var(--space-3);
+}
+
+.profile__photo-actions {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.btn.profile__photo-btn {
+  background: var(--color-primary-soft);
+  color: var(--color-primary-text);
+  box-shadow: none;
+}
+
+.btn.profile__photo-btn:hover {
+  background: var(--color-suggestion-bg);
+}
+
+.profile__presets {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--space-2);
+}
+
+.profile__preset {
+  width: 32px;
+  height: 32px;
+  padding: 0;
+  overflow: hidden;
+  border: 0;
+  border-radius: var(--radius-full);
+  background: transparent;
+  cursor: pointer;
+}
+
+.profile__preset img {
+  display: block;
+  width: 100%;
+  height: 100%;
+}
+
+.profile__preset[aria-pressed="true"] {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+/* 동기화 상태 · 개수 · 마지막 정리 (F18-02·03) */
+.profile__info {
+  margin-top: var(--space-5);
+  padding: var(--space-4);
+  border-radius: var(--radius-lg);
+  background: var(--color-surface-muted);
+}
+
+.profile__sync {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-strong);
+}
+
+.profile__sync::before {
+  content: "";
+  flex: 0 0 auto;
+  width: 8px;
+  height: 8px;
+  border-radius: var(--radius-full);
+  background: var(--color-sync-off);
+}
+
+.profile__sync--on::before {
+  background: var(--color-sync-on);
+}
+
+.profile__counts {
+  margin-top: var(--space-2);
+  font-size: var(--font-sm);
+  color: var(--color-text);
+}
+
+.profile__counts strong {
+  font-weight: var(--weight-black);
+  color: var(--color-text-strong);
+}
+
+.profile__counts strong + strong,
+.profile__counts span + strong {
+  margin-left: var(--space-3);
+}
+
+.profile__last {
+  margin-top: var(--space-1);
+  font-size: var(--font-xs);
+  color: var(--color-text-faint);
+}
+
+.profile__divider {
+  margin: var(--space-5) 0;
+  border: 0;
+  border-top: 1px solid var(--color-divider);
+}
+
+.profile__section-title {
+  margin: var(--space-5) 0 var(--space-3);
+  font-size: var(--font-sm);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-strong);
+}
+
+.profile__divider + .profile__section-title {
+  margin-top: 0;
+}
+
+/* 색상 8개 (F18-06). 동그라미 색은 :root의 --swatch-ID */
+.profile__swatches {
+  display: grid;
+  grid-template-columns: repeat(8, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.profile__swatch {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  width: 100%;
+  max-width: 40px;
+  aspect-ratio: 1 / 1;
+  padding: 0;
+  border: 0;
+  border-radius: var(--radius-full);
+  color: var(--color-on-dark);
+  cursor: pointer;
+}
+
+.profile__swatch .icon {
+  visibility: hidden;
+}
+
+.profile__swatch[aria-pressed="true"] {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 3px;
+}
+
+.profile__swatch[aria-pressed="true"] .icon {
+  visibility: visible;
+}
+
+.profile__swatch[data-value="violet"] { background: var(--swatch-violet); }
+.profile__swatch[data-value="navy"] { background: var(--swatch-navy); }
+.profile__swatch[data-value="blue"] { background: var(--swatch-blue); }
+.profile__swatch[data-value="sky"] { background: var(--swatch-sky); }
+.profile__swatch[data-value="teal"] { background: var(--swatch-teal); }
+.profile__swatch[data-value="green"] { background: var(--swatch-green); }
+.profile__swatch[data-value="rose"] { background: var(--swatch-rose); }
+.profile__swatch[data-value="ink"] { background: var(--swatch-ink); }
+
+/* 배경 6개 + 내 사진 + 사진 올리기 (F18-07·08). 작은 그림은 img/wallpapers/thumb/ID.jpg */
+.profile__wallpapers {
+  display: grid;
+  grid-template-columns: repeat(4, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.profile__wallpaper {
+  position: relative;
+  display: flex;
+  align-items: flex-end;
+  aspect-ratio: 16 / 10;
+  padding: var(--space-1);
+  overflow: hidden;
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background-color: var(--color-surface-muted);
+  background-size: cover;
+  background-position: center;
+  cursor: pointer;
+}
+
+.profile__wallpaper[aria-pressed="true"] {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.profile__wallpaper[data-value="cloud"] { background-image: url("img/wallpapers/thumb/cloud.jpg"); }
+.profile__wallpaper[data-value="dawn"] { background-image: url("img/wallpapers/thumb/dawn.jpg"); }
+.profile__wallpaper[data-value="mint"] { background-image: url("img/wallpapers/thumb/mint.jpg"); }
+.profile__wallpaper[data-value="lavender"] { background-image: url("img/wallpapers/thumb/lavender.jpg"); }
+.profile__wallpaper[data-value="peach"] { background-image: url("img/wallpapers/thumb/peach.jpg"); }
+.profile__wallpaper[data-value="mist"] { background-image: url("img/wallpapers/thumb/mist.jpg"); }
+/* 내 사진: ui.js가 <html>에 넣은 --wallpaper-photo를 그대로 쓴다 */
+.profile__wallpaper[data-value="photo"] { background-image: var(--wallpaper-photo); }
+
+/* 칸 왼쪽 아래의 이름표 (구름, 새벽…). 사진 위에서도 읽히게 어두운 반투명 바탕 */
+.profile__wallpaper-label {
+  padding: 1px var(--space-2);
+  border-radius: var(--radius-sm);
+  background: rgba(15, 23, 42, 0.55);
+  color: var(--color-on-dark);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-bold);
+}
+
+/* [사진 올리기] 칸: 점선 + 가운데 글자 */
+.profile__wallpaper--upload {
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  gap: 2px;
+  border: 1.5px dashed var(--color-text-muted);
+  background: transparent;
+  color: var(--color-text-soft);
+  font-size: var(--font-xs);
+  font-weight: var(--weight-bold);
+  text-align: center;
+}
+
+.profile__wallpaper--upload:hover {
+  border-color: var(--color-primary);
+  color: var(--color-primary-text);
+}
+
+.profile__wallpaper--upload input[type="file"] {
+  display: none;
+}
+
+/* 글꼴 3개 (F18-11). 보기 글자는 그 글꼴로 */
+.profile__fonts {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: var(--space-2);
+}
+
+.profile__font {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 2px;
+  padding: var(--space-3) var(--space-2);
+  border: 1px solid var(--color-divider);
+  border-radius: var(--radius-md);
+  background: var(--color-surface-strong);
+  color: var(--color-text-strong);
+  cursor: pointer;
+}
+
+.profile__font[aria-pressed="true"] {
+  outline: 3px solid var(--color-primary);
+  outline-offset: 2px;
+}
+
+.profile__font-sample {
+  font-size: var(--font-md);
+  font-weight: var(--weight-bold);
+}
+
+.profile__font-name {
+  font-size: var(--font-xs);
+  color: var(--color-text-faint);
+}
+
+.profile__font[data-value="system"] .profile__font-sample { font-family: var(--font-system); }
+.profile__font[data-value="gothic"] .profile__font-sample { font-family: var(--font-gothic); }
+.profile__font[data-value="serif"] .profile__font-sample { font-family: var(--font-serif); font-weight: var(--weight-medium); }
+
+/* "꾸미기와 사진은 이 PC에만 저장돼요" (F18-12) */
+.profile__note {
+  display: flex;
+  align-items: center;
+  gap: var(--space-2);
+  margin-top: var(--space-5);
+  font-size: var(--font-xs);
+  color: var(--color-text-faint);
+}
+
+/* 좁은 화면: 색상은 4개씩 두 줄, 배경은 3개씩 */
+@media (max-width: 520px) {
+  .profile__swatches {
+    grid-template-columns: repeat(4, minmax(0, 1fr));
+  }
+
+  .profile__wallpapers {
+    grid-template-columns: repeat(3, minmax(0, 1fr));
   }
 }
