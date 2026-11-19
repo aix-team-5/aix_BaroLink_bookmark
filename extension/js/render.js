@@ -7,17 +7,18 @@
 // - 북마크나 저장 항목이 바뀌면 renderAll을 다시 부른다. 그리기 함수는 자기 칸을 비우고 다시 그린다.
 
 import { loadTree, openBookmark } from "./bookmarks.js";
-import { load, cleanupMissing, unpin } from "./store.js";
+import { load, loadPhotos, cleanupMissing, unpin } from "./store.js";
 import { getTargets, makePlan, suggestNewFolders } from "./plan.js";
 import { suggestForNew } from "./classify.js";
 import { pickForgotten } from "./forgotten.js";
-import { appIcon, icon, showToast } from "./ui.js";
+import { appIcon, applyAppearance, icon, showToast } from "./ui.js";
 import { runWebSearch, searchBookmarks } from "./search.js";
 import { makeDraggable } from "./dnd.js";
 import { showFolders, openFolderPopup, showContextMenu } from "./view/folders.js";
 import { showForgotten } from "./view/forgottenFolder.js";
 import { showResultNotice, showHistory } from "./view/history.js";
 import { showFirstCard, showOrganizeDialog, showPinPicker } from "./view/cards.js";
+import { showProfile } from "./view/profile.js";
 
 // 고정됨(독)에 넣을 수 있는 최대 개수. store.js의 MAX_PINNED와 같다 (F08-06)
 const DOCK_MAX = 8;
@@ -241,8 +242,57 @@ function renderHeader(stored) {
   const historyBtn = makeHeaderButton("", "history", "btn--icon", () => showHistory());
   historyBtn.setAttribute("aria-label", "정리 기록");
 
-  groupActions.append(toFolders, toAll, organizeBtn, historyBtn);
+  groupActions.append(toFolders, toAll, organizeBtn, historyBtn, makeAccountButton(stored));
   header.append(brand, groupActions);
+}
+
+// 대체 이미지(avatarPreset)로 쓸 수 있는 ID. img/avatars/ID.svg와 같다. 목록에 없는 값은 사람 아이콘으로 그린다
+const AVATAR_PRESETS = ["lavender", "peach", "sky", "mint", "pink", "slate"];
+
+// 헤더 맨 오른쪽 계정 동그라미 (F18-01). 올린 사진 → 대체 이미지 → 사람 모양 선 아이콘 순으로 보여 주고, 누르면 내 정보 창을 연다
+function makeAccountButton(stored) {
+  const button = document.createElement("button");
+  button.type = "button";
+  button.className = "account";
+  button.setAttribute("aria-label", "내 정보와 꾸미기");
+  button.setAttribute("aria-haspopup", "dialog");
+
+  const photo = lastPhotos.profilePhoto;
+  const preset = stored?.appearance?.avatarPreset;
+  if (typeof photo === "string" && photo.startsWith("data:image/")) {
+    const img = document.createElement("img");
+    img.src = photo;
+    img.alt = "";
+    button.appendChild(img);
+  } else if (typeof preset === "string" && AVATAR_PRESETS.includes(preset)) {
+    const img = document.createElement("img");
+    img.src = `img/avatars/${preset}.svg`;
+    img.alt = "";
+    button.appendChild(img);
+  } else {
+    button.classList.add("account--empty");
+    button.appendChild(icon("user", 20));
+  }
+  button.addEventListener("click", openProfile);
+  return button;
+}
+
+// 내 정보 창을 연다 (F18-02·03). 창은 view/profile.js가 #dialogs에 붙인다. 이메일·이름은 넘기지 않는다
+// 마지막 정리 시각 = 되돌리지 않은 정리 기록 중 가장 최근 것(없으면 null)
+function openProfile() {
+  const stored = currentStored();
+  const done = (Array.isArray(stored.history) ? stored.history : []).filter(
+    (entry) => entry && !entry.undoneAt && Number.isFinite(entry.at),
+  );
+  const info = {
+    syncing: lastTree?.roots?.bar?.syncing === true,
+    bookmarkCount: lastTree?.bookmarks?.length ?? 0,
+    folderCount: lastTree?.folders?.length ?? 0,
+    lastOrganizedAt: done.length > 0 ? Math.max(...done.map((entry) => entry.at)) : null,
+    appearance: stored.appearance,
+    photos: lastPhotos,
+  };
+  showProfile(info, actions);
 }
 
 function makeHeaderButton(text, iconName, extraClass, onClick) {
@@ -257,6 +307,13 @@ function makeHeaderButton(text, iconName, extraClass, onClick) {
 
 // 마지막으로 읽은 stored를 보관해 둔다 (버튼 핸들러에서 쓴다)
 let lastStored = null;
+
+// 올린 사진 두 개. 수백 KB라 매번 읽지 않고, 시작할 때와 사진 키(profilePhoto·wallpaperPhoto)가 바뀔 때만 다시 읽는다 (F18-13)
+// photosVersion은 사진 키가 바뀔 때마다 올라가고, loadedPhotosVersion은 마지막으로 읽은 때의 값이다. 둘이 다르면 다시 읽어야 한다
+let lastPhotos = { profilePhoto: null, wallpaperPhoto: null };
+let photosVersion = 0;
+let loadedPhotosVersion = -1;
+
 function currentStored() {
   return lastStored ?? {};
 }
@@ -623,10 +680,27 @@ let rerenderAfterDrag = false;
 // 크롬 북마크와 저장 항목을 다시 읽어 화면을 그린다
 async function refresh() {
   const seq = ++refreshSeq;
-  const [tree, stored] = await Promise.all([loadTree(), load()]);
+  const photosAt = photosVersion;
+  const needPhotos = loadedPhotosVersion !== photosAt;
+  const [tree, stored, photos] = await Promise.all([
+    loadTree(),
+    load(),
+    needPhotos
+      ? loadPhotos().catch((error) => {
+          console.warn("사진을 읽지 못했어요", error);
+          return null;
+        })
+      : null,
+  ]);
   // 읽는 동안 더 나중에 시작한 읽기가 있으면, 이 결과는 낡았으니 그리지 않는다
   if (seq !== refreshSeq) return;
   lastStored = stored;
+  if (photos) {
+    lastPhotos = photos;
+    loadedPhotosVersion = photosAt;
+  }
+  // 꾸미기를 먼저 적용하고 그린다. 같은 값이면 아무것도 바뀌지 않는다
+  applyAppearance(stored.appearance, lastPhotos);
   // 저장 항목에서 사라진 북마크 ID를 정리한다 (실패해도 화면은 그린다)
   try {
     await cleanupMissing(tree);
@@ -655,7 +729,10 @@ function registerListeners() {
   chrome.bookmarks.onMoved.addListener(() => scheduleRerender());
   // 서비스 워커가 저장 항목을 바꾸면(새 북마크·직접 옮김) 새 탭이 알아챈다
   chrome.storage.onChanged.addListener((changes, areaName) => {
-    if (areaName === "local") scheduleRerender();
+    if (areaName !== "local") return;
+    // 사진이 바뀐 때만 사진을 다시 읽는다. 꾸미기(appearance)가 바뀐 것은 refresh가 load()로 함께 읽는다
+    if (changes.profilePhoto || changes.wallpaperPhoto) photosVersion += 1;
+    scheduleRerender();
   });
   // F17-10: 끌기가 끝나면, 끄는 동안 미룬 다시 그리기를 한 번 한다
   document.addEventListener("dnd:end", () => {
@@ -667,6 +744,18 @@ function registerListeners() {
 
 // 화면 시작
 async function start() {
+  // 첫 화면을 그리기 전에 꾸미기부터 적용한다. 그 전까지 newtab.css가 화면을 숨겨서 기본 색이 잠깐 보이지 않는다 (F18-13)
+  // 읽지 못해도 기본 꾸미기로 화면은 보여 준다
+  const photosAt = photosVersion;
+  try {
+    const [stored, photos] = await Promise.all([load(), loadPhotos()]);
+    lastPhotos = photos;
+    loadedPhotosVersion = photosAt;
+    applyAppearance(stored.appearance, photos);
+  } catch (error) {
+    console.warn("꾸미기를 읽지 못해 기본값으로 보여요", error);
+    applyAppearance(null, null);
+  }
   await loadCategories();
   registerListeners();
   await refresh();
@@ -674,5 +763,7 @@ async function start() {
 
 start().catch((error) => {
   console.error("화면을 시작하지 못했어요", error);
+  // 어떤 오류여도 숨긴 화면은 다시 보여 준다 (F18-13). 이미 적용한 꾸미기는 그대로 둔다
+  document.documentElement.dataset.appearanceReady = "true";
   showToast("화면을 불러오지 못했어요");
 });
