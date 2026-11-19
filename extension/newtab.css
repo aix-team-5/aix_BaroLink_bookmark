@@ -35,6 +35,22 @@
    - .hidden              : 숨김
    ========================================================================= */
 
+/* 고딕(Pretendard) 글꼴 파일 — 확장 프로그램 안의 fonts/ 파일만 쓴다 (F18-11, 명세 v23. 라이선스는 fonts/OFL-Pretendard.txt)
+   화면이 쓰는 500·700·800 굵기를 두 파일로 나눠 받는다 */
+@font-face {
+  font-family: "Pretendard";
+  src: url("fonts/Pretendard-Regular.subset.woff2") format("woff2");
+  font-weight: 400 500;
+  font-display: swap;
+}
+
+@font-face {
+  font-family: "Pretendard";
+  src: url("fonts/Pretendard-Bold.subset.woff2") format("woff2");
+  font-weight: 600 900;
+  font-display: swap;
+}
+
 /* -------------------------------------------------------------------------
    공통 값 — 색, 간격, 글자 크기, 둥글기 (CSS 변수)
    ------------------------------------------------------------------------- */
@@ -124,11 +140,12 @@
   --layout-min: 480px;    /* 최소 너비 (F12-02) */
 
   /* 글꼴 (F18-11). ID system·gothic·serif. <html data-font>로 바꾼다 (ui.js의 applyAppearance)
-     웹 글꼴을 밖에서 불러오지 않는다. Pretendard·나눔명조 파일을 fonts/에 넣기 전에는 깔린 글꼴이 없으면 대신 쓸 글꼴로 보인다 */
+     웹 글꼴을 밖에서 불러오지 않는다. Pretendard 줄인 판은 fonts/에 포함(F18-11)
+     명조는 파일 없이 PC 글꼴을 쓴다. PC에 없으면 기본 글꼴로 보인다(알려진 한계) */
   --font-system: ui-sans-serif, system-ui, -apple-system, "Segoe UI", Roboto,
     "Noto Sans KR", "Malgun Gothic", sans-serif;
   --font-gothic: "Pretendard", "Pretendard Variable", "Noto Sans KR", "Malgun Gothic", sans-serif;
-  --font-serif: "Nanum Myeongjo", "NanumMyeongjo", "Noto Serif KR", "Batang", serif;
+  --font-serif: "AppleMyungjo", "Batang", "바탕", "Nanum Myeongjo", "Noto Serif KR", "Noto Serif CJK KR", serif;
 
   /* 색상 고르기의 동그라미 색 (F18-06, 내 정보 창). 강조색 한 벌의 대표색이다 */
   --swatch-violet: #7c3aed;
@@ -253,6 +270,8 @@ textarea {
 body {
   min-width: var(--layout-min);
   min-height: 100vh;
+  /* 크롬이 확장 프로그램 페이지의 body에 기본 글꼴을 넣어서, 이 줄이 없으면 고른 글꼴(F18-11)이 body에 닿지 않는다 */
+  font-family: inherit;
   background-color: var(--color-bg);
   /* 배경 사진 (시안). 사진이 없을 때를 위해 위의 배경색을 남긴다. 사진은 스크롤해도 고정 */
   background-image: url("img/cloud-background.jpg");
