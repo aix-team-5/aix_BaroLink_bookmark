@@ -310,9 +310,12 @@ body {
     url("img/wallpapers/peach.jpg");
 }
 
-/* 올린 사진: ui.js가 <html>에 --wallpaper-photo: url("data:…")를 넣는다. 사진이 없으면 구름 그대로 */
+/* 올린 사진: ui.js가 <html>에 --wallpaper-photo: url("data:…")를 넣는다. 사진이 없으면 구름 그대로
+   어두운 사진을 올려도 제목·날짜 같은 배경 위 글자가 읽히도록 옅은 흰 막을 깐다 (Q6) */
 :root[data-wallpaper="photo"] body {
-  background-image: var(--wallpaper-photo, url("img/cloud-background.jpg"));
+  background-image:
+    linear-gradient(rgba(255, 255, 255, 0.4), rgba(255, 255, 255, 0.4)),
+    var(--wallpaper-photo, url("img/cloud-background.jpg"));
 }
 
 a {
