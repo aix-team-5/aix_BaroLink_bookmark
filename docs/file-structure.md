@@ -75,7 +75,7 @@ aix_BaroLink_bookmark/
 │   │   └── dnd.js             드래그 이동 (P3, 크롬 기본 끌어 놓기)                 담당 D
 │   ├── data/
 │   │   └── categories.json    사이트 분류표 · 제목 키워드 · 분류하지 않는 사이트     담당 B
-│   ├── fonts/                 Pretendard · 나눔명조 글꼴 파일과 OFL 라이선스 (P3, CDN 금지)  담당 D
+│   ├── fonts/                 Pretendard 줄인 판 2개 + OFL 라이선스(F18-11) (P3, 밖에서 불러오지 않음)  담당 D
 │   └── img/
 │       ├── cloud-background.jpg  기본 배경 사진                                       담당 D
 │       ├── wallpapers/        미리 넣은 배경 (P3)                                    담당 D

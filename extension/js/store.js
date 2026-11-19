@@ -1,7 +1,8 @@
-// 담당: 팀원 A · 이슈 #3 · 명세: N08~N16, N38~N40, N47, N50~N53 · 크롬 API: C14, C15
+// 담당: 팀원 A · 이슈 #3 · 명세: N08~N16, N38~N40, N47, N50~N53 (F18-12·14) · 크롬 API: C14, C15
 // 저장 항목을 읽고 쓰는 통로. 모든 저장은 이 파일을 거친다. 한 키는 한쪽(새 탭 또는 서비스 워커)만 쓴다.
 
-// 저장 항목 10개의 기본값. 밖으로 내보낼 때는 항상 복사본을 준다
+// 저장 항목 11개의 기본값. 밖으로 내보낼 때는 항상 복사본을 준다
+// 사진 두 키(profilePhoto, wallpaperPhoto)는 넣지 않는다. load()가 수백 KB 사진을 매번 읽지 않게 loadPhotos()로 따로 읽는다(N53)
 const DEFAULTS = Object.freeze({
   pinned: [],
   lastOpenedByUs: {},
@@ -13,7 +14,14 @@ const DEFAULTS = Object.freeze({
   history: [],
   state: { firstCard: "pending" },
   importing: null,
+  appearance: { accent: "violet", wallpaper: "cloud", font: "system", avatarPreset: null },
 });
+
+// 꾸미기(appearance)의 키 네 개. 이 밖의 키는 버린다
+const APPEARANCE_KEYS = ["accent", "wallpaper", "font", "avatarPreset"];
+
+// setPhoto의 kind → 저장 키
+const PHOTO_KEYS = { profile: "profilePhoto", wallpaper: "wallpaperPhoto" };
 
 // '옮기는 중' 표시가 유효한 시간 (1분)
 const PENDING_TTL = 60000;
@@ -30,6 +38,9 @@ const WRITER = {
   pendingMoves: "newtab",
   history: "newtab",
   state: "newtab",
+  appearance: "newtab",
+  profilePhoto: "newtab",
+  wallpaperPhoto: "newtab",
   manualMoves: "worker",
   newBookmarks: "worker",
   importing: "worker",
@@ -69,8 +80,25 @@ function toIdList(ids) {
   return ids.map(toId);
 }
 
+// 일반 객체인지 (null·배열·문자열은 아니다)
+function isPlainObject(value) {
+  return value !== null && typeof value === "object" && !Array.isArray(value);
+}
+
+// F18-14: 저장된 appearance의 형태를 맞춘다. 객체가 아니면 기본값, 객체면 기본값 위에 네 키만 덮어쓴다
+// 값이 목록에 있는지는 보지 않는다(목록에 없는 값은 ui.js의 applyAppearance가 기본값으로 바꾼다, N51)
+function normalizeAppearance(stored) {
+  const result = clone(DEFAULTS.appearance);
+  if (!isPlainObject(stored)) return result;
+  for (const key of APPEARANCE_KEYS) {
+    if (stored[key] !== undefined) result[key] = stored[key];
+  }
+  return result;
+}
+
 // 저장소에서 읽은 값에 기본값을 채운다. state는 기본값과 합친다
 function withDefault(key, stored) {
+  if (key === "appearance") return normalizeAppearance(stored);
   if (key === "state") {
     const value = stored && typeof stored === "object" ? stored : {};
     return { ...DEFAULTS.state, ...value };
@@ -413,13 +441,41 @@ export async function restoreStored(newId, snapshot) {
   }
 }
 
-// ----- P3 (명세 v22, F18). 뼈대: 이름과 입력만 있는 빈 함수 -----
+// ----- P3 (명세 v22, F18). 모두 storage.local만 쓴다. storage.sync는 쓰지 않는다(F18-12) -----
 
 // N51: 꾸미기(appearance)에 patch를 합쳐 저장하고 고친 값 전체를 돌려준다. 새 탭만 부른다
-export async function setAppearance(patch) { return {}; }
+// 저장된 값은 update가 withDefault로 먼저 형태를 맞춘 뒤(F18-14) 넘겨 준다. 네 키 밖의 키와 undefined 값은 버린다
+// 값이 목록에 있는지는 보지 않는다(N51). patch가 객체가 아니면 오류(명세에 없는 검사)
+export async function setAppearance(patch) {
+  if (!isPlainObject(patch)) {
+    throw new Error("store.js: setAppearance에는 { accent, wallpaper, font, avatarPreset } 중 일부를 담은 객체가 필요하다");
+  }
+  const changes = {};
+  for (const key of APPEARANCE_KEYS) {
+    if (Object.hasOwn(patch, key) && patch[key] !== undefined) changes[key] = patch[key];
+  }
+  return update("appearance", (appearance) => ({ ...appearance, ...changes }));
+}
 
-// N52: 줄인 사진을 저장한다. kind "profile" → profilePhoto, "wallpaper" → wallpaperPhoto. null이면 지운다. 새 탭만 부른다
-export async function setPhoto(kind, dataUrl) {}
+// N52: 줄인 사진을 저장한다. kind "profile" → profilePhoto, "wallpaper" → wallpaperPhoto. null이면 지운다(null을 저장). 새 탭만 부른다
+// 사진을 줄이는 것과 20MB 검사는 부르는 쪽(view/profile.js)이 한다(F18-04·08·09)
+// 저장 공간이 모자라 저장에 실패하면 그 오류를 그대로 던진다 → 부르는 쪽이 "사진을 쓸 수 없어요"(F18-09)
+export async function setPhoto(kind, dataUrl) {
+  if (!Object.hasOwn(PHOTO_KEYS, kind)) {
+    throw new Error(`store.js: setPhoto의 kind는 "profile" 또는 "wallpaper"여야 한다 (받은 값: ${kind})`);
+  }
+  if (dataUrl !== null && !(typeof dataUrl === "string" && dataUrl.startsWith("data:image/"))) {
+    throw new Error("store.js: setPhoto에는 data:image/로 시작하는 dataURL 또는 null이 필요하다");
+  }
+  await update(PHOTO_KEYS[kind], () => dataUrl);
+}
 
 // N53: 올린 사진 두 개를 읽는다. 사진 키는 load()에 넣지 않는다(수백 KB를 매번 읽지 않게)
-export async function loadPhotos() { return { profilePhoto: null, wallpaperPhoto: null }; }
+// render.js가 시작할 때와 사진 키가 바뀔 때(storage.onChanged)만 부른다. 없는 키는 null
+export async function loadPhotos() {
+  // 같은 쪽에서 먼저 시작한 setPhoto가 저장을 끝낼 때까지 기다린다
+  await queue;
+  const stored = await chrome.storage.local.get(["profilePhoto", "wallpaperPhoto"]);
+  const photoOf = (value) => (typeof value === "string" ? value : null);
+  return { profilePhoto: photoOf(stored.profilePhoto), wallpaperPhoto: photoOf(stored.wallpaperPhoto) };
+}

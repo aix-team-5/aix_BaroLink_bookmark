@@ -55,7 +55,7 @@ beforeEach(() => {
 });
 
 // 1. load
-test("load: 저장된 것이 없으면 키 10개 모두 기본값", async () => {
+test("load: 저장된 것이 없으면 키 11개 모두 기본값", async () => {
   const all = await store.load();
   assert.deepEqual(all, {
     pinned: [],
@@ -68,6 +68,7 @@ test("load: 저장된 것이 없으면 키 10개 모두 기본값", async () => 
     history: [],
     state: { firstCard: "pending" },
     importing: null,
+    appearance: { accent: "violet", wallpaper: "cloud", font: "system", avatarPreset: null },
   });
 });
 
