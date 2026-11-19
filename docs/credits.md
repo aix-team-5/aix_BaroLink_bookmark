@@ -13,12 +13,12 @@
 | `extension/icons/icon16.png` | 확장 프로그램 아이콘 (PNG) | 팀 제작인지 확인 필요 | |
 | `extension/icons/icon48.png` | 확장 프로그램 아이콘 (PNG) | 팀 제작인지 확인 필요 | |
 | `extension/icons/icon128.png` | 확장 프로그램 아이콘 (PNG) | 팀 제작인지 확인 필요 | |
-| `extension/img/cloud-background.jpg` (+ `img/wallpapers/thumb/cloud.jpg`: 같은 사진을 줄인 것) | 기본 배경 사진 (JPG, #51) | 출처 확인 필요(D, S2) | |
-| `extension/img/wallpapers/dawn.jpg` (+ `thumb/dawn.jpg`: 같은 사진을 줄인 것) | 미리 넣은 배경 사진 (JPG) · 아직 main에 없음(#87) | 출처 확인 필요(D, S2) | |
-| `extension/img/wallpapers/lavender.jpg` (+ `thumb/lavender.jpg`: 같은 사진을 줄인 것) | 미리 넣은 배경 사진 (JPG) · 아직 main에 없음(#87) | 출처 확인 필요(D, S2) | |
-| `extension/img/wallpapers/mint.jpg` (+ `thumb/mint.jpg`: 같은 사진을 줄인 것) | 미리 넣은 배경 사진 (JPG) · 아직 main에 없음(#87) | 출처 확인 필요(D, S2) | |
-| `extension/img/wallpapers/mist.jpg` (+ `thumb/mist.jpg`: 같은 사진을 줄인 것) | 미리 넣은 배경 사진 (JPG) · 아직 main에 없음(#87) | 출처 확인 필요(D, S2) | |
-| `extension/img/wallpapers/peach.jpg` (+ `thumb/peach.jpg`: 같은 사진을 줄인 것) | 미리 넣은 배경 사진 (JPG) · 아직 main에 없음(#87) | 출처 확인 필요(D, S2) | |
+| `extension/img/cloud-background.jpg` (+ `img/wallpapers/thumb/cloud.jpg`: 같은 사진을 줄인 것) | 기본 배경 사진 (JPG, #51) | 팀원 D가 Claude Pro(Anthropic)로 직접 만듦 (2026-11). 외부 사진·작품 사용 없음. Anthropic 이용약관(2025-10-08 시행) 4항에 따라 결과물 권리가 사용자에게 있음 | 팀 제작 (확장 프로그램과 함께 배포) |
+| `extension/img/wallpapers/dawn.jpg` (+ `thumb/dawn.jpg`: 같은 사진을 줄인 것) | 미리 넣은 배경 사진 (JPG) · 아직 main에 없음(#87) | 팀원 D가 Claude Pro(Anthropic)로 직접 만듦 (2026-11). 외부 사진·작품 사용 없음. Anthropic 이용약관(2025-10-08 시행) 4항에 따라 결과물 권리가 사용자에게 있음 | 팀 제작 (확장 프로그램과 함께 배포) |
+| `extension/img/wallpapers/lavender.jpg` (+ `thumb/lavender.jpg`: 같은 사진을 줄인 것) | 미리 넣은 배경 사진 (JPG) · 아직 main에 없음(#87) | 팀원 D가 Claude Pro(Anthropic)로 직접 만듦 (2026-11). 외부 사진·작품 사용 없음. Anthropic 이용약관(2025-10-08 시행) 4항에 따라 결과물 권리가 사용자에게 있음 | 팀 제작 (확장 프로그램과 함께 배포) |
+| `extension/img/wallpapers/mint.jpg` (+ `thumb/mint.jpg`: 같은 사진을 줄인 것) | 미리 넣은 배경 사진 (JPG) · 아직 main에 없음(#87) | 팀원 D가 Claude Pro(Anthropic)로 직접 만듦 (2026-11). 외부 사진·작품 사용 없음. Anthropic 이용약관(2025-10-08 시행) 4항에 따라 결과물 권리가 사용자에게 있음 | 팀 제작 (확장 프로그램과 함께 배포) |
+| `extension/img/wallpapers/mist.jpg` (+ `thumb/mist.jpg`: 같은 사진을 줄인 것) | 미리 넣은 배경 사진 (JPG) · 아직 main에 없음(#87) | 팀원 D가 Claude Pro(Anthropic)로 직접 만듦 (2026-11). 외부 사진·작품 사용 없음. Anthropic 이용약관(2025-10-08 시행) 4항에 따라 결과물 권리가 사용자에게 있음 | 팀 제작 (확장 프로그램과 함께 배포) |
+| `extension/img/wallpapers/peach.jpg` (+ `thumb/peach.jpg`: 같은 사진을 줄인 것) | 미리 넣은 배경 사진 (JPG) · 아직 main에 없음(#87) | 팀원 D가 Claude Pro(Anthropic)로 직접 만듦 (2026-11). 외부 사진·작품 사용 없음. Anthropic 이용약관(2025-10-08 시행) 4항에 따라 결과물 권리가 사용자에게 있음 | 팀 제작 (확장 프로그램과 함께 배포) |
 | `extension/img/avatars/` lavender · mint · peach · pink · sky · slate `.svg` (6개) | 계정 동그라미 대체 이미지 (SVG) · 아직 main에 없음(#87) | 직접 만든 것인지 확인 필요(D, S4) | |
 | `extension/fonts/Pretendard-Regular.subset.woff2` | 글꼴 Pretendard 보통 (WOFF2, 공식 줄인 판, F18-11) · 아직 main에 없음(#87) | Pretendard 1.3.9 (orioncactus), 공식 줄인 판을 고치지 않고 넣음 | SIL OFL 1.1 |
 | `extension/fonts/Pretendard-Bold.subset.woff2` | 글꼴 Pretendard 굵게 (WOFF2, 공식 줄인 판, F18-11) · 아직 main에 없음(#87) | Pretendard 1.3.9 (orioncactus), 공식 줄인 판을 고치지 않고 넣음 | SIL OFL 1.1 |
