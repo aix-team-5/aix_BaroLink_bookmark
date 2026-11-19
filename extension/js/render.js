@@ -342,10 +342,24 @@ function formatToday() {
 // 북마크 검색(F14)이 찾는 북마크 목록. 다시 그릴 때마다 최신 목록으로 바꾼다
 let searchPool = [];
 
+// 모든 북마크는 최근 저장한 것부터 보인다. 받은 배열은 독·내 폴더·잊고 있던 북마크도 쓰므로 복사해서 정렬한다
+// dateAdded가 없거나 숫자가 아니면 맨 뒤로 보내고, 같으면 원래(트리) 순서를 지킨다(sort는 안정 정렬)
+function sortNewestFirst(bookmarks) {
+  return [...bookmarks].sort((a, b) => {
+    const aValid = Number.isFinite(a?.dateAdded);
+    const bValid = Number.isFinite(b?.dateAdded);
+    if (aValid && bValid) return b.dateAdded - a.dateAdded;
+    if (aValid) return -1;
+    if (bValid) return 1;
+    return 0;
+  });
+}
+
 function renderAllBookmarks(bookmarks, stored) {
   const section = document.getElementById("all-bookmarks");
   if (!section) return;
-  searchPool = bookmarks;
+  const sorted = sortNewestFirst(bookmarks);
+  searchPool = sorted;
 
   // 제목·검색창·결과 칸은 한 번만 만든다. 다시 그릴 때 새로 만들면 입력 중이던 글자가 지워진다 (웹 검색창과 같은 방식)
   if (!section.querySelector(".bookmark-grid")) buildAllBookmarks(section);
@@ -354,7 +368,7 @@ function renderAllBookmarks(bookmarks, stored) {
   grid.replaceChildren();
   // 새로 저장된 북마크에는 "새로" 표시를 붙인다 (F10-01). 정리하거나 '그대로 두기'로 두면 빠진다 (F10-05)
   const newIds = newBookmarkIds(bookmarks, stored);
-  for (const bookmark of bookmarks) {
+  for (const bookmark of sorted) {
     grid.appendChild(renderBookmarkTile(bookmark, newIds.has(String(bookmark.id))));
   }
 
