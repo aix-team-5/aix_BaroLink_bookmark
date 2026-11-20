@@ -278,9 +278,11 @@ function openApp(bookmark, newTab) {
     });
 }
 
-// 팝업의 앱 타일 하나: render.js의 모든 북마크 타일과 같은 모양
+// 팝업의 앱 칸 하나: render.js의 모든 북마크 타일과 같은 모양
+// 끌기 손잡이를 앱 버튼 옆에 붙이므로 칸(div.bookmark-cell)으로 감싼다. 버튼 안의 요소는 크롬에서 끌기를 시작하지 못한다 (F17-02)
 // dialog: 이 타일이 들어 있는 팝업. 우클릭 메뉴를 그 안에 붙인다 (F15-09)
-function appTile(dialog, bookmark) {
+// dndOn: 끌어 옮기기를 켤지 (popupBody가 정한다). data-focus-key와 누르기·우클릭은 지금처럼 버튼에 둔다
+function appTile(dialog, bookmark, dndOn) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "bookmark";
@@ -309,7 +311,13 @@ function appTile(dialog, bookmark) {
     event.preventDefault();
     showContextMenu(bookmark, { x: event.clientX, y: event.clientY, container: dialog });
   });
-  return button;
+
+  const cell = document.createElement("div");
+  cell.className = "bookmark-cell";
+  cell.appendChild(button);
+  // 관리자가 정한 북마크에는 손잡이를 붙이지 않는다 (F17-04). 우클릭 메뉴의 옮기기와 같은 기준이다
+  if (dndOn && canChange(bookmark)) makeDraggable(cell, bookmark);
+  return cell;
 }
 
 // 팝업 내용을 새로 그린다. mode가 "create"면 만들기 패널(info는 쓰지 않음), 아니면 폴더 패널
@@ -815,13 +823,17 @@ function popupBody(dialog, info) {
     body.appendChild(gridOf(folderTiles));
   }
 
-  const tiles = visibleItems(info).map((bookmark) => appTile(dialog, bookmark));
+  const tiles = visibleItems(info).map((bookmark) => appTile(dialog, bookmark, dndOn));
   // 이 폴더에서 방금 지운 북마크가 있으면 그 자리에 되돌리기 칸을 끼운다 (F15-09). splice는 방금 만든 tiles에만 쓴다
+  // 되돌리기 칸은 bookmark-cell로 감싸지 않는다. dnd.js가 앱 칸(.dnd-item)으로 세지 않는다
   if (removed && removed.folderId === info.id) {
     tiles.splice(Math.min(removed.slot, tiles.length), 0, removedTile(removed));
   }
   const grid = gridOf(tiles);
   if (info.subfolders.length > 0) grid.style.marginTop = "var(--space-6)";
+  // 앱 사이에 놓으면 그 자리로 순서를 바꾼다 (F17-02·08). 놓일 위치 번호와 세로 막대는 dnd.js가 맡는다
+  // 관리자 폴더는 크롬이 바꾸지 못하게 하므로 켜지 않는다
+  if (dndOn && info.folder?.rootType !== "managed") makeSortable(grid, info.id);
   body.appendChild(grid);
   return body;
 }
