@@ -10,6 +10,7 @@ import {
   renameFolder,
   restoreBookmark,
 } from "../bookmarks.js";
+import { makeDraggable, makeDropTarget, makeSortable } from "../dnd.js";
 import { load, pin, restoreStored, snapshotStored, unpin } from "../store.js";
 import { appIcon, icon, showToast } from "../ui.js";
 
@@ -112,6 +113,12 @@ function foldersIn(tree, folderId) {
     .sort((a, b) => a.index - b.index);
 }
 
+// 앱을 끌어 넣거나 메뉴로 옮겨 넣을 수 있는 폴더인가 (F17-03, F15-02와 같은 기준)
+// 고르지 않은 쪽(rootChosen false)과 관리자 폴더(managed)에는 넣지 않는다. 관리자 폴더는 크롬이 바꾸지 못하게 한다
+function canDropInto(folder) {
+  return folder.rootChosen !== false && folder.rootType !== "managed";
+}
+
 // 폴더 하나: 미리보기 앱 아이콘(최대 4개) + 이름 + 개수. 누르면 폴더 팝업을 연다
 function folderTile(folder, items) {
   const button = document.createElement("button");
@@ -188,7 +195,11 @@ export function showFolders(tree) {
 
     slot.replaceChildren();
     for (const folder of topFolders(tree)) {
-      slot.appendChild(folderTile(folder, bookmarksIn(tree, folder.id)));
+      const tile = folderTile(folder, bookmarksIn(tree, folder.id));
+      // 앱을 끌어 이 폴더 위에 놓으면 맨 뒤로 옮긴다 (F17-01). 지금 들어 있는 폴더인지는 dnd.js가 본다 (F17-05)
+      // folderTile은 팝업 하위 폴더에도 쓰므로 놓는 쪽은 부르는 곳에서 붙인다. [새 폴더] 칸에는 붙이지 않는다
+      if (canDropInto(folder)) makeDropTarget(tile, folder.id, { name: folder.title || "이름 없는 폴더" });
+      slot.appendChild(tile);
     }
     // 북마크바를 찾지 못하면 만들 곳이 없으므로 [새 폴더] 칸을 그리지 않는다
     if (tree?.roots?.bar) slot.appendChild(newFolderTile());
@@ -784,6 +795,10 @@ function gridOf(tiles) {
 function popupBody(dialog, info) {
   const body = document.createElement("div");
   body.className = "dialog__body";
+  // 끌어 옮기기는 보기 모드이고 바꾸는 중이 아닐 때만 켠다 (F17-01·02)
+  // busy면 하위 폴더 타일이 disabled라 드래그 이벤트를 믿을 수 없고, 이름 바꾸기·삭제 확인 중에는 옮기지 않는다
+  // 모드나 busy가 바뀌면 팝업을 다시 그리므로 이 기준이 그대로 유지된다
+  const dndOn = popup.mode === "view" && !popup.busy;
 
   // 하위 폴더를 먼저 둔다. 폴더 타일이 앱 타일보다 커서 섞으면 줄 높이가 들쭉날쭉하다
   // 하위 폴더 타일은 내 폴더 줄과 같은 .folder 모양이다 (.bookmark를 쓰지 않는다). 누르면 같은 팝업에서 그 폴더로 들어간다
@@ -793,6 +808,8 @@ function popupBody(dialog, info) {
       tile.dataset.focusKey = `folder:${sub.id}`;
       // 바꾸는 중에는 다른 폴더로 가지 않는다
       tile.disabled = popup.busy;
+      // 앱을 끌어 하위 폴더 위에 놓으면 그 폴더 맨 뒤로 옮긴다 (F17-02)
+      if (dndOn && canDropInto(sub)) makeDropTarget(tile, sub.id, { name: sub.title || "이름 없는 폴더" });
       return tile;
     });
     body.appendChild(gridOf(folderTiles));
@@ -1214,7 +1231,7 @@ function destinationsOf(tree) {
   const folders = Array.isArray(tree?.folders) ? tree.folders : [];
   const byParent = new Map();
   for (const folder of folders) {
-    if (folder.rootChosen === false || folder.rootType === "managed") continue;
+    if (!canDropInto(folder)) continue;
     if (!byParent.has(folder.parentId)) byParent.set(folder.parentId, []);
     byParent.get(folder.parentId).push(folder);
   }
