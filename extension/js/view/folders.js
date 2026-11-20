@@ -49,6 +49,19 @@ let menu = null;
 // { saved: removeBookmark의 출력, snap: snapshotStored의 출력, folderId, slot, timer, undoing }
 // folderId·slot: 우리 폴더 팝업 안 앱 격자에 되돌리기 칸을 그릴 때 그 폴더 ID와 칸 자리. 칸이 아니라 showToast로 보여 줄 때는 null
 let removed = null;
+// 앱을 끄는 동안 미룬 팝업 다시 그리기가 있는가 (F17-10). 끌기가 끝나면("dnd:end") 한 번 그린다
+let redrawAfterDrag = false;
+
+// F17-10: dnd.js는 끌기가 끝나면 document에 "dnd:end"를 보낸다. 끄는 동안 미룬 팝업 다시 그리기를 그때 한다
+// 팝업이 그사이 닫혔으면 그리지 않는다. Node에서 이 파일을 불러와도 오류가 나지 않게 document가 있을 때만 단다
+if (typeof document !== "undefined") {
+  document.addEventListener("dnd:end", () => {
+    if (!redrawAfterDrag) return;
+    redrawAfterDrag = false;
+    const dialog = document.getElementById(POPUP_ID);
+    if (dialog?.open) redrawPopup(dialog);
+  });
+}
 
 // 팝업 상태를 기본값으로 되돌린다
 function resetPopup() {
@@ -217,6 +230,12 @@ export function showFolders(tree) {
 // 지금 팝업 상태(popup.mode, openFolderId)로 가장 최근 tree에서 다시 그린다
 // 보던 폴더가 tree에 없으면(지워지는 중 등) 이전 내용 그대로 둔다
 function redrawPopup(dialog) {
+  // F17-10: 앱을 끄는 동안에는 다시 그리지 않는다. 패널을 바꾸면 끄던 칸이 사라져 끌기가 끊긴다
+  // 되돌리기 6초가 지나거나 메뉴 작업이 끝나 부른 것도 여기서 미룬다. popup.message·focusKey는 그대로 두었다가 끌기가 끝나면 쓴다
+  if (document.documentElement.classList.contains("is-dragging")) {
+    redrawAfterDrag = true;
+    return;
+  }
   if (popup.mode === "create") {
     drawPopup(dialog, null);
     return;
