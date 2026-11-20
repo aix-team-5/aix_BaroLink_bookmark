@@ -35,7 +35,6 @@
 개인정보처리방침: https://github.com/aix-team-5/aix_BaroLink_bookmark/blob/main/docs/privacy.md
 ```
 
-<!-- TODO: '끌어서 옮기기'(F17): dnd.js는 #82로 main에 들어옴. folders.js 놓는 쪽(C, #13)이 들어온 뒤 확인 -->
 
 ## 3. 권한별 사용 이유 (S7)
 
