@@ -825,7 +825,10 @@ function popupBody(dialog, info) {
   // 끌어 옮기기는 보기 모드이고 바꾸는 중이 아닐 때만 켠다 (F17-01·02)
   // busy면 하위 폴더 타일이 disabled라 드래그 이벤트를 믿을 수 없고, 이름 바꾸기·삭제 확인 중에는 옮기지 않는다
   // 모드나 busy가 바뀌면 팝업을 다시 그리므로 이 기준이 그대로 유지된다
-  const dndOn = popup.mode === "view" && !popup.busy;
+  // 놓을 곳 기준(canDropInto, F15 "폴더로 이동"과 같음)에 맞지 않는 폴더(고르지 않은 쪽, 관리자)의 팝업에서는 모두 끈다
+  // 그 팝업에는 하위 폴더도 같은 쪽이라 놓을 곳이 없고, 모달이라 내 폴더 줄에도 놓을 수 없다. 손잡이만 남으면 끌어도 놓을 데가 없다 (F17-03·04)
+  // info.folder가 null인 최상위 폴더 팝업에서는 지금처럼 켠다
+  const dndOn = popup.mode === "view" && !popup.busy && (!info.folder || canDropInto(info.folder));
 
   // 하위 폴더를 먼저 둔다. 폴더 타일이 앱 타일보다 커서 섞으면 줄 높이가 들쭉날쭉하다
   // 하위 폴더 타일은 내 폴더 줄과 같은 .folder 모양이다 (.bookmark를 쓰지 않는다). 누르면 같은 팝업에서 그 폴더로 들어간다
@@ -851,8 +854,8 @@ function popupBody(dialog, info) {
   const grid = gridOf(tiles);
   if (info.subfolders.length > 0) grid.style.marginTop = "var(--space-6)";
   // 앱 사이에 놓으면 그 자리로 순서를 바꾼다 (F17-02·08). 놓일 위치 번호와 세로 막대는 dnd.js가 맡는다
-  // 관리자 폴더는 크롬이 바꾸지 못하게 하므로 켜지 않는다
-  if (dndOn && info.folder?.rootType !== "managed") makeSortable(grid, info.id);
+  // 관리자·고르지 않은 쪽 폴더는 dndOn에서 이미 걸렀다
+  if (dndOn) makeSortable(grid, info.id);
   body.appendChild(grid);
   return body;
 }
