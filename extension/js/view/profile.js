@@ -173,14 +173,23 @@ function dateLabel(at) {
 
 // ----- 사진 줄이기 -----
 
-// 이미지 파일을 읽어 그림으로 푼다. 이미지가 아니거나, 20MB를 넘거나, 크롬이 열지 못하는 형식(HEIC 등)이면 오류
+// 사용자가 고른 파일을 쓸 수 없을 때의 오류 (F18-09). 프로그램 오류가 아니라 예상된 상황이라 콘솔에 남기지 않는다
+// (콘솔 경고는 chrome://extensions에 "오류"로 쌓인다)
+class UnusableFileError extends Error {}
+
+// 이미지 파일을 읽어 그림으로 푼다. 이미지가 아니거나, 20MB를 넘거나, 크롬이 열지 못하는 형식(HEIC 등)이면 UnusableFileError
 async function decodeImage(file) {
-  if (!(file instanceof Blob) || !String(file.type || "").startsWith("image/")) throw new Error("이미지가 아님");
-  if (file.size > MAX_FILE_BYTES) throw new Error("20MB를 넘음");
-  const bitmap = await createImageBitmap(file);
+  if (!(file instanceof Blob) || !String(file.type || "").startsWith("image/")) throw new UnusableFileError("이미지가 아님");
+  if (file.size > MAX_FILE_BYTES) throw new UnusableFileError("20MB를 넘음");
+  let bitmap;
+  try {
+    bitmap = await createImageBitmap(file);
+  } catch {
+    throw new UnusableFileError("읽을 수 없는 사진");
+  }
   if (!bitmap.width || !bitmap.height) {
     bitmap.close();
-    throw new Error("크기가 0");
+    throw new UnusableFileError("크기가 0");
   }
   return bitmap;
 }
@@ -248,7 +257,8 @@ function save(work, failMessage = TEXT.saveFailed) {
       if (change.appearance) view.appearance = normalizeAppearance({ ...view.appearance, ...change.appearance });
       if (change.photos) view.photos = { ...view.photos, ...change.photos };
     } catch (error) {
-      console.warn("내 정보 창: 저장하지 못했어요", error);
+      // 쓸 수 없는 파일은 안내만 띄운다. 저장 공간 부족 같은 진짜 실패만 콘솔에 남긴다
+      if (!(error instanceof UnusableFileError)) console.warn("내 정보 창: 저장하지 못했어요", error);
       if (startedIn === session) notify(failMessage);
     }
     redraw();

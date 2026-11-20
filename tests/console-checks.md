@@ -2227,8 +2227,9 @@ await (async () => {
   })();
   ```
 - 눈으로 확인 (배경은 위 코드 안에서 바로 원래대로 돌아가므로 두 단계로 따로 붙여 넣는다):
-  1. `T.nowLook = [(await T.store.load()).appearance, await T.store.loadPhotos()]; T.ui.applyAppearance({ accent: "rose", wallpaper: "mint", font: "serif", avatarPreset: null }, { profilePhoto: null, wallpaperPhoto: null })` → 민트 배경, 장미색 버튼, 명조 글꼴로 바뀐 것을 본다
-  2. `T.ui.applyAppearance(...T.nowLook)` → 원래 꾸미기로 돌아온 것을 본다
+  1. `T.nowLook = [(await T.store.load()).appearance, await T.store.loadPhotos()]; T.ui.applyAppearance({ accent: "rose", wallpaper: "mint", font: "serif", avatarPreset: null }, { profilePhoto: null, wallpaperPhoto: null })` → 민트 배경, 장미색 버튼으로 바뀐 것을 본다. 글자는 PC에 깔린 명조(윈도우 바탕, 맥 AppleMyungjo 등)로 바뀐다. 명조가 없는 PC에서는 글꼴이 안 바뀌어도 정상이다(알려진 한계, F18-11)
+  2. `T.ui.applyAppearance({ ...T.nowLook[0], font: "gothic" }, T.nowLook[1])` → 글자가 Pretendard로 바뀐 것을 본다. gothic은 확장 프로그램 안 `fonts/`의 파일을 쓰므로 어느 PC에서나 바뀌어야 한다
+  3. `T.ui.applyAppearance(...T.nowLook)` → 원래 꾸미기로 돌아온 것을 본다
 - 기대 결과: `<html>`의 `data-accent`·`data-font`와 배경이 바로 바뀌고, 목록에 없는 값은 기본값이다. 새 탭을 새로 열면 기본 배경·색이 잠깐 보이지 않는다(F18-13, 눈으로 확인). (N54)
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 

@@ -10,6 +10,7 @@ import {
   renameFolder,
   restoreBookmark,
 } from "../bookmarks.js";
+import { makeDraggable, makeDropTarget, makeSortable } from "../dnd.js";
 import { load, pin, restoreStored, snapshotStored, unpin } from "../store.js";
 import { appIcon, icon, showToast } from "../ui.js";
 
@@ -48,6 +49,19 @@ let menu = null;
 // { saved: removeBookmark의 출력, snap: snapshotStored의 출력, folderId, slot, timer, undoing }
 // folderId·slot: 우리 폴더 팝업 안 앱 격자에 되돌리기 칸을 그릴 때 그 폴더 ID와 칸 자리. 칸이 아니라 showToast로 보여 줄 때는 null
 let removed = null;
+// 앱을 끄는 동안 미룬 팝업 다시 그리기가 있는가 (F17-10). 끌기가 끝나면("dnd:end") 한 번 그린다
+let redrawAfterDrag = false;
+
+// F17-10: dnd.js는 끌기가 끝나면 document에 "dnd:end"를 보낸다. 끄는 동안 미룬 팝업 다시 그리기를 그때 한다
+// 팝업이 그사이 닫혔으면 그리지 않는다. Node에서 이 파일을 불러와도 오류가 나지 않게 document가 있을 때만 단다
+if (typeof document !== "undefined") {
+  document.addEventListener("dnd:end", () => {
+    if (!redrawAfterDrag) return;
+    redrawAfterDrag = false;
+    const dialog = document.getElementById(POPUP_ID);
+    if (dialog?.open) redrawPopup(dialog);
+  });
+}
 
 // 팝업 상태를 기본값으로 되돌린다
 function resetPopup() {
@@ -110,6 +124,12 @@ function foldersIn(tree, folderId) {
   return folders
     .filter((folder) => folder.parentId === id)
     .sort((a, b) => a.index - b.index);
+}
+
+// 앱을 끌어 넣거나 메뉴로 옮겨 넣을 수 있는 폴더인가 (F17-03, F15-02와 같은 기준)
+// 고르지 않은 쪽(rootChosen false)과 관리자 폴더(managed)에는 넣지 않는다. 관리자 폴더는 크롬이 바꾸지 못하게 한다
+function canDropInto(folder) {
+  return folder.rootChosen !== false && folder.rootType !== "managed";
 }
 
 // 폴더 하나: 미리보기 앱 아이콘(최대 4개) + 이름 + 개수. 누르면 폴더 팝업을 연다
@@ -188,7 +208,11 @@ export function showFolders(tree) {
 
     slot.replaceChildren();
     for (const folder of topFolders(tree)) {
-      slot.appendChild(folderTile(folder, bookmarksIn(tree, folder.id)));
+      const tile = folderTile(folder, bookmarksIn(tree, folder.id));
+      // 앱을 끌어 이 폴더 위에 놓으면 맨 뒤로 옮긴다 (F17-01). 지금 들어 있는 폴더인지는 dnd.js가 본다 (F17-05)
+      // folderTile은 팝업 하위 폴더에도 쓰므로 놓는 쪽은 부르는 곳에서 붙인다. [새 폴더] 칸에는 붙이지 않는다
+      if (canDropInto(folder)) makeDropTarget(tile, folder.id, { name: folder.title || "이름 없는 폴더" });
+      slot.appendChild(tile);
     }
     // 북마크바를 찾지 못하면 만들 곳이 없으므로 [새 폴더] 칸을 그리지 않는다
     if (tree?.roots?.bar) slot.appendChild(newFolderTile());
@@ -206,6 +230,12 @@ export function showFolders(tree) {
 // 지금 팝업 상태(popup.mode, openFolderId)로 가장 최근 tree에서 다시 그린다
 // 보던 폴더가 tree에 없으면(지워지는 중 등) 이전 내용 그대로 둔다
 function redrawPopup(dialog) {
+  // F17-10: 앱을 끄는 동안에는 다시 그리지 않는다. 패널을 바꾸면 끄던 칸이 사라져 끌기가 끊긴다
+  // 되돌리기 6초가 지나거나 메뉴 작업이 끝나 부른 것도 여기서 미룬다. popup.message·focusKey는 그대로 두었다가 끌기가 끝나면 쓴다
+  if (document.documentElement.classList.contains("is-dragging")) {
+    redrawAfterDrag = true;
+    return;
+  }
   if (popup.mode === "create") {
     drawPopup(dialog, null);
     return;
@@ -267,9 +297,11 @@ function openApp(bookmark, newTab) {
     });
 }
 
-// 팝업의 앱 타일 하나: render.js의 모든 북마크 타일과 같은 모양
+// 팝업의 앱 칸 하나: render.js의 모든 북마크 타일과 같은 모양
+// 끌기 손잡이를 앱 버튼 옆에 붙이므로 칸(div.bookmark-cell)으로 감싼다. 버튼 안의 요소는 크롬에서 끌기를 시작하지 못한다 (F17-02)
 // dialog: 이 타일이 들어 있는 팝업. 우클릭 메뉴를 그 안에 붙인다 (F15-09)
-function appTile(dialog, bookmark) {
+// dndOn: 끌어 옮기기를 켤지 (popupBody가 정한다). data-focus-key와 누르기·우클릭은 지금처럼 버튼에 둔다
+function appTile(dialog, bookmark, dndOn) {
   const button = document.createElement("button");
   button.type = "button";
   button.className = "bookmark";
@@ -298,7 +330,13 @@ function appTile(dialog, bookmark) {
     event.preventDefault();
     showContextMenu(bookmark, { x: event.clientX, y: event.clientY, container: dialog });
   });
-  return button;
+
+  const cell = document.createElement("div");
+  cell.className = "bookmark-cell";
+  cell.appendChild(button);
+  // 관리자가 정한 북마크에는 손잡이를 붙이지 않는다 (F17-04). 우클릭 메뉴의 옮기기와 같은 기준이다
+  if (dndOn && canChange(bookmark)) makeDraggable(cell, bookmark);
+  return cell;
 }
 
 // 팝업 내용을 새로 그린다. mode가 "create"면 만들기 패널(info는 쓰지 않음), 아니면 폴더 패널
@@ -784,6 +822,13 @@ function gridOf(tiles) {
 function popupBody(dialog, info) {
   const body = document.createElement("div");
   body.className = "dialog__body";
+  // 끌어 옮기기는 보기 모드이고 바꾸는 중이 아닐 때만 켠다 (F17-01·02)
+  // busy면 하위 폴더 타일이 disabled라 드래그 이벤트를 믿을 수 없고, 이름 바꾸기·삭제 확인 중에는 옮기지 않는다
+  // 모드나 busy가 바뀌면 팝업을 다시 그리므로 이 기준이 그대로 유지된다
+  // 놓을 곳 기준(canDropInto, F15 "폴더로 이동"과 같음)에 맞지 않는 폴더(고르지 않은 쪽, 관리자)의 팝업에서는 모두 끈다
+  // 그 팝업에는 하위 폴더도 같은 쪽이라 놓을 곳이 없고, 모달이라 내 폴더 줄에도 놓을 수 없다. 손잡이만 남으면 끌어도 놓을 데가 없다 (F17-03·04)
+  // info.folder가 null인 최상위 폴더 팝업에서는 지금처럼 켠다
+  const dndOn = popup.mode === "view" && !popup.busy && (!info.folder || canDropInto(info.folder));
 
   // 하위 폴더를 먼저 둔다. 폴더 타일이 앱 타일보다 커서 섞으면 줄 높이가 들쭉날쭉하다
   // 하위 폴더 타일은 내 폴더 줄과 같은 .folder 모양이다 (.bookmark를 쓰지 않는다). 누르면 같은 팝업에서 그 폴더로 들어간다
@@ -793,18 +838,24 @@ function popupBody(dialog, info) {
       tile.dataset.focusKey = `folder:${sub.id}`;
       // 바꾸는 중에는 다른 폴더로 가지 않는다
       tile.disabled = popup.busy;
+      // 앱을 끌어 하위 폴더 위에 놓으면 그 폴더 맨 뒤로 옮긴다 (F17-02)
+      if (dndOn && canDropInto(sub)) makeDropTarget(tile, sub.id, { name: sub.title || "이름 없는 폴더" });
       return tile;
     });
     body.appendChild(gridOf(folderTiles));
   }
 
-  const tiles = visibleItems(info).map((bookmark) => appTile(dialog, bookmark));
+  const tiles = visibleItems(info).map((bookmark) => appTile(dialog, bookmark, dndOn));
   // 이 폴더에서 방금 지운 북마크가 있으면 그 자리에 되돌리기 칸을 끼운다 (F15-09). splice는 방금 만든 tiles에만 쓴다
+  // 되돌리기 칸은 bookmark-cell로 감싸지 않는다. dnd.js가 앱 칸(.dnd-item)으로 세지 않는다
   if (removed && removed.folderId === info.id) {
     tiles.splice(Math.min(removed.slot, tiles.length), 0, removedTile(removed));
   }
   const grid = gridOf(tiles);
   if (info.subfolders.length > 0) grid.style.marginTop = "var(--space-6)";
+  // 앱 사이에 놓으면 그 자리로 순서를 바꾼다 (F17-02·08). 놓일 위치 번호와 세로 막대는 dnd.js가 맡는다
+  // 관리자·고르지 않은 쪽 폴더는 dndOn에서 이미 걸렀다
+  if (dndOn) makeSortable(grid, info.id);
   body.appendChild(grid);
   return body;
 }
@@ -1214,7 +1265,7 @@ function destinationsOf(tree) {
   const folders = Array.isArray(tree?.folders) ? tree.folders : [];
   const byParent = new Map();
   for (const folder of folders) {
-    if (folder.rootChosen === false || folder.rootType === "managed") continue;
+    if (!canDropInto(folder)) continue;
     if (!byParent.has(folder.parentId)) byParent.set(folder.parentId, []);
     byParent.get(folder.parentId).push(folder);
   }
