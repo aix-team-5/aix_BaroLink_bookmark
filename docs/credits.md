@@ -34,6 +34,10 @@
 | 파일 경로 | 종류 | 출처 | 라이선스 |
 | --- | --- | --- | --- |
 | `store/promo-small-440x280.png` | 작은 프로모션 타일 (PNG, 440×280) | 팀원 A가 AI 도구(Claude Code Pro 요금제, Kiro)로 만듦 (2026-11). 외부 이미지·아이콘 세트 사용 없음 | 팀 제작 |
-| `store/screenshot-1-newtab.png` ~ `store/screenshot-5-….png` (최대 5장) | 스크린샷 (PNG, 1280×800) · 아직 없음 | 팀이 샘플 북마크 프로필로 직접 찍음 (찍는 법: `store/listing.md` 5절) | |
-
-<!-- TODO: 스크린샷을 찍어 넣으면 위 한 줄을 파일마다 나누고 "아직 없음"을 지운다. 실제 북마크·이름·메일이 보이지 않게 한다 -->
+| `store/screenshot-1-newtab.png` | 스크린샷 (PNG, 1280×800) · 웹스토어 | 샘플 북마크 프로필로 찍음 (tests/sample-100.html) | 팀 제작 |
+| `store/screenshot-2-organize-detail.png` | 스크린샷 (PNG, 1280×800) · 발표 자료용 | 샘플 북마크 프로필로 찍음 (tests/sample-100.html) | 팀 제작 |
+| `store/screenshot-3-organize-result.png` | 스크린샷 (PNG, 1280×800) · 웹스토어 | 샘플 북마크 프로필로 찍음 (tests/sample-100.html) | 팀 제작 |
+| `store/screenshot-4-forgotten.png` | 스크린샷 (PNG, 1280×800) · 웹스토어 | 샘플 북마크 프로필로 찍음 (tests/sample-100.html) | 팀 제작 |
+| `store/screenshot-5-folder-reorder.png` | 스크린샷 (PNG, 1280×800) · 발표 자료용 | 샘플 북마크 프로필로 찍음 (tests/sample-100.html) | 팀 제작 |
+| `store/screenshot-6-profile.png` | 스크린샷 (PNG, 1280×800) · 웹스토어 | 샘플 북마크 프로필로 찍음 (tests/sample-100.html) | 팀 제작 |
+| `store/screenshot-7-drag-to-folder.png` | 스크린샷 (PNG, 1280×800) · 웹스토어 | 샘플 북마크 프로필로 찍음 (tests/sample-100.html) | 팀 제작 |
