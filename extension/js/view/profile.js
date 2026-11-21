@@ -34,6 +34,7 @@ const TEXT = {
 
 // 고를 수 있는 값 (명세 v22 '참고_저장 항목' appearance). 순서대로 보여 준다
 // label은 화면 이름표다. 배경 이름은 시안의 임시 이름이라 정해지면 label만 바꾼다(ID는 명세 그대로)
+// ui.js의 ACCENTS·WALLPAPERS와 같아야 한다. 없는 ID는 F18-14 때문에 기본값으로 돌아간다 (황금·주황·단색 6개: #99)
 const ACCENTS = [
   { id: "violet", label: "보라" },
   { id: "navy", label: "남색" },
@@ -41,6 +42,8 @@ const ACCENTS = [
   { id: "sky", label: "하늘" },
   { id: "teal", label: "청록" },
   { id: "green", label: "초록" },
+  { id: "amber", label: "황금" },
+  { id: "orange", label: "주황" },
   { id: "rose", label: "장미" },
   { id: "ink", label: "먹색" },
 ];
@@ -51,6 +54,12 @@ const WALLPAPERS = [
   { id: "lavender", label: "라벤더" },
   { id: "peach", label: "복숭아" },
   { id: "mist", label: "안개" },
+  { id: "solid-cream", label: "크림" },
+  { id: "solid-gray", label: "연회색" },
+  { id: "solid-lavender", label: "연보라" },
+  { id: "solid-mint", label: "연민트" },
+  { id: "solid-peach", label: "살구" },
+  { id: "solid-sky", label: "연하늘" },
 ];
 const PHOTO_WALLPAPER = "photo"; // 올린 배경 사진을 쓸 때의 wallpaper 값
 const FONTS = [
@@ -472,7 +481,7 @@ function wallpaperTile(id, label, onClick) {
   return tile;
 }
 
-// 배경 6개 + (올린 사진이 있으면) 내 사진 + 사진 올리기
+// 배경 12개(그림 6 + 단색 6) + (올린 사진이 있으면) 내 사진 + 사진 올리기
 function drawWallpapers() {
   const tiles = WALLPAPERS.map(({ id, label }) => wallpaperTile(id, label, () => chooseAppearance({ wallpaper: id })));
 
