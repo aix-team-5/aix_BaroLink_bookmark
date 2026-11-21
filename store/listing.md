@@ -126,7 +126,7 @@ https://github.com/aix-team-5/aix_BaroLink_bookmark/blob/main/docs/privacy.md
 | 3 | 정리 결과 안내와 정리된 내 폴더 | `store/screenshot-3-organize-result.png` | **웹스토어** | 찍음 |
 | 4 | 잊고 있던 북마크 팝업 | `store/screenshot-4-forgotten.png` | **웹스토어** | 찍음 |
 | 5 | 폴더 팝업 안에서 앱 순서 바꾸기 | `store/screenshot-5-folder-reorder.png` | 발표 자료용 | 찍음 |
-| 6 | 내 정보와 꾸미기 창 | `store/screenshot-6-profile.png` | **웹스토어** | **다시 찍어야 함** (색 8개·배경 6개 때 화면. 다시 찍으면 "#100 화면으로 다시 찍음"으로 바꾼다) |
+| 6 | 내 정보와 꾸미기 창 | `store/screenshot-6-profile.png` | **웹스토어** | #100 화면으로 다시 찍음 |
 | 7 | 앱을 끌어 폴더에 넣기 | `store/screenshot-7-drag-to-folder.png` | **웹스토어** | 찍음 |
 
 ## 6. 제출 패키지
