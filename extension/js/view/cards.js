@@ -5,6 +5,7 @@
 import { applyPlan } from "../organize.js";
 import { loadTree } from "../bookmarks.js";
 import { pickPinCandidates } from "../plan.js";
+import { searchBookmarks } from "../search.js";
 import { setFirstCard, pin, load } from "../store.js";
 import { appIcon, icon, showToast } from "../ui.js";
 
@@ -1065,6 +1066,8 @@ export function showPinPicker(bookmarks, { max = 5, limitMessage, onPicked } = {
     none.textContent = "고를 수 있는 북마크가 없어요";
     list.appendChild(none);
   }
+  // 검색칸이 줄을 숨기고 보일 수 있게 [{ id, row }]를 모아 둔다 (F09-10)
+  const rows = [];
   for (const bookmark of items) {
     const id = String(bookmark.id);
     const row = document.createElement("button");
@@ -1111,6 +1114,41 @@ export function showPinPicker(bookmarks, { max = 5, limitMessage, onPicked } = {
       refreshConfirm();
     });
     list.appendChild(row);
+    rows.push({ id, row });
+  }
+
+  // 고정 고르기 검색칸 (F09-10): 고를 북마크가 있을 때만 목록 위에 둔다
+  // 줄을 숨기기만 하고 고른 상태(selected, aria-pressed)와 [고정하기]는 그대로 둔다
+  if (items.length > 0) {
+    const noMatch = document.createElement("p");
+    noMatch.className = "empty-note hidden";
+    noMatch.textContent = "일치하는 북마크가 없어요";
+    list.appendChild(noMatch);
+
+    const search = document.createElement("label");
+    search.className = "bookmark-search";
+    search.appendChild(icon("search", 16));
+    const input = document.createElement("input");
+    input.type = "search";
+    input.name = "picker-q";
+    input.placeholder = "제목이나 주소로 찾기";
+    input.setAttribute("aria-label", "고정할 북마크 찾기");
+    search.appendChild(input);
+    input.addEventListener("input", () => {
+      // 한글 입력 중간(예: "네이ㅂ")에 결과가 없어도 창이 줄었다 늘었다 하지 않게 처음 높이를 유지한다 (F09-10)
+      if (!list.style.minHeight) list.style.minHeight = `${list.offsetHeight}px`;
+      const query = input.value;
+      if (query.trim() === "") {
+        for (const { row } of rows) row.classList.remove("hidden");
+        noMatch.classList.add("hidden");
+        return;
+      }
+      const matched = new Set(searchBookmarks(query, items).map((bookmark) => String(bookmark.id)));
+      // row.hidden은 .list__row의 display:flex에 덮여 안 숨겨지므로 hidden 클래스를 쓴다
+      for (const { id, row } of rows) row.classList.toggle("hidden", !matched.has(id));
+      noMatch.classList.toggle("hidden", matched.size > 0);
+    });
+    body.appendChild(search);
   }
   body.appendChild(list);
 
