@@ -539,6 +539,11 @@ function renderSearchResultRow(bookmark) {
   }
 
   row.addEventListener("click", () => openWithNotice(bookmark));
+  // 모든 북마크 영역이라 container 없음 (F14-07). 끌기 손잡이는 붙이지 않음 (F17-04)
+  row.addEventListener("contextmenu", (event) => {
+    event.preventDefault();
+    showContextMenu(bookmark, { x: event.clientX, y: event.clientY });
+  });
   return row;
 }
 
