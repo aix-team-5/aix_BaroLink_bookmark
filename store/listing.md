@@ -27,10 +27,11 @@
 • 고정 제안: 사용자가 허락했을 때만 자주 방문한 사이트를 사용해 화면 아래에 고정할 북마크를 제안합니다.
 • 끌어서 옮기기: 앱을 끌어 폴더에 넣거나 폴더 안에서 순서를 바꿉니다.
 • 내 정보와 꾸미기: 북마크 동기화 상태와 북마크·폴더 개수를 보고, 색상·배경·글꼴과 프로필 사진을 고릅니다.
-• 검색: 북마크를 찾아 결과에서 바로 열거나 우클릭으로 옮기고 지우며, 크롬에 설정한 기본 검색엔진으로 웹도 검색합니다.
+• 검색: 북마크를 찾아 결과에서 바로 열거나 우클릭으로 옮기고 지우며, 크롬에 설정한 기본 검색엔진으로 웹도 검색합니다. 점이 있고 띄어쓰기가 없는 입력(예: example.com)은 주소로 보고 검색하지 않고 지금 탭에서 엽니다.
 
 데이터
-북마크와 설정, 올린 사진은 모두 이 기기 안에서만 처리하고 저장하며, 밖으로 보내지 않습니다. 서버, 회원가입, 광고, 분석 도구가 없습니다. 웹 검색창에 입력한 검색어만 크롬의 기본 검색엔진으로 전달됩니다.
+바로링크는 북마크와 설정, 올린 사진을 밖으로 보내지 않습니다. 서버, 회원가입, 광고, 분석 도구가 없습니다. 웹 검색창에 입력한 검색어는 크롬의 기본 검색엔진으로 전달되고, 주소로 입력한 것은 그 사이트로 바로 이동합니다.
+크롬의 북마크 동기화가 켜져 있으면 바로링크로 정리·이동·삭제한 북마크도 크롬이 구글 계정에 동기화합니다. 이것은 크롬의 기능입니다. 꾸미기 설정과 올린 사진은 이 기기의 로컬 저장소에만 있어 동기화되지 않습니다.
 
 개인정보처리방침: https://github.com/aix-team-5/aix_BaroLink_bookmark/blob/main/docs/privacy.md
 ```
@@ -137,11 +138,17 @@ https://github.com/aix-team-5/aix_BaroLink_bookmark/blob/main/docs/privacy.md
 2. 아래 명령으로 zip을 만든다
 3. 테스트용 크롬 프로필에서 설치 시험 → 대시보드에 초안으로 올려 설치 시험 오류 확인 → 제출
 
-- zip 안에는 `extension/` 폴더의 **내용만** 넣는다. `manifest.json`이 zip의 최상위(폴더 없이 바로)에 와야 한다. 목록 순서에서 첫 줄일 필요는 없다(`tar.exe -tf`로 보면 이름 순서라 `background.js`가 먼저 나온다).
+- zip 안에는 `extension/` 폴더의 **내용만** 넣는다. `manifest.json`이 zip의 최상위(폴더 없이 바로)에 와야 한다. 목록 순서에서 첫 줄일 필요는 없다(아래 명령은 폴더를 먼저 넘기므로 `tar.exe -tf`로 보면 `data/`가 먼저 나온다).
 - 저장소 맨 위에서 아래 한 줄을 PowerShell로 돌린다. 윈도우에 들어 있는 `tar`를 쓴다.
 
 ```powershell
-tar.exe -a -cf barolink-1.0.0.zip -C extension *
+tar.exe -a -cf barolink-1.0.0.zip -C extension (Get-ChildItem extension -Name)
+```
+
+- 만든 뒤 아래 한 줄로 `manifest.json`이 폴더 없이 맨 위에 있는지 본다. `manifest.json` 한 줄이 나오면 된다.
+
+```powershell
+tar.exe -tf barolink-1.0.0.zip | Select-String '^manifest\.json$'
 ```
 
 - `Compress-Archive`는 쓰지 않는다. Windows PowerShell 5.1의 `Compress-Archive`는 zip 안 경로를 `js\store.js`처럼 역슬래시로 적는다(zip 규격은 `/`).
@@ -154,7 +161,7 @@ tar.exe -a -cf barolink-1.0.0.zip -C extension *
 1. **zip 올리기.** 지금 main으로 6절의 명령을 돌려 zip을 만든다. 이름만 `barolink-draft.zip`으로 바꾸고 manifest의 version은 그대로 둔다. 대시보드에서 새 항목 → zip 업로드. 초안이 생기고 설치 시험이 바로 돈다.
 
    ```powershell
-   tar.exe -a -cf barolink-draft.zip -C extension *
+   tar.exe -a -cf barolink-draft.zip -C extension (Get-ChildItem extension -Name)
    ```
 
 2. **스토어 등록정보.** 2절의 요약과 자세한 설명, 언어 한국어, 카테고리는 생산성 계열에서 고른다. 아이콘(`extension/icons/icon128.png`)과 작은 프로모션 타일(`store/promo-small-440x280.png`), 스크린샷 5장(1·3·4·6·7번)을 이 순서로 올린다.
