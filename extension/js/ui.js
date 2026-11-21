@@ -220,8 +220,12 @@ function hideToast() {
 }
 
 // 꾸미기 목록은 명세 v22 F18 그대로다. newtab.css의 :root[data-accent·data-font·data-wallpaper] 값과 같아야 한다
-const ACCENTS = ["violet", "navy", "blue", "sky", "teal", "green", "rose", "ink"];
-const WALLPAPERS = ["cloud", "dawn", "mint", "lavender", "peach", "mist", "photo"];
+const ACCENTS = ["violet", "navy", "blue", "sky", "teal", "green", "amber", "orange", "rose", "ink"];
+const WALLPAPERS = [
+  "cloud", "dawn", "mint", "lavender", "peach", "mist",
+  "solid-cream", "solid-gray", "solid-lavender", "solid-mint", "solid-peach", "solid-sky",
+  "photo",
+];
 const FONTS = ["system", "gothic", "serif"];
 const DEFAULT_ACCENT = "violet";
 const DEFAULT_WALLPAPER = "cloud";

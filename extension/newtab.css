@@ -154,8 +154,18 @@
   --swatch-sky: #0369a1;
   --swatch-teal: #0f766e;
   --swatch-green: #15803d;
+  --swatch-amber: #a16207;
+  --swatch-orange: #c2410c;
   --swatch-rose: #e11d48;
   --swatch-ink: #334155;
+
+  /* 단색 배경 6개 (F18-07). 배경 규칙과 고르기 칸이 같은 값을 쓴다. 모두 옅은 색이라 어두운 글자가 읽힌다 */
+  --wall-solid-cream: #f3eee5;
+  --wall-solid-gray: #e6e7ee;
+  --wall-solid-lavender: #e3def4;
+  --wall-solid-mint: #d8eee7;
+  --wall-solid-peach: #f6e3da;
+  --wall-solid-sky: #dae8f6;
 
   /* 동기화 상태 점 (F18-03) */
   --color-sync-on: #10b981;   /* emerald-500 */
@@ -220,6 +230,22 @@ html:not([data-appearance-ready]) body {
   --color-primary-soft: #dcfce7;
   --color-primary-text: #15803d;
   --color-suggestion-bg: #f0fdf4;
+}
+
+:root[data-accent="amber"] {
+  --color-primary: #a16207;
+  --color-primary-strong: #854d0e;
+  --color-primary-soft: #fef9c3;
+  --color-primary-text: #854d0e;
+  --color-suggestion-bg: #fefce8;
+}
+
+:root[data-accent="orange"] {
+  --color-primary: #c2410c;
+  --color-primary-strong: #9a3412;
+  --color-primary-soft: #ffedd5;
+  --color-primary-text: #9a3412;
+  --color-suggestion-bg: #fff7ed;
 }
 
 :root[data-accent="rose"] {
@@ -309,6 +335,18 @@ body {
     linear-gradient(to bottom, rgba(255, 255, 255, 0.55), rgba(255, 255, 255, 0.15) 45%, rgba(255, 255, 255, 0) 70%),
     url("img/wallpapers/peach.jpg");
 }
+
+/* 단색 배경 (F18-07). 그림 파일 없이 색만 쓴다. ID는 solid-색이름 */
+:root[data-wallpaper^="solid-"] body {
+  background-image: none;
+}
+
+:root[data-wallpaper="solid-cream"] body { background-color: var(--wall-solid-cream); }
+:root[data-wallpaper="solid-gray"] body { background-color: var(--wall-solid-gray); }
+:root[data-wallpaper="solid-lavender"] body { background-color: var(--wall-solid-lavender); }
+:root[data-wallpaper="solid-mint"] body { background-color: var(--wall-solid-mint); }
+:root[data-wallpaper="solid-peach"] body { background-color: var(--wall-solid-peach); }
+:root[data-wallpaper="solid-sky"] body { background-color: var(--wall-solid-sky); }
 
 /* 올린 사진: ui.js가 <html>에 --wallpaper-photo: url("data:…")를 넣는다. 사진이 없으면 구름 그대로
    어두운 사진을 올려도 제목·날짜 같은 배경 위 글자가 읽히도록 옅은 흰 막을 깐다 (Q6) */
@@ -2155,10 +2193,11 @@ a {
   margin-top: 0;
 }
 
-/* 색상 8개 (F18-06). 동그라미 색은 :root의 --swatch-ID */
+/* 색상 10개 (F18-06). 동그라미 색은 :root의 --swatch-ID. 5개씩 두 줄 */
 .profile__swatches {
   display: grid;
-  grid-template-columns: repeat(8, minmax(0, 1fr));
+  grid-template-columns: repeat(5, minmax(0, 1fr));
+  justify-items: center;
   gap: var(--space-2);
 }
 
@@ -2195,6 +2234,8 @@ a {
 .profile__swatch[data-value="sky"] { background: var(--swatch-sky); }
 .profile__swatch[data-value="teal"] { background: var(--swatch-teal); }
 .profile__swatch[data-value="green"] { background: var(--swatch-green); }
+.profile__swatch[data-value="amber"] { background: var(--swatch-amber); }
+.profile__swatch[data-value="orange"] { background: var(--swatch-orange); }
 .profile__swatch[data-value="rose"] { background: var(--swatch-rose); }
 .profile__swatch[data-value="ink"] { background: var(--swatch-ink); }
 
@@ -2231,6 +2272,12 @@ a {
 .profile__wallpaper[data-value="lavender"] { background-image: url("img/wallpapers/thumb/lavender.jpg"); }
 .profile__wallpaper[data-value="peach"] { background-image: url("img/wallpapers/thumb/peach.jpg"); }
 .profile__wallpaper[data-value="mist"] { background-image: url("img/wallpapers/thumb/mist.jpg"); }
+.profile__wallpaper[data-value="solid-cream"] { background-color: var(--wall-solid-cream); }
+.profile__wallpaper[data-value="solid-gray"] { background-color: var(--wall-solid-gray); }
+.profile__wallpaper[data-value="solid-lavender"] { background-color: var(--wall-solid-lavender); }
+.profile__wallpaper[data-value="solid-mint"] { background-color: var(--wall-solid-mint); }
+.profile__wallpaper[data-value="solid-peach"] { background-color: var(--wall-solid-peach); }
+.profile__wallpaper[data-value="solid-sky"] { background-color: var(--wall-solid-sky); }
 /* 내 사진: ui.js가 <html>에 넣은 --wallpaper-photo를 그대로 쓴다 */
 .profile__wallpaper[data-value="photo"] { background-image: var(--wallpaper-photo); }
 
@@ -2316,12 +2363,8 @@ a {
   color: var(--color-text-faint);
 }
 
-/* 좁은 화면: 색상은 4개씩 두 줄, 배경은 3개씩 */
+/* 좁은 화면: 배경은 3개씩 (색상은 그대로 5개씩 두 줄) */
 @media (max-width: 520px) {
-  .profile__swatches {
-    grid-template-columns: repeat(4, minmax(0, 1fr));
-  }
-
   .profile__wallpapers {
     grid-template-columns: repeat(3, minmax(0, 1fr));
   }
