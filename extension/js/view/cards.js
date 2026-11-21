@@ -1135,6 +1135,8 @@ export function showPinPicker(bookmarks, { max = 5, limitMessage, onPicked } = {
     input.setAttribute("aria-label", "고정할 북마크 찾기");
     search.appendChild(input);
     input.addEventListener("input", () => {
+      // 한글 입력 중간(예: "네이ㅂ")에 결과가 없어도 창이 줄었다 늘었다 하지 않게 처음 높이를 유지한다 (F09-10)
+      if (!list.style.minHeight) list.style.minHeight = `${list.offsetHeight}px`;
       const query = input.value;
       if (query.trim() === "") {
         for (const { row } of rows) row.classList.remove("hidden");
