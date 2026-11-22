@@ -104,6 +104,17 @@ test("onCreated: 사용자 폴더 안·관리 폴더 안에 저장하면 추가�
   assert.equal(Object.hasOwn(data, "newBookmarks"), false);
 });
 
+test("onCreated·onRemoved: 북마크바 바로 아래의 임시 북마크(TOUCH_URL)는 기록하지 않는다", async () => {
+  const { TOUCH_URL } = await import("../extension/js/bookmarks.js");
+  const a = create(1);
+  nodes[a.id].url = TOUCH_URL;
+  await a.fire();
+  assert.deepEqual(data.newBookmarks ?? [], []);
+  const before = structuredClone(data);
+  await listeners.onRemoved(a.id, { parentId: "1", index: 0, node: structuredClone(nodes[a.id]) });
+  assert.deepEqual(data, before);
+});
+
 test("onCreated: 폴더는 추가하지 않는다", async () => {
   await create(1, { folder: true }).fire();
   assert.equal(Object.hasOwn(data, "newBookmarks"), false);

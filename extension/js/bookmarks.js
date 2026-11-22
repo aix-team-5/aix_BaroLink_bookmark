@@ -15,6 +15,11 @@ const ROOT_TYPES = {
 const FAVICON_SIZE = 32;
 const NO_FAVICON_PAGE = "https://no-favicon.invalid/";
 
+// 별(☆) 창의 기본 폴더를 북마크바로 되돌릴 때 잠깐 만들었다 지우는 임시 북마크의 주소와 제목
+// .invalid는 실제로 열리지 않는 주소다. 이 주소의 북마크는 loadTree가 빼고, 서비스 워커(background.js)가 기록하지 않는다
+export const TOUCH_URL = "https://barolink.invalid/touch";
+const TOUCH_TITLE = "BaroLink";
+
 // N01: 크롬 북마크를 읽어 화면과 규칙이 쓰기 쉬운 목록으로 바꾼다
 export async function loadTree() {
   const [top] = await chrome.bookmarks.getTree();
@@ -50,13 +55,18 @@ function pickRoot(tops, folderType) {
     title: root.title,
     folderType: root.folderType,
     syncing: root.syncing === true,
-    childIds: (root.children ?? []).map((child) => child.id),
+    childIds: visibleChildren(root.children).map((child) => child.id),
   };
+}
+
+// 임시 북마크(TOUCH_URL)를 뺀 자식 목록. 지우기 전의 짧은 순간에도 화면과 정리 계산에 섞이지 않게 한다
+function visibleChildren(children) {
+  return (children ?? []).filter((child) => child.url !== TOUCH_URL);
 }
 
 // 트리를 내려가며 북마크와 폴더를 펼친다. path는 최상위 폴더 아래의 폴더 이름들
 function collect(nodes, folderTitle, path, base, bookmarks, folders) {
-  for (const node of nodes) {
+  for (const node of visibleChildren(nodes)) {
     if (node.url !== undefined) {
       const item = {
         id: node.id,
@@ -74,7 +84,7 @@ function collect(nodes, folderTitle, path, base, bookmarks, folders) {
       bookmarks.push({ ...item, folderTitle, ...base, path: [...path] });
       continue;
     }
-    const children = node.children ?? [];
+    const children = visibleChildren(node.children);
     folders.push({
       id: node.id,
       title: node.title,
@@ -101,7 +111,10 @@ export async function createFolder(name, parentId) {
     .filter((node) => node.url === undefined && !node.folderType && node.title === title)
     .sort((a, b) => a.index - b.index)[0];
   if (same) return same;
-  return chrome.bookmarks.create({ parentId: String(parentId), title });
+  const folder = await chrome.bookmarks.create({ parentId: String(parentId), title });
+  // 새 폴더가 '최근 수정 폴더'가 될 수 있으므로 북마크바로 되돌린다 (touchBookmarksBar)
+  await requestTouch();
+  return folder;
 }
 
 // N03: 북마크 하나를 옮긴다. 북마크가 없으면 null
@@ -124,13 +137,17 @@ export async function moveBookmark(id, parentId, index) {
     }
     destination.index = target;
   }
+  let moved;
   try {
-    return await chrome.bookmarks.move(node.id, destination);
+    moved = await chrome.bookmarks.move(node.id, destination);
   } catch (error) {
     // 그사이 지워졌으면 null, 그 밖의 오류(목적지 없음 등)는 그대로 던진다
     if (!(await findNode(node.id))) return null;
     throw error;
   }
+  // 옮긴 폴더가 '최근 수정 폴더'가 되므로 북마크바로 되돌린다 (touchBookmarksBar). 끌어 놓기·폴더로 이동도 여기를 거친다
+  await requestTouch();
+  return moved;
 }
 
 // 북마크 하나를 찾는다. 없으면 null
@@ -163,6 +180,11 @@ export async function renameFolder(id, name) {
 // 꺼낸 것은 폴더가 있던 자리에 원래 순서대로 놓는다. 안의 폴더도 함께 꺼내지만(비어야 지울 수 있다) 세지 않는다
 // 중간에 이동이 실패하면 일부만 꺼낸 채 오류를 던진다 (이미 꺼낸 것은 상위 폴더에 남는다)
 export async function deleteFolderKeepChildren(id) {
+  // 꺼낼 때마다 임시 북마크를 만들지 않고, 다 꺼낸 뒤 한 번만 만든다
+  return holdBarTouch(() => runDeleteFolderKeepChildren(id));
+}
+
+async function runDeleteFolderKeepChildren(id) {
   const [folder] = await chrome.bookmarks.get(String(id));
   // 관리자가 정한 폴더(managed)는 바꿀 수 없다
   if (folder.unmodifiable) throw new Error("바꿀 수 없는 폴더예요");
@@ -226,13 +248,105 @@ export async function restoreBookmark(saved) {
         const count = (await chrome.bookmarks.getChildren(parent.id)).length;
         details.index = Math.min(Math.max(0, Math.trunc(saved.index)), count);
       }
-      return { node: await chrome.bookmarks.create(details), fallback: false };
+      const node = await chrome.bookmarks.create(details);
+      // 원래 폴더가 '최근 수정 폴더'가 되므로 북마크바로 되돌린다 (touchBookmarksBar)
+      await requestTouch();
+      return { node, fallback: false };
     } catch (error) {
       // 확인한 직후 폴더가 지워졌으면 기타 북마크로, 그 밖의 오류는 그대로 던진다
       if (await findNode(parent.id)) throw error;
     }
   }
   return { node: await createInOther(title, saved.url), fallback: true };
+}
+
+// ---- 별(☆) 창의 기본 폴더를 북마크바로 되돌리기 ----
+// 크롬의 별 창은 저장 위치로 '가장 최근에 내용이 바뀐 폴더'(dateGroupModified가 가장 최근인 폴더)를 기본으로 고른다.
+// 우리가 북마크를 사용자 폴더로 옮기면 그 폴더가 기본이 되어, 다음 별 저장이 그 폴더 안으로 들어가 'new'가 뜨지 않는다 (F10-01, F10-09).
+// 그래서 옮긴 뒤 북마크바 바로 아래에 임시 북마크를 만들고 곧바로 지워 북마크바를 다시 '최근 수정 폴더'로 만든다.
+// 주의: 이것은 공식 API가 아니라 크롬 내부 동작(별 창 기본 폴더 = 최근 수정 폴더)에 기댄 것이다. 크롬 버전에 따라 효과가 없을 수 있다.
+// 북마크를 다른 위치로 옮기지 않는다. 임시 북마크를 만들고 지우는 것만 한다.
+
+// holdBarTouch가 진행 중인 수. 0보다 크면 requestTouch는 바로 만들지 않고 끝난 뒤로 미룬다
+let touchHold = 0;
+let touchWanted = false;
+// 같은 탭에서 touch가 겹치지 않게 한 줄로 세운다
+let touchQueue = Promise.resolve();
+
+// 북마크를 옮기거나 만든 뒤 부른다. 여러 번 옮기는 중(holdBarTouch 안)이면 끝난 뒤 한 번만 한다
+async function requestTouch() {
+  if (touchHold > 0) {
+    touchWanted = true;
+    return;
+  }
+  await touchBookmarksBar();
+}
+
+// fn을 실행하는 동안 requestTouch를 미루고, 그사이 옮기거나 만든 것이 있으면 끝난 뒤(fn이 오류를 던져도) 한 번 touchBookmarksBar를 부른다
+// 옮긴 것이 하나도 없으면 부르지 않는다. organize.js의 정리(applyPlan)와 되돌리기(undo)가 쓴다
+export async function holdBarTouch(fn) {
+  touchHold++;
+  try {
+    return await fn();
+  } finally {
+    touchHold--;
+    if (touchHold === 0 && touchWanted) {
+      touchWanted = false;
+      await touchBookmarksBar();
+    }
+  }
+}
+
+// 북마크바를 다시 '최근 수정 폴더'로 만든다. 만들었으면 true, 필요 없거나 실패했으면 false
+// 실패해도 오류를 던지지 않는다(정리 결과에 영향이 없게). 북마크바는 ID가 아니라 folderType으로 찾는다 (F01-04)
+export function touchBookmarksBar() {
+  const task = touchQueue.then(runTouch);
+  touchQueue = task.catch(() => {});
+  return task;
+}
+
+async function runTouch() {
+  try {
+    // 지난번에 지우기 전에 끊겨(새 탭을 닫는 등) 남은 임시 북마크를 먼저 지운다
+    await removeTouchLeftovers();
+    const [top] = await chrome.bookmarks.getTree();
+    const tops = top?.children ?? [];
+    const bar = pickRoot(tops, "bookmarks-bar");
+    if (!bar) return false;
+    const barNode = tops.find((node) => node.id === bar.id);
+    // 북마크바가 이미 어느 사용자 폴더보다 최근에 바뀌었으면 만들지 않는다
+    if (!userFolderNewer(tops, barNode?.dateGroupModified ?? 0)) return false;
+    const node = await chrome.bookmarks.create({ parentId: bar.id, title: TOUCH_TITLE, url: TOUCH_URL });
+    await chrome.bookmarks.remove(node.id);
+    return true;
+  } catch (error) {
+    console.warn("북마크바를 최근 수정 폴더로 되돌리지 못했어요", error);
+    return false;
+  }
+}
+
+// 같은 주소의 임시 북마크를 모두 지운다. 하나를 못 지워도 나머지는 지운다
+async function removeTouchLeftovers() {
+  const found = await chrome.bookmarks.search({ url: TOUCH_URL });
+  for (const node of found) {
+    if (node.url !== TOUCH_URL) continue;
+    try {
+      await chrome.bookmarks.remove(node.id);
+    } catch (error) {
+      console.warn(`남은 임시 북마크 ${node.id}를 지우지 못했어요`, error);
+    }
+  }
+}
+
+// 사용자 폴더(folderType 없음) 중 dateGroupModified가 time 이상인 것이 있으면 true. 관리자 폴더(managed) 아래는 보지 않는다
+function userFolderNewer(tops, time) {
+  const walk = (nodes) =>
+    nodes.some((node) => {
+      if (node.url !== undefined) return false;
+      if (!node.folderType && node.dateGroupModified !== undefined && node.dateGroupModified >= time) return true;
+      return walk(node.children ?? []);
+    });
+  return walk(tops.filter((node) => node.folderType !== "managed"));
 }
 
 // 기타 북마크(loadTree의 roots.other와 같은 폴더) 맨 뒤에 북마크를 만든다

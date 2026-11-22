@@ -1,7 +1,7 @@
 // 담당: 팀원 A · 이슈 #4 · 명세: N22, N23 (F07, F10, F13)
 // 정리 적용과 되돌리기. 크롬 북마크를 실제로 바꾼다. bookmarks.js와 store.js를 거친다.
 
-import { loadTree, createFolder, moveBookmark, deleteFolderKeepChildren } from "./bookmarks.js";
+import { loadTree, createFolder, moveBookmark, deleteFolderKeepChildren, holdBarTouch } from "./bookmarks.js";
 import { load, setPending, addHistory, markUndone, markHandledNew } from "./store.js";
 
 const TYPES = ["first", "new"];
@@ -92,8 +92,9 @@ function readPlan(plan, type) {
 // N22: 폴더를 만들고 북마크를 옮긴 뒤 기록을 저장. type은 "first" | "new"
 // 옮긴 것도 만든 폴더도 없으면 기록을 저장하지 않고 돌려주기만 한다(되돌릴 것이 없다)
 // 결과: { id, at, type, createdFolderIds, moves, fromOrder, skipped, kept }. kept는 '그대로 두기'로 기록한 수("first"는 0)
+// 옮기거나 만든 것이 있으면 끝난 뒤 한 번 북마크바를 '최근 수정 폴더'로 되돌린다(touchBookmarksBar). 별 창의 기본 폴더가 정리한 폴더가 되지 않게 한다
 export async function applyPlan(plan, type) {
-  return enqueue(() => runApplyPlan(plan, type));
+  return enqueue(() => holdBarTouch(() => runApplyPlan(plan, type)));
 }
 
 async function runApplyPlan(plan, type) {
@@ -208,8 +209,9 @@ async function runApplyPlan(plan, type) {
 }
 
 // N23: 원래 순서에서 바로 앞에 있던 이웃의 뒤에 끼워 넣어 되돌린다
+// 되돌린 것이 있으면 applyPlan처럼 끝난 뒤 한 번 북마크바를 '최근 수정 폴더'로 되돌린다
 export async function undo(historyId) {
-  return enqueue(() => runUndo(historyId));
+  return enqueue(() => holdBarTouch(() => runUndo(historyId)));
 }
 
 async function runUndo(historyId) {

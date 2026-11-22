@@ -128,6 +128,10 @@ const bookmarks = {
     calls.push("bookmarks.update");
     return view(node.id, false);
   },
+  // 옮긴 뒤 남은 임시 북마크(touchBookmarksBar)를 찾을 때 쓴다. 자세한 확인은 tests/organize.test.mjs
+  async search({ url }) {
+    return [...nodes.values()].filter((node) => node.url === url).map((node) => view(node.id, false));
+  },
 };
 
 // ---- 가짜 chrome.tabs ----
