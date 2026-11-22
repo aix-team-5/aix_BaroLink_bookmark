@@ -268,7 +268,7 @@ sequenceDiagram
 - 디바운스: 마지막 예약 뒤 500ms 동안 다른 예약이 없으면 한 번만 실행한다. 정리하기처럼 여러 개를 한꺼번에 바꿔도 임시 북마크는 한 번만 만들고 지운다. 최신화는 `chrome.bookmarks`를 직접 불러 임시 북마크를 만들고 지우므로 다시 예약하지 않는다(무한 반복 없음).
 - `holdBarTouch(fn)`: `fn`이 도는 동안에는 500ms가 지나도 실행하지 않고, 그사이 예약된 것이 있으면 끝난 뒤 다시 예약한다. `organize.js`의 `applyPlan`·`undo`가 쓴다(정리 도중에 임시 북마크가 생기지 않게).
 - `flushBarTouch()`: 예약된 최신화를 기다리지 않고 지금 실행한다. 테스트와 콘솔 확인용.
-- 새 탭을 0.5초 안에 닫으면 예약된 최신화는 실행되지 않는다(임시 북마크도 만들지 않았으므로 남는 것은 없다).
+- 새 탭을 0.5초 안에 닫으면 예약된 최신화는 실행되지 않는다(임시 북마크도 만들지 않았으므로 남는 것은 없다). 그래서 `render.js`가 새 탭의 첫 화면을 그린 뒤(첫 `loadTree` 뒤) `touchBookmarksBar()`를 기다리지 않고 한 번 부른다. 북마크바가 이미 가장 최근이면 아무것도 하지 않는다.
 - 임시 북마크가 섞이지 않게: `loadTree`는 `TOUCH_URL` 북마크를 북마크 목록·폴더의 `childIds`·루트의 `childIds`에서 뺀다(새 탭 화면과 정리 계산에 보이지 않음). `background.js`는 `onCreated`·`onRemoved`에서 `TOUCH_URL`이면 아무것도 기록하지 않는다(`newBookmarks`·`manualMoves`). 북마크를 사용자 몰래 다른 곳으로 옮기지는 않는다.
 - 수동 확인: `tests/console-checks.md`의 C-TOUCH.
 
