@@ -99,9 +99,9 @@ https://github.com/aix-team-5/aix_BaroLink_bookmark/blob/main/docs/privacy.md
 | 항목 | 크기 | 필수 | 지금 |
 | --- | --- | --- | --- |
 | 스토어 아이콘 | 128×128 PNG | 필수 | `extension/icons/icon128.png` (128×128) |
-| 스크린샷 | 1280×800 또는 640×400, 1~5장 | 1장 이상 필수 | `store/screenshot-*.png` 7장 (1280×800). 웹스토어에는 1·3·4·6·7번 5장 |
+| 스크린샷 | 1280×800 또는 640×400, 1~5장 | 1장 이상 필수 | 웹스토어에는 `store/store-1~5` 5장(화면 7개를 묶고 문구를 붙인 판) |
 | 작은 프로모션 타일 | 440×280 | 필수 | `store/promo-small-440x280.png` (440×280) |
-| 마키 프로모션 타일 | 1400×560 | 선택 | 없음 |
+| 마키 프로모션 타일 | 1400×560 | 선택 | `store/store-marquee-1400x560.png` |
 
 찍은 파일은 `store/screenshot-1-newtab.png`처럼 번호를 붙여 `store/`에 넣고 `docs/credits.md`에도 줄을 더한다.
 
