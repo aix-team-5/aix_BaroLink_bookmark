@@ -28,7 +28,12 @@ const storage = {
   async set(items) {
     await new Promise((resolve) => setTimeout(resolve, 2));
     for (const [key, value] of Object.entries(items)) data[key] = structuredClone(value);
+    // 북마크바 최신화 예약 표시(barTouchPending)는 호출 순서 확인에 넣지 않는다
+    if (Object.hasOwn(items, "barTouchPending")) return;
     calls.push("storage.set");
+  },
+  async remove(keys) {
+    for (const key of [keys].flat()) delete data[key];
   },
 };
 

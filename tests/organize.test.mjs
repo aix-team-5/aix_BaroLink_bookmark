@@ -31,7 +31,12 @@ const storage = {
     await new Promise((resolve) => setTimeout(resolve, 2));
     if (failSetKey && Object.hasOwn(items, failSetKey)) throw new Error("저장 실패");
     for (const [key, value] of Object.entries(items)) data[key] = structuredClone(value);
-    calls.push("storage.set");
+    // 북마크바 최신화 예약 표시는 따로 적는다 (기존 호출 순서 확인과 섞이지 않게)
+    calls.push(Object.hasOwn(items, "barTouchPending") ? "storage.mark" : "storage.set");
+  },
+  async remove(keys) {
+    for (const key of [keys].flat()) delete data[key];
+    calls.push("storage.remove");
   },
 };
 
@@ -483,7 +488,8 @@ test("applyPlan new: setPending 저장 뒤에 첫 이동, 기록 뒤에 handledN
   const pendingSet = calls.lastIndexOf("storage.set", firstMove);
   assert.ok(pendingSet !== -1 && pendingSet < firstMove);
   // 이동 뒤 저장 두 번: history → handledNew. 북마크바 최신화는 500ms 뒤로 미뤄져 아직 없다
-  assert.deepEqual(calls.slice(firstMove), ["bookmarks.move", "storage.set", "storage.set"]);
+  // 최신화 예약 표시(storage.mark)는 기다리지 않고 쓰므로 순서 확인에서 뺀다
+  assert.deepEqual(calls.slice(firstMove).filter((c) => c !== "storage.mark"), ["bookmarks.move", "storage.set", "storage.set"]);
   assert.equal(data.pendingMoves["11"].toParentId, "16");
   assert.deepEqual(data.newBookmarks, ["11", "12"]);
 });
@@ -1011,42 +1017,89 @@ test("loadTree: 임시 북마크는 북마크 목록·폴더 자식·루트 자�
   assert.ok(!tree.folders.find((f) => f.id === "17").childIds.some((id) => ids.includes(id)));
 });
 
-// ---- 새 탭 시작 시 북마크바 최신화 (render.js의 start) ----
+// ---- 새 탭 시작 시 북마크바 최신화 (render.js의 start → touchBookmarksBarIfPending) ----
 
-test("새 탭 시작: 북마크바가 이미 가장 최근이면 임시 북마크를 만들지 않는다 (평소에는 아무 일도 없음)", { skip: SKIP }, async () => {
-  nodes.get("16").dateGroupModified = 5;
-  nodes.get("17").dateGroupModified = 7;
-  nodes.get("1").dateGroupModified = 9;
-  clock = 9;
-  assert.equal(await b.touchBookmarksBar(), false);
-  assert.equal(touches(), 0);
-  assert.ok(!calls.includes("bookmarks.remove"));
-  assert.deepEqual(touchNodes(), []);
+test("예약 표시: 북마크를 바꾸면 barTouchPending을 남기고, 최신화가 끝나면 지운다", { skip: SKIP }, async () => {
+  await b.moveBookmark("11", "17");
+  await b.moveBookmark("12", "17");
+  await sleep(10); // 표시는 기다리지 않고 쓴다
+  // 표시는 한 번만 쓴다
+  assert.equal(calls.filter((c) => c === "storage.mark").length, 1);
+  assert.equal(data.barTouchPending, true);
+  await b.flushBarTouch();
+  assert.equal(touches(), 1);
+  assert.ok(!("barTouchPending" in data));
 });
 
-test("새 탭 시작: 사용자 폴더가 더 최근이면(지난 새 탭이 0.5초 안에 닫힘) 임시 북마크를 한 번 만들고 지운다", { skip: SKIP }, async () => {
-  // 지난 새 탭에서 [기본 폴더]로 옮긴 뒤 예약된 최신화가 실행되기 전에 탭이 닫힌 상태
+test("예약 표시: 최신화가 필요 없었어도(북마크바가 이미 최근) 표시를 지운다", { skip: SKIP }, async () => {
+  await b.renameFolder("16", "개발2");
+  await sleep(10);
+  assert.equal(data.barTouchPending, true);
+  nodes.get("1").dateGroupModified = ++clock;
+  await b.flushBarTouch();
+  assert.equal(touches(), 0);
+  assert.ok(!("barTouchPending" in data));
+});
+
+test("예약 표시: 최신화가 실패하면 표시를 남겨 다음 새 탭이 다시 해 본다", { skip: SKIP }, async () => {
+  failTouch = true;
+  await b.moveBookmark("11", "17");
+  await b.flushBarTouch();
+  assert.equal(data.barTouchPending, true);
+  failTouch = false;
+  assert.equal(await b.touchBookmarksBarIfPending(), true);
+  assert.ok(!("barTouchPending" in data));
+});
+
+test("새 탭 시작: 표시가 없으면 사용자 폴더가 더 최근이어도(별 창으로 사용자 폴더에 저장) 크롬 북마크를 건드리지 않는다", { skip: SKIP }, async () => {
+  // 사용자가 크롬 별 창으로 [기본 폴더]에 직접 저장한 상태. 확장 프로그램에서는 아무것도 하지 않았다
   nodes.get("1").dateGroupModified = 5;
   nodes.get("17").dateGroupModified = 8;
   clock = 8;
-  assert.equal(await b.touchBookmarksBar(), true);
+  assert.equal(await b.touchBookmarksBarIfPending(), false);
+  assert.equal(searches(), 0);
+  assert.equal(touches(), 0);
+  assert.ok(!calls.includes("bookmarks.remove"));
+  assert.equal(newestFolder(), "17");
+});
+
+test("새 탭 시작: 표시가 남아 있으면(지난 새 탭이 0.5초 안에 닫힘) 한 번 최신화하고 표시를 지운다", { skip: SKIP }, async () => {
+  // 지난 새 탭에서 [기본 폴더]로 옮긴 뒤 예약된 최신화가 실행되기 전에 탭이 닫힌 상태
+  data.barTouchPending = true;
+  nodes.get("1").dateGroupModified = 5;
+  nodes.get("17").dateGroupModified = 8;
+  clock = 8;
+  assert.equal(await b.touchBookmarksBarIfPending(), true);
   assert.equal(touches(), 1);
   assert.equal(calls.filter((c) => c === "bookmarks.remove").length, 1);
   assert.deepEqual(touchNodes(), []);
   assert.equal(newestFolder(), "1");
-  // 이어서 다시 불러도 이제 북마크바가 최근이라 더 만들지 않는다
-  assert.equal(await b.touchBookmarksBar(), false);
-  assert.equal(touches(), 1);
+  assert.ok(!("barTouchPending" in data));
+  // 다음 새 탭에서는 표시가 없어 아무것도 하지 않는다
+  calls = [];
+  assert.equal(await b.touchBookmarksBarIfPending(), false);
+  assert.equal(searches(), 0);
 });
 
-test("render.js: 첫 화면을 그린 뒤 touchBookmarksBar를 기다리지 않고 한 번 부른다", async () => {
+test("새 탭 시작: 표시가 있어도 북마크바가 이미 가장 최근이면 임시 북마크를 만들지 않고 표시만 지운다", { skip: SKIP }, async () => {
+  data.barTouchPending = true;
+  nodes.get("16").dateGroupModified = 5;
+  nodes.get("1").dateGroupModified = 9;
+  clock = 9;
+  assert.equal(await b.touchBookmarksBarIfPending(), false);
+  assert.equal(touches(), 0);
+  assert.ok(!("barTouchPending" in data));
+});
+
+test("render.js: 첫 화면을 그린 뒤 예약 표시가 있을 때만 최신화하는 함수를 기다리지 않고 한 번 부른다", async () => {
   const { readFileSync } = await import("node:fs");
   const source = readFileSync(new URL("../extension/js/render.js", import.meta.url), "utf8");
   const start = source.slice(source.indexOf("async function start()"));
   const body = start.slice(0, start.indexOf("\n}\n"));
   const refreshAt = body.indexOf("await refresh();");
-  const touchAt = body.indexOf("touchBookmarksBar()");
+  const touchAt = body.indexOf("touchBookmarksBarIfPending()");
   assert.ok(refreshAt !== -1 && touchAt > refreshAt, "첫 refresh(첫 loadTree) 뒤에 부른다");
-  assert.ok(!/await\s+touchBookmarksBar\(/.test(body), "await하지 않는다");
-  assert.equal(body.match(/touchBookmarksBar\(\)/g).length, 1);
+  assert.ok(!/await\s+touchBookmarksBarIfPending\(/.test(body), "await하지 않는다");
+  assert.equal(body.match(/touchBookmarksBarIfPending\(\)/g).length, 1);
+  assert.ok(!/touchBookmarksBar\(\)/.test(source), "표시를 보지 않고 바로 최신화하지 않는다");
 });

@@ -284,8 +284,51 @@ let touchWanted = false;
 // 같은 탭에서 최신화가 겹치지 않게 한 줄로 세운다
 let touchQueue = Promise.resolve();
 
+// 최신화 예약이 남아 있다는 표시(chrome.storage.local의 내부 키). 예약할 때 남기고, 최신화가 끝나면(만들었든 필요 없었든) 지운다
+// 새 탭을 0.5초 안에 닫아 예약이 실행되지 못했을 때, 다음 새 탭이 이 표시를 보고 한 번 최신화한다 (touchBookmarksBarIfPending)
+// 표시가 없으면 새 탭을 열어도 크롬 북마크를 바꾸지 않는다. 사용자가 별 창으로 사용자 폴더에 직접 저장한 뒤에도 마찬가지다 (docs/privacy.md 4절)
+// store.js를 거치지 않는 bookmarks.js만의 내부 키다. 새 탭만 쓰고 서비스 워커는 쓰지 않는다
+const TOUCH_PENDING_KEY = "barTouchPending";
+// 이 탭이 표시를 남겼는지. 같은 표시를 여러 번 쓰지 않으려고 둔다
+let pendingMarked = false;
+let markTask = Promise.resolve();
+
+function markTouchPending() {
+  if (pendingMarked) return;
+  pendingMarked = true;
+  markTask = chrome.storage.local.set({ [TOUCH_PENDING_KEY]: true }).catch((error) => {
+    pendingMarked = false;
+    console.warn("북마크바 최신화 예약 표시를 남기지 못했어요", error);
+  });
+}
+
+// 최신화가 끝난 뒤 부른다. 그사이 새 예약이 생겼으면 표시를 남겨 둔다
+async function clearTouchPending() {
+  if (touchTimer !== null || touchHold > 0 || touchWanted) return;
+  pendingMarked = false;
+  try {
+    await chrome.storage.local.remove(TOUCH_PENDING_KEY);
+  } catch (error) {
+    console.warn("북마크바 최신화 예약 표시를 지우지 못했어요", error);
+  }
+}
+
+// 새 탭이 처음 그려질 때 부른다(render.js). 예약 표시가 남아 있을 때만 최신화하고 결과(true/false)를 돌려준다. 표시가 없으면 크롬 북마크를 건드리지 않고 false
+// 실패해도 오류를 던지지 않는다
+export async function touchBookmarksBarIfPending() {
+  try {
+    const stored = await chrome.storage.local.get(TOUCH_PENDING_KEY);
+    if (stored[TOUCH_PENDING_KEY] !== true) return false;
+  } catch (error) {
+    console.warn("북마크바 최신화 예약 표시를 읽지 못했어요", error);
+    return false;
+  }
+  return touchBookmarksBar();
+}
+
 // 북마크를 바꾼 뒤 부른다. 이미 예약돼 있으면 시간을 처음부터 다시 잰다(디바운스). 기다리지 않고 바로 돌아온다
 function scheduleBarTouch() {
+  markTouchPending();
   if (touchHold > 0) {
     touchWanted = true;
     return;
@@ -333,6 +376,7 @@ export async function flushBarTouch() {
 
 // 북마크바를 다시 '최근 수정 폴더'로 만든다(바로 실행). 만들었으면 true, 필요 없거나 실패했으면 false
 // 실패해도 오류를 던지지 않는다(정리 결과에 영향이 없게). 북마크바는 ID가 아니라 folderType으로 찾는다 (F01-04)
+// 끝나면(만들었든 필요 없었든) 예약 표시를 지운다. 실패했으면 다음 새 탭이 다시 해 보도록 표시를 남긴다
 export function touchBookmarksBar() {
   const task = touchQueue.then(runTouch);
   touchQueue = task.catch(() => {});
@@ -340,6 +384,15 @@ export function touchBookmarksBar() {
 }
 
 async function runTouch() {
+  // 예약 표시를 쓰는 중이면 끝난 뒤에 시작한다(표시를 지우는 것이 쓰는 것보다 먼저 끝나지 않게)
+  await markTask;
+  const done = await tryTouch();
+  if (done !== null) await clearTouchPending();
+  return done === true;
+}
+
+// 만들었으면 true, 필요 없었으면 false, 실패했으면 null
+async function tryTouch() {
   try {
     // 지난번에 지우기 전에 끊겨(새 탭을 닫는 등) 남은 임시 북마크를 먼저 지운다
     await removeTouchLeftovers();
@@ -355,7 +408,7 @@ async function runTouch() {
     return true;
   } catch (error) {
     console.warn("북마크바를 최근 수정 폴더로 되돌리지 못했어요", error);
-    return false;
+    return null;
   }
 }
 
