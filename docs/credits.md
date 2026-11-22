@@ -41,3 +41,9 @@
 | `store/screenshot-5-folder-reorder.png` | 스크린샷 (PNG, 1280×800) · 발표 자료용 | 샘플 북마크 프로필로 찍음 (tests/sample-100.html) | 팀 제작 |
 | `store/screenshot-6-profile.png` | 스크린샷 (PNG, 1280×800) · 웹스토어 | 샘플 북마크 프로필로 찍음 (tests/sample-100.html) | 팀 제작 |
 | `store/screenshot-7-drag-to-folder.png` | 스크린샷 (PNG, 1280×800) · 웹스토어 | 샘플 북마크 프로필로 찍음 (tests/sample-100.html) | 팀 제작 |
+| `store/store-1-home.png` | 웹스토어 제출 이미지 (PNG, 1280×800) | screenshot-1~7 원본을 잘라 묶고 제목·설명 문구를 더함. 문구 글꼴 Noto Sans CJK KR | 팀 제작 (Noto Sans CJK: SIL OFL 1.1) |
+| `store/store-2-organize.png` | 웹스토어 제출 이미지 (PNG, 1280×800) | screenshot-1~7 원본을 잘라 묶고 제목·설명 문구를 더함. 문구 글꼴 Noto Sans CJK KR | 팀 제작 (Noto Sans CJK: SIL OFL 1.1) |
+| `store/store-3-forgotten.png` | 웹스토어 제출 이미지 (PNG, 1280×800) | screenshot-1~7 원본을 잘라 묶고 제목·설명 문구를 더함. 문구 글꼴 Noto Sans CJK KR | 팀 제작 (Noto Sans CJK: SIL OFL 1.1) |
+| `store/store-4-drag.png` | 웹스토어 제출 이미지 (PNG, 1280×800) | screenshot-1~7 원본을 잘라 묶고 제목·설명 문구를 더함. 문구 글꼴 Noto Sans CJK KR | 팀 제작 (Noto Sans CJK: SIL OFL 1.1) |
+| `store/store-5-customize-privacy.png` | 웹스토어 제출 이미지 (PNG, 1280×800) | screenshot-1~7 원본을 잘라 묶고 제목·설명 문구를 더함. 문구 글꼴 Noto Sans CJK KR | 팀 제작 (Noto Sans CJK: SIL OFL 1.1) |
+| `store/store-marquee-1400x560.png` | 웹스토어 제출 이미지 (PNG, 1400×560) | screenshot-1~7 원본을 잘라 묶고 제목·설명 문구를 더함. 문구 글꼴 Noto Sans CJK KR | 팀 제작 (Noto Sans CJK: SIL OFL 1.1) |
