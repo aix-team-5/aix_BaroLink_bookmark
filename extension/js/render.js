@@ -6,7 +6,7 @@
 // - 화면 파일끼리는 서로 부르지 않는다. 다른 화면 파일의 동작이 필요한 그리기 함수에는 동작 묶음(actions)을 넘긴다.
 // - 북마크나 저장 항목이 바뀌면 renderAll을 다시 부른다. 그리기 함수는 자기 칸을 비우고 다시 그린다.
 
-import { loadTree, openBookmark } from "./bookmarks.js";
+import { loadTree, openBookmark, touchBookmarksBar } from "./bookmarks.js";
 import { load, loadPhotos, cleanupMissing, unpin } from "./store.js";
 import { getTargets, makePlan, suggestNewFolders } from "./plan.js";
 import { suggestForNew } from "./classify.js";
@@ -778,6 +778,9 @@ async function start() {
   await loadCategories();
   registerListeners();
   await refresh();
+  // 첫 화면을 그린 뒤 북마크바 최신화를 한 번 한다. 지난 새 탭이 0.5초 안에 닫혀 예약된 최신화가 실행되지 않았을 때를 맞춘다
+  // 북마크바가 이미 가장 최근이면 아무것도 하지 않는다. 화면을 기다리게 하지 않게 await하지 않고, 실패는 bookmarks.js가 warn만 남긴다
+  touchBookmarksBar().catch(() => {});
 }
 
 start().catch((error) => {

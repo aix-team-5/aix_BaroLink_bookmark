@@ -1010,3 +1010,43 @@ test("loadTree: 임시 북마크는 북마크 목록·폴더 자식·루트 자�
   assert.ok(!tree.roots.bar.childIds.some((id) => ids.includes(id)));
   assert.ok(!tree.folders.find((f) => f.id === "17").childIds.some((id) => ids.includes(id)));
 });
+
+// ---- 새 탭 시작 시 북마크바 최신화 (render.js의 start) ----
+
+test("새 탭 시작: 북마크바가 이미 가장 최근이면 임시 북마크를 만들지 않는다 (평소에는 아무 일도 없음)", { skip: SKIP }, async () => {
+  nodes.get("16").dateGroupModified = 5;
+  nodes.get("17").dateGroupModified = 7;
+  nodes.get("1").dateGroupModified = 9;
+  clock = 9;
+  assert.equal(await b.touchBookmarksBar(), false);
+  assert.equal(touches(), 0);
+  assert.ok(!calls.includes("bookmarks.remove"));
+  assert.deepEqual(touchNodes(), []);
+});
+
+test("새 탭 시작: 사용자 폴더가 더 최근이면(지난 새 탭이 0.5초 안에 닫힘) 임시 북마크를 한 번 만들고 지운다", { skip: SKIP }, async () => {
+  // 지난 새 탭에서 [기본 폴더]로 옮긴 뒤 예약된 최신화가 실행되기 전에 탭이 닫힌 상태
+  nodes.get("1").dateGroupModified = 5;
+  nodes.get("17").dateGroupModified = 8;
+  clock = 8;
+  assert.equal(await b.touchBookmarksBar(), true);
+  assert.equal(touches(), 1);
+  assert.equal(calls.filter((c) => c === "bookmarks.remove").length, 1);
+  assert.deepEqual(touchNodes(), []);
+  assert.equal(newestFolder(), "1");
+  // 이어서 다시 불러도 이제 북마크바가 최근이라 더 만들지 않는다
+  assert.equal(await b.touchBookmarksBar(), false);
+  assert.equal(touches(), 1);
+});
+
+test("render.js: 첫 화면을 그린 뒤 touchBookmarksBar를 기다리지 않고 한 번 부른다", async () => {
+  const { readFileSync } = await import("node:fs");
+  const source = readFileSync(new URL("../extension/js/render.js", import.meta.url), "utf8");
+  const start = source.slice(source.indexOf("async function start()"));
+  const body = start.slice(0, start.indexOf("\n}\n"));
+  const refreshAt = body.indexOf("await refresh();");
+  const touchAt = body.indexOf("touchBookmarksBar()");
+  assert.ok(refreshAt !== -1 && touchAt > refreshAt, "첫 refresh(첫 loadTree) 뒤에 부른다");
+  assert.ok(!/await\s+touchBookmarksBar\(/.test(body), "await하지 않는다");
+  assert.equal(body.match(/touchBookmarksBar\(\)/g).length, 1);
+});
