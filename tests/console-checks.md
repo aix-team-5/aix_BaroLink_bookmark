@@ -2268,6 +2268,54 @@ await (async () => {
 - 되돌리는 법: `await T.restoreStore(T.savedBeforeProfile)` 뒤 새 탭을 새로 연다.
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
+#### C-TOUCH touchBookmarksBar: 북마크를 바꾼 뒤 별(☆) 저장 위치를 북마크바로 되돌리기(북마크바 최신화) · P2
+- 구현 상태: 구현됨 (`fix/star-default-bookmarks-bar`). 명세 함수 표에는 아직 없다(명세 추가 제안은 그 PR 설명에 있다)
+- 파일·담당: bookmarks.js · organize.js · 팀원 A (임시 북마크를 거르는 곳은 background.js · 팀원 B)
+- 관련 요구사항: F10-01, F10-09, F01-04
+- 안전 등급: ⚠ 크롬 북마크를 바꿈 (정리하기를 실제로 실행한다)
+- 동작: 새 탭에서 북마크·폴더를 바꾸면(만들기·옮기기·이름 바꾸기·삭제·삭제 되돌리기·정리·정리 되돌리기) 마지막 변경 뒤 약 0.5초 동안 다른 변경이 없을 때 한 번 최신화한다. 그래서 ②는 바꾼 뒤 1초쯤 기다렸다가 돌린다.
+- 배경: 크롬의 별 창은 저장 위치로 '가장 최근에 내용이 바뀐 폴더'(`dateGroupModified`가 가장 최근인 폴더)를 기본으로 고른다. 공식 API가 아니라 크롬 내부 동작이라 크롬 버전에 따라 결과가 다를 수 있다. 실패하면 크롬 버전(`chrome://version`)을 함께 적는다.
+- 사전 조건: 1장의 테스트용 프로필에 `sample-100.html`을 가져온 상태. 모든 북마크에 정리할 것이 남아 있어야 한다(첫 정리 카드 또는 새 북마크 정리 버튼이 보인다).
+- 순서:
+  1. 새 탭에서 정리하기를 실행한다(첫 정리 카드 → 정리하기, 또는 새 북마크 정리). 결과 안내가 뜬 뒤 1초쯤 기다린다.
+  2. 같은 새 탭의 콘솔에 아래 코드를 붙여 넣는다.
+     ```js
+     // C-TOUCH ②: dateGroupModified가 가장 최근인 폴더와, 남은 임시 북마크 수
+     await (async () => {
+       const [top] = await chrome.bookmarks.getTree();
+       const folders = [];
+       const walk = (n) => { if (n.url === undefined) { if (n.id !== "0") folders.push(n); (n.children ?? []).forEach(walk); } };
+       walk(top);
+       folders.sort((a, b) => (b.dateGroupModified ?? 0) - (a.dateGroupModified ?? 0));
+       console.table(folders.slice(0, 5).map((f) => ({ id: f.id, title: f.title, folderType: f.folderType ?? "", dateGroupModified: f.dateGroupModified ? new Date(f.dateGroupModified).toLocaleString() : "" })));
+       console.log("가장 최근 폴더가 북마크바인가:", folders[0]?.folderType === "bookmarks-bar");
+       console.log("남은 임시 북마크 수(0이어야 함):", (await chrome.bookmarks.search({ url: "https://barolink.invalid/touch" })).length);
+     })();
+     ```
+  3. 새 탭이 아닌 아무 페이지(예: `https://example.org/`)를 열고 주소창의 별(☆)을 눌러 저장한다. 별 창의 폴더를 바꾸지 않고 **완료**를 누른다.
+  4. 새 탭을 다시 연다.
+- 기대 결과:
+  - ②에서 표 맨 위(가장 최근) 폴더의 `folderType`이 `bookmarks-bar`이고 "가장 최근 폴더가 북마크바인가: true", 남은 임시 북마크 수가 0이다.
+  - ③의 별 창에 폴더가 "북마크바"로 골라져 있고, 저장한 북마크가 북마크바 바로 아래(맨 뒤)에 들어간다.
+  - ④의 새 탭 모든 북마크에서 그 북마크에 'new' 표시가 있다. (F10-01)
+  - 정리 기록(내 정보 → 정리 기록)·`manualMoves`·`newBookmarks`에 `barolink.invalid`가 없다: `JSON.stringify(await chrome.storage.local.get(null)).includes("barolink.invalid")`가 `false`.
+  - 정리하는 동안 새 탭 화면에 "BaroLink"라는 앱이 잠깐이라도 보이지 않는다.
+- 이어서 볼 것: 아래 동작마다 1을 그 동작으로 바꿔 ②~④를 반복한다. 매번 ③에서 저장한 북마크는 다음 동작 전에 지운다(지운 뒤 다시 1초 기다린다). 기대 결과는 위와 같다(가장 최근 폴더가 북마크바, 임시 북마크 0개, 별 저장이 북마크바 바로 아래, 새 탭에 'new').
+  - 정리 되돌리기: 결과 안내의 [되돌리기]를 누른다.
+  - 새 폴더 만들기: 내 폴더 줄 끝의 [새 폴더] 칸을 눌러 폴더를 하나 만든다.
+  - 끌어 놓기: 모든 북마크의 앱 하나를 끌어 사용자 폴더 타일에 놓는다. 폴더 팝업 안에서 순서를 바꾸는 것도 한 번 한다.
+  - 우클릭 "폴더로 이동": 앱 하나를 사용자 폴더로 옮긴다.
+  - 폴더 이름 바꾸기: 사용자 폴더 하나의 이름을 바꾼다.
+  - 북마크 삭제: 사용자 폴더 팝업 안의 앱 하나를 우클릭 → 삭제한다. 되돌리기 안내(6초)가 사라질 때까지 기다린 뒤 ②~④를 한다.
+  - 삭제 되돌리기: 사용자 폴더 팝업 안의 앱 하나를 지운 뒤 6초 안에 [되돌리기]를 누른다. 앱이 원래 폴더의 원래 자리에 돌아온 것을 보고 ②~④를 한다.
+  - 정리 직후 탭 닫기: 정리하기를 누르고 결과 안내가 뜨자마자(0.5초 안에) 새 탭을 닫는다(`Ctrl+W`). 이때는 최신화가 실행되지 않았을 수 있다. 새 탭을 다시 열고 첫 화면이 그려진 뒤 1초쯤 기다렸다가 ②~④를 한다. 닫힌 탭이 남긴 예약 표시(`barTouchPending`)를 보고 다시 연 새 탭이 처음 그려질 때 최신화를 한 번 하므로 기대 결과는 위와 같다. 끝나면 `(await chrome.storage.local.get("barTouchPending")).barTouchPending`이 `undefined`다(가장 최근 폴더가 북마크바, 별 저장이 북마크바 바로 아래, 'new'가 뜸). 콘솔이 필요하면 다시 연 새 탭에서 연다.
+  - 평소 새 탭 열기: 북마크바가 이미 가장 최근인 상태에서 크롬 북마크 관리자(`chrome://bookmarks`)를 열어 둔 채 새 탭을 몇 번 연다. ②의 표에서 북마크바의 `dateGroupModified`가 바뀌지 않는다(임시 북마크를 만들지 않음).
+  - 별 창으로 사용자 폴더에 저장 → 새 탭 열기: 아무 페이지에서 별(☆) 창의 폴더를 사용자 폴더로 골라 저장한 뒤, 확장 프로그램에서는 아무것도 하지 않고 크롬 북마크 관리자(`chrome://bookmarks`)를 열어 둔 채 새 탭을 연다. 북마크 관리자에 변화가 없고(“BaroLink”가 생겼다 사라지지 않음), ②의 표 맨 위는 그 사용자 폴더 그대로다. (docs/privacy.md 4절: 사용자가 무언가를 했을 때만 북마크를 바꾼다)
+  - 연속 변경: 끌어 놓기를 0.5초 안에 여러 번 빠르게 한 뒤 크롬 북마크 관리자(`chrome://bookmarks`)를 열어 둔다. "BaroLink" 북마크가 보이지 않고(만들자마자 지움), 그 뒤 ②~④가 위와 같다.
+  - 남은 임시 북마크 정리: 콘솔에서 `await chrome.bookmarks.create({ parentId: (await chrome.bookmarks.getTree())[0].children.find((n) => n.folderType === "bookmarks-bar").id, title: "BaroLink", url: "https://barolink.invalid/touch" })`로 하나를 남긴 뒤(이때 새 탭에 보이지 않아야 한다) 앱 하나를 사용자 폴더로 옮긴다. ②의 남은 임시 북마크 수가 0이다.
+- 되돌리는 법: 정리 기록에서 되돌리기. ③에서 저장한 북마크는 지운다.
+- 결과: 통과 / 실패 / 보류   확인자:   날짜:   크롬 버전:
+
 ---
 
 ## 4장. 아직 없는 것 · 명세와 다른 것

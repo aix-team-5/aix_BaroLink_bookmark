@@ -1,6 +1,7 @@
 // 담당: 팀원 B · 이슈 #6 · 명세: N32, N33, N34 (F01, F07, F10) · 크롬 API: C03, C09, C10, C12, C13
 // 서비스 워커. 알림 리스너는 파일 맨 위에서 바로 등록한다. 상태는 변수가 아니라 저장소에 기록한다.
 import * as store from "./js/store.js";
+import { TOUCH_URL } from "./js/bookmarks.js";
 
 // 새 북마크로 세는 최상위 폴더 (F10-01). 관리자 폴더(managed)는 사용자가 저장할 수 없으므로 뺀다
 const NEW_BOOKMARK_ROOTS = new Set(["bookmarks-bar", "other", "mobile"]);
@@ -42,8 +43,10 @@ async function onInstalled(details) {
 // N32: 북마크바·기타·모바일 바로 아래에 저장된 새 북마크를 newBookmarks에 추가 (F10-01)
 // 폴더이거나, 사용자 폴더 안에 바로 저장된 것(F10-09)이거나, 가져오는 중에 들어온 것(F01-07)은 추가하지 않는다
 // 바로 아래인지는 폴더 ID가 아니라 부모 폴더의 folderType으로 판단한다 (F01-04)
+// 북마크바를 '최근 수정 폴더'로 되돌리려고 bookmarks.js가 잠깐 만들었다 지우는 임시 북마크(TOUCH_URL)는 기록하지 않는다
 async function onCreated(id, node) {
   if (node?.url === undefined) return;
+  if (node.url === TOUCH_URL) return;
   try {
     if (await store.isImporting()) return;
     const [parent] = await chrome.bookmarks.get(node.parentId);
@@ -74,6 +77,8 @@ async function onMoved(id, moveInfo) {
 // N34: 삭제된 북마크(폴더면 안의 북마크까지) ID를 서비스 워커가 쓰는 항목에서 정리
 // 폴더가 통째로 지워지면 알림은 폴더 것 하나만 오고 안의 북마크는 node.children에 들어 있다 (C12). 새 탭이 쓰는 항목은 cleanupMissing이 정리한다
 async function onRemoved(id, removeInfo) {
+  // 임시 북마크(TOUCH_URL)는 기록한 적이 없으므로 정리할 것도 없다
+  if (removeInfo?.node?.url === TOUCH_URL) return;
   const ids = [String(id)];
   const walk = (nodes) => {
     for (const child of nodes ?? []) {

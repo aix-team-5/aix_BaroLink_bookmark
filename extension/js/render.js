@@ -6,7 +6,7 @@
 // - 화면 파일끼리는 서로 부르지 않는다. 다른 화면 파일의 동작이 필요한 그리기 함수에는 동작 묶음(actions)을 넘긴다.
 // - 북마크나 저장 항목이 바뀌면 renderAll을 다시 부른다. 그리기 함수는 자기 칸을 비우고 다시 그린다.
 
-import { loadTree, openBookmark } from "./bookmarks.js";
+import { loadTree, openBookmark, touchBookmarksBarIfPending } from "./bookmarks.js";
 import { load, loadPhotos, cleanupMissing, unpin } from "./store.js";
 import { getTargets, makePlan, suggestNewFolders } from "./plan.js";
 import { suggestForNew } from "./classify.js";
@@ -796,6 +796,8 @@ function registerListeners() {
   // 서비스 워커가 저장 항목을 바꾸면(새 북마크·직접 옮김) 새 탭이 알아챈다
   chrome.storage.onChanged.addListener((changes, areaName) => {
     if (areaName !== "local") return;
+    // 북마크바 최신화 예약 표시(bookmarks.js의 내부 키)만 바뀌었으면 다시 그리지 않는다
+    if (Object.keys(changes).every((key) => key === "barTouchPending")) return;
     // 사진이 바뀐 때만 사진을 다시 읽는다. 꾸미기(appearance)가 바뀐 것은 refresh가 load()로 함께 읽는다
     if (changes.profilePhoto || changes.wallpaperPhoto) photosVersion += 1;
     scheduleRerender();
@@ -825,6 +827,9 @@ async function start() {
   await loadCategories();
   registerListeners();
   await refresh();
+  // 첫 화면을 그린 뒤, 지난 새 탭이 0.5초 안에 닫혀 실행되지 못한 북마크바 최신화 예약이 남아 있을 때만 한 번 한다
+  // 예약 표시가 없으면 크롬 북마크를 건드리지 않는다. 화면을 기다리게 하지 않게 await하지 않고, 실패는 bookmarks.js가 warn만 남긴다
+  touchBookmarksBarIfPending().catch(() => {});
 }
 
 start().catch((error) => {
