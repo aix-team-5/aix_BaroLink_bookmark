@@ -116,6 +116,7 @@
   --font-lg: 24px;
   --font-xl: 32px;
   --font-2xl: 40px;
+  --font-clock: clamp(56px, 12vw, 96px); /* 새 탭 시계. 화면이 좁아지면 함께 줄어든다 */
 
   /* 글자 두께 */
   --weight-medium: 500;
@@ -727,17 +728,30 @@ a {
   text-align: center;
 }
 
-#web-search .date {
-  font-size: var(--font-sm);
-  font-weight: var(--weight-bold);
+/* 시계: 날짜 위에 아주 크게 둔다. 숫자 폭이 같아서 분이 바뀌어도 글자가 흔들리지 않는다
+   화면이 좁아지면 글자도 함께 줄어든다 (최소 너비 480px에서 약 58px) */
+#web-search .clock {
+  display: block;
+  font-size: var(--font-clock);
+  font-weight: var(--weight-black);
+  line-height: 1;
+  letter-spacing: -0.02em;
   color: var(--color-text-strong);
+  font-variant-numeric: tabular-nums;
+}
+
+#web-search .date {
+  margin-top: var(--space-3);
+  font-size: var(--font-md);
+  font-weight: var(--weight-bold);
+  color: var(--color-text-soft);
 }
 
 #web-search .search-box {
   display: flex;
   align-items: center;
   gap: var(--space-3);
-  margin-top: var(--space-8);
+  margin-top: var(--space-5);
   padding: var(--space-4) var(--space-5);
   border-radius: var(--radius-lg);
   background: rgba(255, 255, 255, 0.85);
