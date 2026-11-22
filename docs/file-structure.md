@@ -96,7 +96,7 @@ aix_BaroLink_bookmark/
 |---|---|---|---|---|
 | `manifest.json` | 권한, 새 탭을 `newtab.html`로 바꾸기, 서비스 워커(`type: module`) 등록 | — | C01, C02 | A |
 | `background.js` | 새 탭이 닫혀 있어도 북마크 알림을 받아 기록. 새 북마크는 `newBookmarks`, 우리 정리가 아닌 이동은 `manualMoves`에 기록. 가져오기 중엔 멈춤 | onCreated·onMoved·onRemoved 처리 (N32–N34). 임시 북마크(`TOUCH_URL`, 6번 아래)는 기록하지 않음 | bookmarks 알림, runtime.onInstalled (C03, C09, C10, C12, C13) | B |
-| `js/bookmarks.js` | 크롬 북마크를 읽고 바꾸는 통로. 전체 읽기(기타 북마크가 두 개면 동기화되는 쪽), 폴더 만들기·이름·삭제(안의 북마크는 꺼냄), 옮기기, 열기, 북마크 삭제·되살리기, 파비콘 | loadTree, createFolder, moveBookmark, renameFolder, deleteFolderKeepChildren, openBookmark, faviconUrl, removeBookmark, restoreBookmark (N01–N07, N48, N49). 명세 밖: touchBookmarksBar, holdBarTouch, TOUCH_URL (6번 아래) | bookmarks, tabs, favicon (C04–C08, C18, C22) | A |
+| `js/bookmarks.js` | 크롬 북마크를 읽고 바꾸는 통로. 전체 읽기(기타 북마크가 두 개면 동기화되는 쪽), 폴더 만들기·이름·삭제(안의 북마크는 꺼냄), 옮기기, 열기, 북마크 삭제·되살리기, 파비콘 | loadTree, createFolder, moveBookmark, renameFolder, deleteFolderKeepChildren, openBookmark, faviconUrl, removeBookmark, restoreBookmark (N01–N07, N48, N49). 명세 밖: touchBookmarksBar, holdBarTouch, flushBarTouch, TOUCH_URL (6번 아래) | bookmarks, tabs, favicon (C04–C08, C18, C22) | A |
 | `js/store.js` | 저장 항목을 읽고 쓰는 통로. 읽고→고치고→쓰기를 한 함수로 묶어 순서대로 처리 | load, update, recordOpened, pin, dismiss, markManualMove, setPending/isPending, addHistory, cleanupMissing, setFirstCard, markHandledNew, addNew/removeNew/purgeWorkerKeys, setImporting/isImporting, snapshotStored/restoreStored, setAppearance, setPhoto, loadPhotos (N08–N16, N38–N40, N47, N50–N53). 사진 두 키는 `load()`에 넣지 않고 `loadPhotos()`로 읽음 | storage.local (C14, C15) | A |
 | `js/organize.js` | 정리 적용: 원래 위치 읽기 → 북마크바 맨 뒤에 폴더 만들기 → '옮기는 중' 저장 → 옮기기 → 정리 기록. 되돌리기: 원래 바로 앞에 있던 북마크의 뒤에 놓아 순서를 복원, 직접 옮긴 것은 건너뜀 | applyPlan, undo (N22, N23) | bookmarks.js · store.js 경유 | A |
 | `js/classify.js` | 분류표 → 주소 끝 → 제목 키워드 순으로 카테고리 하나. 정답지로 적용률·정확도 측정. 새 북마크 추천 폴더 | classify, measure, suggestForNew (N17, N18, N24) | 없음 | B |
@@ -251,8 +251,8 @@ sequenceDiagram
     W->>S: isPending이면 건너뜀, 아니면 manualMoves 기록
   end
   O->>S: addHistory
-  O->>B: 북마크바를 최근 수정 폴더로 되돌리기 (holdBarTouch → touchBookmarksBar)
-  B->>C: 북마크바에 임시 북마크 create → 곧바로 remove
+  O->>B: 정리가 끝나면 북마크바 최신화 예약 (holdBarTouch, 0.5초 디바운스)
+  B->>C: 0.5초 뒤 북마크바에 임시 북마크 create → 곧바로 remove
   O-->>R: 폴더 N개 · 북마크 N개
   R-->>U: 결과 안내 + [되돌리기] (12초, view/history.js가 그림)
 ```
@@ -264,8 +264,11 @@ sequenceDiagram
 크롬의 별(☆) 창은 저장 위치로 '가장 최근에 내용이 바뀐 폴더'(`dateGroupModified`가 가장 최근인 폴더)를 기본으로 고른다. 우리가 북마크를 사용자 폴더로 옮기면 그 폴더가 기본이 되어, 다음 별 저장이 그 폴더 안으로 들어가 'new'가 뜨지 않는다(F10-01, F10-09 규칙은 그대로). 그래서 `bookmarks.js`가 옮긴 뒤 북마크바를 다시 가장 최근 폴더로 만든다. **공식 API가 아니라 크롬 내부 동작에 기댄 것**이라 크롬 버전에 따라 효과가 없을 수 있다.
 
 - `touchBookmarksBar()`: 북마크바(`folderType === "bookmarks-bar"`, ID로 찾지 않음) 바로 아래에 임시 북마크(`TOUCH_URL` = `https://barolink.invalid/touch`)를 만들고 곧바로 지운다. 먼저 `search`로 지난번에 남은 임시 북마크를 지운다. 북마크바가 이미 어느 사용자 폴더보다 최근이면 만들지 않는다. 실패해도 오류를 던지지 않고 `console.warn`만 남긴다.
-- 언제 부르나: `moveBookmark`·`createFolder`(새로 만들었을 때)·`restoreBookmark`(원래 폴더에 다시 만들었을 때)가 성공한 뒤. 그래서 끌어 놓기(`dnd.js`)·우클릭 "폴더로 이동"(`view/folders.js`)도 따로 부르지 않아도 된다. 옮긴 것이 없으면 부르지 않는다.
-- `holdBarTouch(fn)`: `fn`이 끝날 때까지 위의 호출을 미뤘다가, 그사이 옮기거나 만든 것이 있으면 끝난 뒤 한 번만 부른다. `organize.js`의 `applyPlan`·`undo`와 `deleteFolderKeepChildren`이 쓴다.
+- 언제 부르나(북마크바 최신화): 북마크를 바꾸는 export 함수 `createFolder`·`moveBookmark`·`renameFolder`·`deleteFolderKeepChildren`·`removeBookmark`·`restoreBookmark`가 성공한 뒤 최신화를 **예약**한다. 삭제·이름 바꾸기는 크롬이 수정 시각을 바꾸지 않을 수도 있지만 무해해서 함께 넣었다. 그래서 끌어 놓기(`dnd.js`)·폴더 화면(`view/folders.js`)은 따로 부르지 않는다. 바꾸지 못했으면(없는 북마크, 같은 이름 폴더 등) 예약하지 않는다.
+- 디바운스: 마지막 예약 뒤 500ms 동안 다른 예약이 없으면 한 번만 실행한다. 정리하기처럼 여러 개를 한꺼번에 바꿔도 임시 북마크는 한 번만 만들고 지운다. 최신화는 `chrome.bookmarks`를 직접 불러 임시 북마크를 만들고 지우므로 다시 예약하지 않는다(무한 반복 없음).
+- `holdBarTouch(fn)`: `fn`이 도는 동안에는 500ms가 지나도 실행하지 않고, 그사이 예약된 것이 있으면 끝난 뒤 다시 예약한다. `organize.js`의 `applyPlan`·`undo`가 쓴다(정리 도중에 임시 북마크가 생기지 않게).
+- `flushBarTouch()`: 예약된 최신화를 기다리지 않고 지금 실행한다. 테스트와 콘솔 확인용.
+- 새 탭을 0.5초 안에 닫으면 예약된 최신화는 실행되지 않는다(임시 북마크도 만들지 않았으므로 남는 것은 없다).
 - 임시 북마크가 섞이지 않게: `loadTree`는 `TOUCH_URL` 북마크를 북마크 목록·폴더의 `childIds`·루트의 `childIds`에서 뺀다(새 탭 화면과 정리 계산에 보이지 않음). `background.js`는 `onCreated`·`onRemoved`에서 `TOUCH_URL`이면 아무것도 기록하지 않는다(`newBookmarks`·`manualMoves`). 북마크를 사용자 몰래 다른 곳으로 옮기지는 않는다.
 - 수동 확인: `tests/console-checks.md`의 C-TOUCH.
 
