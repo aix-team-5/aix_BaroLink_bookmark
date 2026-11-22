@@ -4,7 +4,7 @@
 // 가짜 chrome.bookmarks.move는 실제 크롬에서 확인한 동작을 따른다: 없는 ID·목적지는 오류,
 // index가 목적지 폴더의 개수보다 크면 "Index out of bounds", 같은 폴더 안에서 뒤쪽으로 옮기면 한 칸 앞에 놓임.
 
-import { test, beforeEach } from "node:test";
+import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 
 // 크롬 호출 순서 기록 ("storage.set", "tabs.update" 등)
@@ -218,6 +218,9 @@ const SAMPLE = [
 const childIds = (id) => [...nodes.get(id).children];
 
 const b = await import("../extension/js/bookmarks.js");
+
+// 북마크를 바꾸는 함수가 예약한 북마크바 최신화(500ms 뒤)가 다음 테스트에서 실행되지 않게, 끝날 때 바로 실행해 비운다
+afterEach(() => b.flushBarTouch());
 
 beforeEach(() => {
   build(structuredClone(SAMPLE));

@@ -4,7 +4,7 @@
 // 가짜 chrome.bookmarks.move는 실제 크롬에서 확인한 동작을 따른다 (tests/bookmarks.test.mjs와 같음).
 // bookmarks.js · store.js가 뼈대(PR #29 · #30이 합쳐지기 전)면 전체를 건너뛴다.
 
-import { test, beforeEach } from "node:test";
+import { test, beforeEach, afterEach } from "node:test";
 import assert from "node:assert/strict";
 
 // 크롬 호출 순서 기록 ("storage.set", "bookmarks.move" 등)
@@ -125,7 +125,16 @@ const bookmarks = {
     nodes.delete(node.id);
     calls.push("bookmarks.remove");
   },
+  // renameFolder(N04)가 쓴다. 최신화 예약 확인용
+  async update(id, { title }) {
+    const node = need(id);
+    if (node.parentId === undefined || node.parentId === "0") throw new Error("Can't modify the root bookmark folders.");
+    if (title !== undefined) node.title = title;
+    calls.push("bookmarks.update");
+    return view(node.id, false);
+  },
   async search({ url }) {
+    calls.push("bookmarks.search");
     return [...nodes.values()].filter((node) => node.url === url).map((node) => view(node.id, false));
   },
 };
@@ -213,6 +222,13 @@ beforeEach(() => {
   clock = 0;
   failTouch = false;
 });
+
+// 테스트가 예약한 최신화가 다음 테스트에서 실행되지 않게, 끝날 때 바로 실행해 비운다
+afterEach(() => b.flushBarTouch());
+
+const touches = () => calls.filter((c) => c === "bookmarks.touch").length;
+const searches = () => calls.filter((c) => c === "bookmarks.search").length;
+const sleep = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
 // 지금 dateGroupModified가 가장 큰 폴더 ID (별 창이 기본으로 고르는 폴더)
 const newestFolder = () =>
@@ -466,8 +482,8 @@ test("applyPlan new: setPending 저장 뒤에 첫 이동, 기록 뒤에 handledN
   const firstMove = calls.indexOf("bookmarks.move");
   const pendingSet = calls.lastIndexOf("storage.set", firstMove);
   assert.ok(pendingSet !== -1 && pendingSet < firstMove);
-  // 이동 뒤 저장 두 번: history → handledNew. 모두 끝난 뒤 북마크바를 되돌리는 임시 북마크를 만들고 지운다
-  assert.deepEqual(calls.slice(firstMove), ["bookmarks.move", "storage.set", "storage.set", "bookmarks.touch", "bookmarks.remove"]);
+  // 이동 뒤 저장 두 번: history → handledNew. 북마크바 최신화는 500ms 뒤로 미뤄져 아직 없다
+  assert.deepEqual(calls.slice(firstMove), ["bookmarks.move", "storage.set", "storage.set"]);
   assert.equal(data.pendingMoves["11"].toParentId, "16");
   assert.deepEqual(data.newBookmarks, ["11", "12"]);
 });
@@ -833,52 +849,129 @@ test("undo: fromOrder에 없는 옛 기록은 fromIndex 자리로, 숫자 ID의 
   assert.deepEqual(childIds("1").slice(0, 5), ["10", "11", "12", "13", "14"]);
 });
 
-// ---- 별(☆) 창의 기본 폴더를 북마크바로 되돌리기 (touchBookmarksBar) ----
+// ---- 북마크바 최신화 (touchBookmarksBar · 디바운스) ----
 
-test("applyPlan: 정리 뒤 북마크바가 가장 최근에 바뀐 폴더가 되고, 임시 북마크는 남지 않는다", { skip: SKIP }, async () => {
+test("applyPlan: 정리 뒤 최신화가 한 번 예약되고, 실행하면 북마크바가 가장 최근 폴더가 되며 임시 북마크는 남지 않는다", { skip: SKIP }, async () => {
   const entry = await o.applyPlan(plan(["가", ["11", "13"]]), "first");
   assert.equal(entry.moves.length, 2);
-  assert.equal(calls.filter((c) => c === "bookmarks.touch").length, 1);
+  // 바로 실행하지 않는다
+  assert.equal(searches(), 0);
+  await b.flushBarTouch();
+  assert.equal(searches(), 1);
+  assert.equal(touches(), 1);
   assert.equal(newestFolder(), "1");
   assert.deepEqual(touchNodes(), []);
-  // 기록과 저장 항목에 임시 북마크가 섞이지 않는다
   assert.ok(!JSON.stringify(data).includes("barolink.invalid"));
 });
 
-test("applyPlan new: 기존 사용자 폴더로 여러 개 옮겨도 끝난 뒤 한 번만 북마크바를 되돌린다", { skip: SKIP }, async () => {
-  await o.applyPlan({ folders: [{ folderId: "16", items: ["11", "12", "13"] }] }, "new");
-  assert.equal(calls.filter((c) => c === "bookmarks.touch").length, 1);
+test("디바운스: 실제로 500ms 동안 다른 변경이 없을 때 한 번만 실행한다", { skip: SKIP }, async () => {
+  await b.moveBookmark("11", "16");
+  await sleep(300);
+  await b.moveBookmark("12", "17");
+  await sleep(300);
+  // 두 번째 변경에서 시간을 다시 잰다 → 첫 변경 뒤 600ms가 지났지만 아직 실행 전
+  assert.equal(searches(), 0);
+  await sleep(350);
+  await b.flushBarTouch();
+  assert.equal(searches(), 1);
+  assert.equal(touches(), 1);
   assert.equal(newestFolder(), "1");
 });
 
-test("applyPlan: 옮긴 것도 만든 폴더도 없으면 touch를 부르지 않는다", { skip: SKIP }, async () => {
-  await o.applyPlan({ folders: [{ folderId: "16", items: ["160"] }], keep: [] }, "new");
-  await o.applyPlan(plan(), "first");
-  assert.ok(!calls.includes("bookmarks.touch"));
-  assert.ok(!calls.includes("bookmarks.move"));
+test("디바운스: 여러 함수로 연속해서 바꿔도 최신화는 1회", { skip: SKIP }, async () => {
+  const folder = await b.createFolder("새 폴더", "1");
+  await b.moveBookmark("11", folder.id);
+  await b.renameFolder(folder.id, "새 이름");
+  const saved = await b.removeBookmark("12");
+  await b.restoreBookmark(saved);
+  await b.deleteFolderKeepChildren("16");
+  await o.applyPlan({ folders: [{ folderId: "17", items: ["13", "14"] }] }, "new");
+  assert.equal(searches(), 0);
+  await b.flushBarTouch();
+  assert.equal(searches(), 1);
+  assert.equal(touches(), 1);
+  assert.deepEqual(touchNodes(), []);
 });
 
-test("undo: 사용자 폴더로 되돌린 뒤에도 북마크바를 되돌린다", { skip: SKIP }, async () => {
-  // [기본 폴더] 안의 a를 [개발]로 정리한 뒤 되돌리면 a는 [기본 폴더]로 돌아가 그 폴더가 최근 수정 폴더가 된다
+test("각 함수 뒤에 최신화가 예약된다 (createFolder, moveBookmark, renameFolder, deleteFolderKeepChildren, removeBookmark, restoreBookmark)", { skip: SKIP }, async () => {
+  let saved;
+  const cases = [
+    ["createFolder", () => b.createFolder("예약 확인", "1")],
+    ["moveBookmark", () => b.moveBookmark("11", "17")],
+    ["renameFolder", () => b.renameFolder("16", "개발2")],
+    ["removeBookmark", async () => { saved = await b.removeBookmark("12"); }],
+    ["restoreBookmark", () => b.restoreBookmark(saved)],
+    ["deleteFolderKeepChildren", () => b.deleteFolderKeepChildren("16")],
+  ];
+  for (const [name, run] of cases) {
+    calls = [];
+    await run();
+    assert.equal(searches(), 0, `${name}: 바로 실행하지 않는다`);
+    await b.flushBarTouch();
+    assert.equal(searches(), 1, `${name}: 끝난 뒤 최신화가 예약돼 있었다`);
+  }
+});
+
+test("바꾸지 못하면 예약하지 않는다 (없는 북마크 옮기기·지우기, 같은 이름 폴더)", { skip: SKIP }, async () => {
+  assert.equal(await b.moveBookmark("없음", "17"), null);
+  assert.equal(await b.removeBookmark("없음"), null);
+  await b.createFolder("개발", "1");
+  await assert.rejects(b.renameFolder("16", "  "));
+  await b.flushBarTouch();
+  assert.equal(searches(), 0);
+});
+
+test("최신화는 자기 자신을 다시 예약하지 않는다 (임시 북마크 생성·삭제는 예약 없음)", { skip: SKIP }, async () => {
+  await b.moveBookmark("11", "17");
+  await b.flushBarTouch();
+  assert.equal(touches(), 1);
+  // 최신화가 끝난 뒤 예약된 것이 없어야 한다. 기다려도, 다시 비워도 더 실행되지 않는다
+  calls = [];
+  await sleep(600);
+  assert.equal(await b.flushBarTouch(), false);
+  assert.equal(searches(), 0);
+  assert.equal(touches(), 0);
+});
+
+test("applyPlan 도중에는 예약된 최신화가 실행되지 않고, 끝난 뒤 한 번 다시 예약된다", { skip: SKIP }, async () => {
+  // 정리 전에 예약된 것이 있어도 정리 도중에 실행되지 않는다
+  await b.moveBookmark("15", "17");
+  beforeMove = () => sleep(300);
+  await o.applyPlan(plan(["가", ["11", "12", "13"]]), "first");
+  beforeMove = null;
+  assert.equal(touches(), 0);
+  await b.flushBarTouch();
+  assert.equal(touches(), 1);
+  assert.equal(newestFolder(), "1");
+});
+
+test("undo: 사용자 폴더로 되돌린 뒤에도 최신화가 한 번 예약된다", { skip: SKIP }, async () => {
   const entry = await o.applyPlan({ folders: [{ folderId: "16", items: ["170"] }] }, "new");
+  await b.flushBarTouch();
   calls = [];
   const result = await o.undo(entry.id);
   assert.equal(result.restored, 1);
-  assert.equal(calls.filter((c) => c === "bookmarks.touch").length, 1);
+  assert.equal(searches(), 0);
+  await b.flushBarTouch();
+  assert.equal(touches(), 1);
   assert.equal(newestFolder(), "1");
 });
 
 test("undo: 북마크바로만 되돌리면 북마크바가 이미 최근이라 임시 북마크를 만들지 않는다", { skip: SKIP }, async () => {
   const entry = await o.applyPlan({ folders: [{ folderId: "16", items: ["11"] }] }, "new");
+  await b.flushBarTouch();
   calls = [];
   await o.undo(entry.id);
-  assert.ok(!calls.includes("bookmarks.touch"));
+  await b.flushBarTouch();
+  assert.equal(searches(), 1);
+  assert.equal(touches(), 0);
   assert.equal(newestFolder(), "1");
 });
 
-test("applyPlan: touch가 실패해도 정리 결과와 기록은 그대로이고 warn만 남긴다", { skip: SKIP }, async () => {
+test("applyPlan: 최신화가 실패해도 정리 결과와 기록은 그대로이고 warn만 남긴다", { skip: SKIP }, async () => {
   failTouch = true;
   const entry = await o.applyPlan(plan(["가", ["11", "13"]]), "first");
+  assert.equal(await b.flushBarTouch(), false);
   assert.equal(entry.moves.length, 2);
   assert.equal(entry.skipped, 0);
   assert.equal(data.history.length, 1);
@@ -901,7 +994,7 @@ test("touchBookmarksBar: 북마크바가 이미 가장 최근이면 임시 북�
   nodes.get("1").dateGroupModified = 9;
   clock = 9;
   assert.equal(await b.touchBookmarksBar(), false);
-  assert.ok(!calls.includes("bookmarks.touch"));
+  assert.equal(touches(), 0);
   nodes.get("17").dateGroupModified = 10;
   clock = 10;
   assert.equal(await b.touchBookmarksBar(), true);
@@ -916,13 +1009,4 @@ test("loadTree: 임시 북마크는 북마크 목록·폴더 자식·루트 자�
   assert.ok(!tree.bookmarks.some((bm) => ids.includes(bm.id)));
   assert.ok(!tree.roots.bar.childIds.some((id) => ids.includes(id)));
   assert.ok(!tree.folders.find((f) => f.id === "17").childIds.some((id) => ids.includes(id)));
-});
-
-test("moveBookmark: 하나만 옮겨도(끌어 놓기·폴더로 이동) 옮긴 뒤 북마크바를 되돌리고, 못 옮기면 부르지 않는다", { skip: SKIP }, async () => {
-  await b.moveBookmark("11", "17");
-  assert.equal(calls.filter((c) => c === "bookmarks.touch").length, 1);
-  assert.equal(newestFolder(), "1");
-  calls = [];
-  assert.equal(await b.moveBookmark("없음", "17"), null);
-  assert.ok(!calls.includes("bookmarks.touch"));
 });

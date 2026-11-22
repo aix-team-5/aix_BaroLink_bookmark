@@ -112,8 +112,8 @@ export async function createFolder(name, parentId) {
     .sort((a, b) => a.index - b.index)[0];
   if (same) return same;
   const folder = await chrome.bookmarks.create({ parentId: String(parentId), title });
-  // 새 폴더가 '최근 수정 폴더'가 될 수 있으므로 북마크바로 되돌린다 (touchBookmarksBar)
-  await requestTouch();
+  // 새 폴더가 '최근 수정 폴더'가 될 수 있으므로 북마크바 최신화를 예약한다 (scheduleBarTouch)
+  scheduleBarTouch();
   return folder;
 }
 
@@ -145,8 +145,8 @@ export async function moveBookmark(id, parentId, index) {
     if (!(await findNode(node.id))) return null;
     throw error;
   }
-  // 옮긴 폴더가 '최근 수정 폴더'가 되므로 북마크바로 되돌린다 (touchBookmarksBar). 끌어 놓기·폴더로 이동도 여기를 거친다
-  await requestTouch();
+  // 옮긴 폴더가 '최근 수정 폴더'가 되므로 북마크바 최신화를 예약한다. 끌어 놓기·폴더로 이동도 여기를 거친다
+  scheduleBarTouch();
   return moved;
 }
 
@@ -173,18 +173,16 @@ export async function renameFolder(id, name) {
   // 루트("0")는 parentId가 없다
   if (node.parentId === undefined) throw new Error("최상위 폴더는 이름을 바꿀 수 없어요");
   if (node.folderType) throw new Error("북마크바·기타 북마크·모바일 북마크는 이름을 바꿀 수 없어요");
-  return chrome.bookmarks.update(node.id, { title });
+  const renamed = await chrome.bookmarks.update(node.id, { title });
+  // 크롬이 수정 시각을 바꾸지 않을 수도 있지만 무해하므로 북마크바 최신화를 예약한다
+  scheduleBarTouch();
+  return renamed;
 }
 
 // N05: 안의 북마크를 상위 폴더로 꺼낸 뒤 폴더만 삭제. 꺼낸 북마크 수를 돌려준다
 // 꺼낸 것은 폴더가 있던 자리에 원래 순서대로 놓는다. 안의 폴더도 함께 꺼내지만(비어야 지울 수 있다) 세지 않는다
 // 중간에 이동이 실패하면 일부만 꺼낸 채 오류를 던진다 (이미 꺼낸 것은 상위 폴더에 남는다)
 export async function deleteFolderKeepChildren(id) {
-  // 꺼낼 때마다 임시 북마크를 만들지 않고, 다 꺼낸 뒤 한 번만 만든다
-  return holdBarTouch(() => runDeleteFolderKeepChildren(id));
-}
-
-async function runDeleteFolderKeepChildren(id) {
   const [folder] = await chrome.bookmarks.get(String(id));
   // 관리자가 정한 폴더(managed)는 바꿀 수 없다
   if (folder.unmodifiable) throw new Error("바꿀 수 없는 폴더예요");
@@ -206,6 +204,8 @@ async function runDeleteFolderKeepChildren(id) {
   }
   // removeTree는 쓰지 않는다(안의 북마크까지 지워짐). 비어 있지 않으면 크롬이 오류를 낸다
   await chrome.bookmarks.remove(folder.id);
+  // 꺼낸 북마크가 들어간 폴더가 '최근 수정 폴더'가 될 수 있으므로 북마크바 최신화를 예약한다 (꺼낼 때마다 예약해도 디바운스로 한 번만 실행)
+  scheduleBarTouch();
   return moved;
 }
 
@@ -226,6 +226,8 @@ export async function removeBookmark(id) {
     if (!(await findNode(node.id))) return null;
     throw error;
   }
+  // 크롬이 수정 시각을 바꾸지 않을 수도 있지만 무해하므로 북마크바 최신화를 예약한다
+  scheduleBarTouch();
   return saved;
 }
 
@@ -249,42 +251,62 @@ export async function restoreBookmark(saved) {
         details.index = Math.min(Math.max(0, Math.trunc(saved.index)), count);
       }
       const node = await chrome.bookmarks.create(details);
-      // 원래 폴더가 '최근 수정 폴더'가 되므로 북마크바로 되돌린다 (touchBookmarksBar)
-      await requestTouch();
+      // 원래 폴더가 '최근 수정 폴더'가 되므로 북마크바 최신화를 예약한다
+      scheduleBarTouch();
       return { node, fallback: false };
     } catch (error) {
       // 확인한 직후 폴더가 지워졌으면 기타 북마크로, 그 밖의 오류는 그대로 던진다
       if (await findNode(parent.id)) throw error;
     }
   }
-  return { node: await createInOther(title, saved.url), fallback: true };
+  const node = await createInOther(title, saved.url);
+  scheduleBarTouch();
+  return { node, fallback: true };
 }
 
 // ---- 별(☆) 창의 기본 폴더를 북마크바로 되돌리기 ----
 // 크롬의 별 창은 저장 위치로 '가장 최근에 내용이 바뀐 폴더'(dateGroupModified가 가장 최근인 폴더)를 기본으로 고른다.
 // 우리가 북마크를 사용자 폴더로 옮기면 그 폴더가 기본이 되어, 다음 별 저장이 그 폴더 안으로 들어가 'new'가 뜨지 않는다 (F10-01, F10-09).
-// 그래서 옮긴 뒤 북마크바 바로 아래에 임시 북마크를 만들고 곧바로 지워 북마크바를 다시 '최근 수정 폴더'로 만든다.
+// 그래서 북마크를 바꾼 뒤 북마크바 바로 아래에 임시 북마크를 만들고 곧바로 지워 북마크바를 다시 '최근 수정 폴더'로 만든다(북마크바 최신화).
+// 북마크를 바꾸는 export 함수(createFolder, moveBookmark, renameFolder, deleteFolderKeepChildren, removeBookmark, restoreBookmark)는
+// 끝난 뒤 scheduleBarTouch로 최신화를 예약한다. 마지막 예약 뒤 TOUCH_DELAY_MS 동안 다른 예약이 없으면 한 번만 실행한다(디바운스).
+// 최신화는 chrome.bookmarks를 직접 불러 임시 북마크를 만들고 지우므로, 다시 최신화를 예약하지 않는다(무한 반복 없음).
 // 주의: 이것은 공식 API가 아니라 크롬 내부 동작(별 창 기본 폴더 = 최근 수정 폴더)에 기댄 것이다. 크롬 버전에 따라 효과가 없을 수 있다.
 // 북마크를 다른 위치로 옮기지 않는다. 임시 북마크를 만들고 지우는 것만 한다.
 
-// holdBarTouch가 진행 중인 수. 0보다 크면 requestTouch는 바로 만들지 않고 끝난 뒤로 미룬다
+// 마지막 변경 뒤 이만큼 다른 변경이 없으면 최신화한다
+const TOUCH_DELAY_MS = 500;
+// 예약된 최신화 타이머. 없으면 null
+let touchTimer = null;
+// holdBarTouch가 진행 중인 수. 0보다 크면 타이머가 끝나도 실행하지 않고, 모두 끝난 뒤 다시 예약한다
 let touchHold = 0;
 let touchWanted = false;
-// 같은 탭에서 touch가 겹치지 않게 한 줄로 세운다
+// 같은 탭에서 최신화가 겹치지 않게 한 줄로 세운다
 let touchQueue = Promise.resolve();
 
-// 북마크를 옮기거나 만든 뒤 부른다. 여러 번 옮기는 중(holdBarTouch 안)이면 끝난 뒤 한 번만 한다
-async function requestTouch() {
+// 북마크를 바꾼 뒤 부른다. 이미 예약돼 있으면 시간을 처음부터 다시 잰다(디바운스). 기다리지 않고 바로 돌아온다
+function scheduleBarTouch() {
   if (touchHold > 0) {
     touchWanted = true;
     return;
   }
-  await touchBookmarksBar();
+  if (touchTimer !== null) clearTimeout(touchTimer);
+  touchTimer = setTimeout(() => {
+    touchTimer = null;
+    touchBookmarksBar();
+  }, TOUCH_DELAY_MS);
 }
 
-// fn을 실행하는 동안 requestTouch를 미루고, 그사이 옮기거나 만든 것이 있으면 끝난 뒤(fn이 오류를 던져도) 한 번 touchBookmarksBar를 부른다
-// 옮긴 것이 하나도 없으면 부르지 않는다. organize.js의 정리(applyPlan)와 되돌리기(undo)가 쓴다
+// fn을 실행하는 동안에는 최신화를 실행하지 않고, 그사이 예약된 것이 있으면 끝난 뒤(fn이 오류를 던져도) 다시 예약한다
+// 바꾼 것이 하나도 없으면 예약하지 않는다. organize.js의 정리(applyPlan)와 되돌리기(undo)가 쓴다
+// 중간에 크롬 호출이 오래 걸려 500ms가 지나도, 정리 도중에 임시 북마크가 생기지 않게 하기 위해서다
 export async function holdBarTouch(fn) {
+  if (touchHold === 0 && touchTimer !== null) {
+    // 이미 예약된 것은 정리가 끝난 뒤로 미룬다
+    clearTimeout(touchTimer);
+    touchTimer = null;
+    touchWanted = true;
+  }
   touchHold++;
   try {
     return await fn();
@@ -292,12 +314,24 @@ export async function holdBarTouch(fn) {
     touchHold--;
     if (touchHold === 0 && touchWanted) {
       touchWanted = false;
-      await touchBookmarksBar();
+      scheduleBarTouch();
     }
   }
 }
 
-// 북마크바를 다시 '최근 수정 폴더'로 만든다. 만들었으면 true, 필요 없거나 실패했으면 false
+// 예약된 최신화가 있으면 기다리지 않고 지금 실행하고, 끝날 때까지 기다린다. 없으면 진행 중인 최신화만 기다린다
+// 테스트와 콘솔 확인에서 500ms를 기다리지 않으려고 쓴다
+export async function flushBarTouch() {
+  if (touchTimer !== null) {
+    clearTimeout(touchTimer);
+    touchTimer = null;
+    return touchBookmarksBar();
+  }
+  await touchQueue;
+  return false;
+}
+
+// 북마크바를 다시 '최근 수정 폴더'로 만든다(바로 실행). 만들었으면 true, 필요 없거나 실패했으면 false
 // 실패해도 오류를 던지지 않는다(정리 결과에 영향이 없게). 북마크바는 ID가 아니라 folderType으로 찾는다 (F01-04)
 export function touchBookmarksBar() {
   const task = touchQueue.then(runTouch);
