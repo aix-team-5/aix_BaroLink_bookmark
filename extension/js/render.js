@@ -397,27 +397,31 @@ function renderWebSearch() {
   section.appendChild(form);
 }
 
-function formatToday() {
-  const now = new Date();
+function formatToday(now = new Date()) {
   const days = ["일", "월", "화", "수", "목", "금", "토"];
   return `${now.getMonth() + 1}월 ${now.getDate()}일 ${days[now.getDay()]}요일`;
 }
 
 // 시계: 24시간제 "23:33" 형태. 분 단위로만 바꾼다. 자정은 "00:00"이 되도록 h23을 쓴다
-const clockFormat = new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+// Intl.DateTimeFormat은 timeZone을 생략하면 만들 때의 시간대를 그대로 저장한다. 새 탭이 열려 있는 동안
+// 시스템 시간대가 바뀌어도 맞게 보이도록, 갱신할 때마다 새로 만든다
+function makeClockFormat() {
+  return new Intl.DateTimeFormat("ko-KR", { hour: "2-digit", minute: "2-digit", hourCycle: "h23" });
+}
 let clockTimer = null;
 
 // 시계와 날짜 글자만 바꾼다. 요소를 새로 만들지 않아서 입력 중인 검색창과 끌기(F17-10)를 건드리지 않는다
 // 자정이 지나면 날짜도 함께 바뀐다
+// 시계 글자, dateTime, 날짜는 모두 같은 now와 현재 시간대로 만든다
 function updateClock() {
   const clock = document.querySelector("#web-search .clock");
   const date = document.querySelector("#web-search .date");
   if (!clock || !date) return;
   const now = new Date();
-  clock.textContent = clockFormat.format(now);
+  clock.textContent = makeClockFormat().format(now);
   // 스크린 리더가 읽을 수 있는 24시간 표기 (예: 15:42)
   clock.dateTime = `${String(now.getHours()).padStart(2, "0")}:${String(now.getMinutes()).padStart(2, "0")}`;
-  date.textContent = formatToday();
+  date.textContent = formatToday(now);
 }
 
 // 다음 분이 시작될 때마다 시계를 바꾼다. 몇 번을 불러도 타이머는 하나다
