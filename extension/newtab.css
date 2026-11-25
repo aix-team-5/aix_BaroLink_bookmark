@@ -350,10 +350,10 @@ body {
 :root[data-wallpaper="solid-sky"] body { background-color: var(--wall-solid-sky); }
 
 /* 올린 사진: ui.js가 <html>에 --wallpaper-photo: url("data:…")를 넣는다. 사진이 없으면 구름 그대로
-   어두운 사진을 올려도 제목·날짜 같은 배경 위 글자가 읽히도록 헤더·제목이 있는 위쪽만 옅게 덮는다 (Q6) */
+   위쪽은 0.45, 40% 아래로는 0.3을 남긴다. #my-folders·#all-bookmarks는 배경이 없어 글자가 사진 위에 바로 놓이고, 배경이 fixed라 아래쪽 글자는 늘 이 막 위에 있다 (Q6) */
 :root[data-wallpaper="photo"] body {
   background-image:
-    linear-gradient(to bottom, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.12) 40%, rgba(255, 255, 255, 0) 65%),
+    linear-gradient(to bottom, rgba(255, 255, 255, 0.45), rgba(255, 255, 255, 0.3) 40%),
     var(--wallpaper-photo, url("img/cloud-background.jpg"));
 }
 
