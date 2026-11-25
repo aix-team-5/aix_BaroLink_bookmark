@@ -2262,7 +2262,7 @@ await (async () => {
   - 마지막 정리 날짜는 되돌리지 않은 가장 최근 정리의 날짜다. 가장 최근 정리를 되돌린 뒤 창을 다시 열면 그 앞의 정리 날짜(없으면 "아직 정리하지 않았어요")가 보인다. (F18-02)
   - 사진을 고르면 동그라미에 바로 보이고 `(await T.stored()).profilePhoto`가 `data:image/`로 시작한다. 크기는 128×128이다. (F18-04)
     `const i = new Image(); i.src = (await T.stored()).profilePhoto; await i.decode(); [i.width, i.height]`
-  - 배경 사진을 올리면 배경이 바뀌고 `appearance.wallpaper`가 `"photo"`, `wallpaperPhoto`의 긴 변이 1920 이하다(위 코드에서 `profilePhoto`를 `wallpaperPhoto`로). 다시 올리면 앞 사진이 바뀐다. [배경 사진 지우기]를 누르면 구름 배경으로 돌아간다. (F18-08, F18-10)
+  - 배경 사진을 올리면 배경이 바뀌고 `appearance.wallpaper`가 `"photo"`, `wallpaperPhoto`의 긴 변이 화면에 맞춘 값(1920~3840)이고 원래 사진보다 크지 않으며, dataURL 길이가 4,000,000자 이하다(위 코드에서 `profilePhoto`를 `wallpaperPhoto`로). 다시 올리면 앞 사진이 바뀐다. [배경 사진 지우기]를 누르면 구름 배경으로 돌아간다. (F18-08, F18-10)
   - 텍스트 파일이나 HEIC 파일을 고르면 "사진을 쓸 수 없어요"가 뜨고 저장 항목이 그대로다. (F18-09)
   - 사진 고르는 곳에 "이 PC에만 저장돼요"가 있다. `await chrome.storage.sync.get(null)`이 빈 객체다. (F18-12)
 - 되돌리는 법: `await T.restoreStore(T.savedBeforeProfile)` 뒤 새 탭을 새로 연다.

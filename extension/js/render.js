@@ -308,7 +308,7 @@ function makeHeaderButton(text, iconName, extraClass, onClick) {
 // 마지막으로 읽은 stored를 보관해 둔다 (버튼 핸들러에서 쓴다)
 let lastStored = null;
 
-// 올린 사진 두 개. 수백 KB라 매번 읽지 않고, 시작할 때와 사진 키(profilePhoto·wallpaperPhoto)가 바뀔 때만 다시 읽는다 (F18-13)
+// 올린 사진 두 개. 최대 약 4MB라 매번 읽지 않고, 시작할 때와 사진 키(profilePhoto·wallpaperPhoto)가 바뀔 때만 다시 읽는다 (F18-13)
 // photosVersion은 사진 키가 바뀔 때마다 올라가고, loadedPhotosVersion은 마지막으로 읽은 때의 값이다. 둘이 다르면 다시 읽어야 한다
 let lastPhotos = { profilePhoto: null, wallpaperPhoto: null };
 let photosVersion = 0;

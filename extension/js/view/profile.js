@@ -76,10 +76,16 @@ const DEFAULT_APPEARANCE = { accent: "violet", wallpaper: "cloud", font: "system
 
 // 사진 줄이기 (F18-04, F18-08, F18-09)
 const PROFILE_SIZE = 128; // 프로필: 가운데를 정사각형으로 잘라 128×128
-const WALLPAPER_MAX = 1920; // 배경: 긴 변 1920px 이하
+// 명세 F18-08은 1920px. 화질 문제로 화면 크기에 맞춤(명세는 따로 고침)
+const WALLPAPER_MAX = 3840; // 배경: 긴 변의 상한
+const WALLPAPER_MIN_LONG = 1920; // 배경: 큰 사진도 긴 변을 이보다 작게 줄이지 않는다 (작은 화면에서 올리고 큰 모니터로 옮겨도 덜 깨지게)
+const WALLPAPER_RETRY_LONG = 2560; // 배경: 용량을 넘을 때 다시 줄이는 긴 변
+const WALLPAPER_MAX_CHARS = 4000000; // 배경 dataURL 길이 상한 (chrome.storage.local 약 10MB, unlimitedStorage 없음)
 const MAX_FILE_BYTES = 20 * 1024 * 1024; // 20MB를 넘으면 쓰지 않는다
 const PHOTO_TYPE = "image/webp"; // 투명한 부분을 지키면서 작게 저장한다
-const PHOTO_QUALITY = 0.85;
+const PHOTO_QUALITY = 0.92; // 배경 사진
+const PHOTO_RETRY_QUALITY = 0.85; // 배경 사진이 용량을 넘을 때 다시 만드는 품질
+const PROFILE_QUALITY = 0.85; // 프로필 사진 (128px)
 
 // 이 파일이 붙이는 CSS 클래스 이름 (newtab.css, 팀원 D #87)
 const CLS = {
@@ -203,16 +209,34 @@ async function decodeImage(file) {
   return bitmap;
 }
 
-// 그림의 (sx, sy, sw, sh) 부분을 width×height로 그려 dataURL로 만든다
-function drawToDataUrl(bitmap, [sx, sy, sw, sh], width, height) {
+// width×height canvas에 그림의 (sx, sy, sw, sh) 부분을 부드럽게 줄여 그린다
+function drawScaled(source, [sx, sy, sw, sh], width, height) {
   const canvas = document.createElement("canvas");
   canvas.width = width;
   canvas.height = height;
   const ctx = canvas.getContext("2d");
   if (!ctx) throw new Error("canvas를 쓸 수 없음");
+  ctx.imageSmoothingEnabled = true;
   ctx.imageSmoothingQuality = "high";
-  ctx.drawImage(bitmap, sx, sy, sw, sh, 0, 0, width, height);
-  const url = canvas.toDataURL(PHOTO_TYPE, PHOTO_QUALITY);
+  ctx.drawImage(source, sx, sy, sw, sh, 0, 0, width, height);
+  return canvas;
+}
+
+// 그림의 (sx, sy, sw, sh) 부분을 width×height로 그려 quality로 압축한 dataURL로 만든다
+// 한 번에 절반보다 더 줄이면 계단·뭉개짐이 생기므로, 그때는 반씩 여러 번 줄여서 그린다
+function drawToDataUrl(bitmap, [sx, sy, sw, sh], width, height, quality) {
+  let source = bitmap;
+  let rect = [sx, sy, sw, sh];
+  while (rect[2] / 2 >= width && rect[3] / 2 >= height) {
+    const half = drawScaled(source, rect, Math.round(rect[2] / 2), Math.round(rect[3] / 2));
+    if (source !== bitmap) source.width = 0; // 앞 단계 canvas의 메모리를 바로 놓는다
+    source = half;
+    rect = [0, 0, half.width, half.height];
+  }
+  const canvas = drawScaled(source, rect, width, height);
+  if (source !== bitmap) source.width = 0;
+  const url = canvas.toDataURL(PHOTO_TYPE, quality);
+  canvas.width = 0;
   if (!url.startsWith("data:image/")) throw new Error("사진을 만들지 못함");
   return url;
 }
@@ -224,20 +248,40 @@ async function shrinkProfile(file) {
     const side = Math.min(bitmap.width, bitmap.height);
     const sx = (bitmap.width - side) / 2;
     const sy = (bitmap.height - side) / 2;
-    return drawToDataUrl(bitmap, [sx, sy, side, side], PROFILE_SIZE, PROFILE_SIZE);
+    return drawToDataUrl(bitmap, [sx, sy, side, side], PROFILE_SIZE, PROFILE_SIZE, PROFILE_QUALITY);
   } finally {
     bitmap.close();
   }
 }
 
-// 배경 사진: 긴 변을 1920px 이하로 줄인다 (F18-08). 작은 사진은 키우지 않는다
+// 배경 사진의 저장할 긴 변. 사진이 화면을 cover로 채울 때 늘어나지 않는 크기로 한다
+// 화면 실제 픽셀은 screen × devicePixelRatio. 지금 화면 방향 기준. 하한 1920은 모니터를 바꾸거나 돌려도 덜 깨지게 남긴다
+// 상한 WALLPAPER_MAX, 하한 WALLPAPER_MIN_LONG. 원래 사진보다 크게는 하지 않는다(키우지 않는다)
+function wallpaperLongSide(width, height) {
+  const dpr = window.devicePixelRatio || 1;
+  const sw = screen.width * dpr, sh = screen.height * dpr;
+  const cover = Math.max(sw / width, sh / height); // 화면을 cover로 채우는 배율
+  const need = Math.ceil(Math.max(width, height) * cover);
+  return Math.min(Math.max(width, height), WALLPAPER_MAX, Math.max(WALLPAPER_MIN_LONG, need));
+}
+
+// 배경 사진: 화면에 맞는 크기로 줄인다 (F18-08). 작은 사진은 키우지 않는다
+// 저장 용량을 넘으면 품질을 낮추고, 그래도 넘으면 긴 변 2560으로 줄여 다시 만든다. 그래도 넘으면 쓸 수 없는 사진 (F18-09)
 async function shrinkWallpaper(file) {
   const bitmap = await decodeImage(file);
   try {
-    const scale = Math.min(1, WALLPAPER_MAX / Math.max(bitmap.width, bitmap.height));
-    const width = Math.max(1, Math.round(bitmap.width * scale));
-    const height = Math.max(1, Math.round(bitmap.height * scale));
-    return drawToDataUrl(bitmap, [0, 0, bitmap.width, bitmap.height], width, height);
+    const { width: w, height: h } = bitmap;
+    const long = wallpaperLongSide(w, h);
+    const tries = [[long, PHOTO_QUALITY], [long, PHOTO_RETRY_QUALITY]];
+    if (long > WALLPAPER_RETRY_LONG) tries.push([WALLPAPER_RETRY_LONG, PHOTO_RETRY_QUALITY]);
+    for (const [targetLong, quality] of tries) {
+      const scale = targetLong / Math.max(w, h);
+      const width = Math.max(1, Math.round(w * scale));
+      const height = Math.max(1, Math.round(h * scale));
+      const url = drawToDataUrl(bitmap, [0, 0, w, h], width, height, quality);
+      if (url.length <= WALLPAPER_MAX_CHARS) return url;
+    }
+    throw new UnusableFileError("저장하기에 너무 큼");
   } finally {
     bitmap.close();
   }
