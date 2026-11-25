@@ -18,6 +18,16 @@ const PIN_PICKER_ID = "dialog-pin-picker";
 // 분류 단계(step)별 한국어 이름 (F06-03 근거 표시에 쓴다)
 const STEP_LABEL = { site: "사이트", suffix: "주소 끝", keyword: "제목 키워드" };
 
+// 창을 닫힘 효과(newtab.css의 --motion-dialog)가 끝난 뒤에 문서에서 뗀다. close 이벤트에서 바로 떼면 효과가 잘린다
+// getAnimations()가 창의 닫힘 효과를 돌려준다. 움직임 줄이기를 켜서 효과가 없으면 바로 뗀다
+// 그사이 같은 창을 다시 열었으면(효과가 거꾸로 돌며 앞 효과는 취소된다) 떼지 않는다
+function removeAfterClose(dialog) {
+  const running = dialog.getAnimations().map((animation) => animation.finished);
+  Promise.allSettled(running).then(() => {
+    if (!dialog.open) dialog.remove();
+  });
+}
+
 // 칸을 비운다. 그리기 함수는 여러 번 불려도 결과가 같아야 한다 (자기 칸을 비우고 다시 그린다)
 function clearSlot(slot) {
   slot.replaceChildren();
@@ -430,7 +440,7 @@ export function showOrganizeDialog(plan, actions) {
     if (event.target === dialog) dialog.close();
   });
   // 닫히면 DOM에서 치운다
-  dialog.addEventListener("close", () => dialog.remove());
+  dialog.addEventListener("close", () => removeAfterClose(dialog));
 
   host.appendChild(dialog);
   dialog.showModal();
@@ -978,7 +988,7 @@ function showNewOrganizeDialog(host, plan, actions) {
     if (event.target === dialog) dialog.close();
   });
   // 닫히면 DOM에서 치운다
-  dialog.addEventListener("close", () => dialog.remove());
+  dialog.addEventListener("close", () => removeAfterClose(dialog));
 
   host.appendChild(dialog);
   dialog.showModal();
@@ -1192,7 +1202,7 @@ export function showPinPicker(bookmarks, { max = 5, limitMessage, onPicked } = {
     if (event.target === dialog) dialog.close();
   });
   // 닫히면 DOM에서 치운다
-  dialog.addEventListener("close", () => dialog.remove());
+  dialog.addEventListener("close", () => removeAfterClose(dialog));
 
   host.appendChild(dialog);
   dialog.showModal();

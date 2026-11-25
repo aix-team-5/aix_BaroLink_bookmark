@@ -137,6 +137,16 @@ let view = null;
 // 저장을 하나씩 차례로 한다. 빨리 여러 번 눌러도 누른 순서대로 저장된다
 let saveQueue = Promise.resolve();
 
+// 창을 닫힘 효과(newtab.css의 --motion-dialog)가 끝난 뒤에 문서에서 뗀다. close 이벤트에서 바로 떼면 효과가 잘린다
+// getAnimations()가 창의 닫힘 효과를 돌려준다. 움직임 줄이기를 켜서 효과가 없으면 바로 뗀다
+// 그사이 같은 창을 다시 열었으면(효과가 거꾸로 돌며 앞 효과는 취소된다) 떼지 않는다
+function removeAfterClose(dialog) {
+  const running = dialog.getAnimations().map((animation) => animation.finished);
+  Promise.allSettled(running).then(() => {
+    if (!dialog.open) dialog.remove();
+  });
+}
+
 // 목록에 있는 값이면 그대로, 아니면 기본값 (F18-14)
 function pick(value, list, fallback) {
   return list.some((item) => item.id === value) ? value : fallback;
@@ -618,7 +628,7 @@ function getProfileDialog(host) {
     if (dialog.open) return;
     view = null;
     session++; // 이 창에서 시작한 저장의 실패 안내는 다음에 연 창에 띄우지 않는다
-    dialog.remove();
+    removeAfterClose(dialog);
   });
 
   const panel = el("div", CLS.dialogPanel);

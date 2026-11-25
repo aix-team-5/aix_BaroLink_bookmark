@@ -38,6 +38,16 @@ let showAll = false;
 // pinned에 저장하는 중인 북마크 ID. 저장이 끝나기 전에 [고정하기]를 다시 눌러도 한 번만 처리한다
 const pinning = new Set();
 
+// 창을 닫힘 효과(newtab.css의 --motion-dialog)가 끝난 뒤에 문서에서 뗀다. close 이벤트에서 바로 떼면 효과가 잘린다
+// getAnimations()가 창의 닫힘 효과를 돌려준다. 움직임 줄이기를 켜서 효과가 없으면 바로 뗀다
+// 그사이 같은 창을 다시 열었으면(효과가 거꾸로 돌며 앞 효과는 취소된다) 떼지 않는다
+function removeAfterClose(dialog) {
+  const running = dialog.getAnimations().map((animation) => animation.finished);
+  Promise.allSettled(running).then(() => {
+    if (!dialog.open) dialog.remove();
+  });
+}
+
 // "N개월 전" 같은 지난 시간 문구. 한 달이 안 되면 일, 1년 이상도 개월로 센다 (시안의 문구)
 function ago(time, now) {
   const days = Math.max(0, Math.floor((now - time) / DAY));
@@ -184,7 +194,7 @@ function openDialog() {
   dialog.addEventListener("close", () => {
     clearUndoRows();
     showAll = false;
-    dialog.remove();
+    removeAfterClose(dialog);
   });
 
   host.appendChild(dialog);

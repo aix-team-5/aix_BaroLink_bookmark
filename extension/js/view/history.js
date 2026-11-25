@@ -91,6 +91,16 @@ const CLS = {
   status: "history-status",
 };
 
+// 창을 닫힘 효과(newtab.css의 --motion-dialog)가 끝난 뒤에 문서에서 뗀다. close 이벤트에서 바로 떼면 효과가 잘린다
+// getAnimations()가 창의 닫힘 효과를 돌려준다. 움직임 줄이기를 켜서 효과가 없으면 바로 뗀다
+// 그사이 같은 창을 다시 열었으면(효과가 거꾸로 돌며 앞 효과는 취소된다) 떼지 않는다
+function removeAfterClose(dialog) {
+  const running = dialog.getAnimations().map((animation) => animation.finished);
+  Promise.allSettled(running).then(() => {
+    if (!dialog.open) dialog.remove();
+  });
+}
+
 // 정리 종류를 화면 문구로 바꾼다
 function typeLabel(type) {
   if (type === "first") return TEXT.typeFirst;
@@ -335,7 +345,7 @@ function getHistoryDialog(host) {
     historyData = null;
     statusMessage = null;
     loadSeq++; // 읽는 중이던 결과는 버린다
-    dialog.remove();
+    removeAfterClose(dialog);
   });
   host.appendChild(dialog);
   return dialog;

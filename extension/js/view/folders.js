@@ -63,6 +63,16 @@ if (typeof document !== "undefined") {
   });
 }
 
+// 창을 닫힘 효과(newtab.css의 --motion-dialog)가 끝난 뒤에 문서에서 뗀다. close 이벤트에서 바로 떼면 효과가 잘린다
+// getAnimations()가 창의 닫힘 효과를 돌려준다. 움직임 줄이기를 켜서 효과가 없으면 바로 뗀다
+// 그사이 같은 창을 다시 열었으면(효과가 거꾸로 돌며 앞 효과는 취소된다) 떼지 않는다
+function removeAfterClose(dialog) {
+  const running = dialog.getAnimations().map((animation) => animation.finished);
+  Promise.allSettled(running).then(() => {
+    if (!dialog.open) dialog.remove();
+  });
+}
+
 // 팝업 상태를 기본값으로 되돌린다
 function resetPopup() {
   popup.mode = "view";
@@ -359,10 +369,22 @@ function drawPopup(dialog, info) {
     oldPanel.replaceWith(panel);
     // 같은 폴더를 다시 그리면 보던 자리를 유지한다. 다른 폴더면 맨 위
     if (sameFolder) panel.scrollTop = scrollTop;
+    // 열린 팝업에서 다른 폴더로 갈 때(하위 폴더로 들어가기·상위로 돌아가기)만 내용이 옆에서 들어온다
+    // 같은 폴더를 다시 그릴 때(render.js의 다시 그리기 등)와 팝업을 처음 열 때(아직 닫힌 창)는 붙이지 않는다
+    if (dialog.open && !creating && !sameFolder) slideInPanel(panel);
   } else {
     dialog.appendChild(panel);
   }
   restorePanelFocus(panel, hadFocus, oldKey);
+}
+
+// 패널에 .dialog__panel--enter를 붙여 옆에서 들어오는 효과를 한 번 돌리고, 끝나면 뗀다 (모양은 newtab.css)
+// 움직임 줄이기를 켜서 효과가 돌지 않으면 animationend가 오지 않지만, 클래스가 남아도 모양은 그대로다
+function slideInPanel(panel) {
+  panel.classList.add("dialog__panel--enter");
+  panel.addEventListener("animationend", (event) => {
+    if (event.target === panel) panel.classList.remove("dialog__panel--enter");
+  });
 }
 
 // 새 패널에서 포커스를 되살린다
@@ -933,7 +955,7 @@ function getPopup(host) {
     closeMenu();
     openFolderId = null;
     resetPopup();
-    dialog.remove();
+    removeAfterClose(dialog);
   });
   host.appendChild(dialog);
   return dialog;
