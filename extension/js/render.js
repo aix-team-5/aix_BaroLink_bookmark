@@ -21,7 +21,7 @@ import { showFirstCard, showOrganizeDialog, showPinPicker } from "./view/cards.j
 import { showProfile } from "./view/profile.js";
 
 // 고정됨(독)에 넣을 수 있는 최대 개수. store.js의 MAX_PINNED와 같다 (F08-06)
-const DOCK_MAX = 8;
+const DOCK_MAX = 10;
 
 // 분류표는 이 파일이 읽어서 계산 파일(plan 등)에 넘긴다 (화면 파일·계산 파일은 fetch하지 않는다)
 let categories = null;
@@ -668,7 +668,7 @@ function renderDock(bookmarks, stored) {
     item.className = "dock__item";
     item.setAttribute("aria-label", `${label} 열기`);
     item.title = label;
-    item.appendChild(appIcon(bookmark, 48));
+    item.appendChild(appIcon(bookmark, 56)); // 칸 크기는 newtab.css의 --dock-size가 정하고, 아이콘은 칸을 가득 채운다
     item.addEventListener("click", () => openWithNotice(bookmark));
 
     const remove = document.createElement("button");
@@ -688,7 +688,7 @@ function renderDock(bookmarks, stored) {
     dock.appendChild(slot);
   }
 
-  // 8개가 되면 [+]를 숨긴다 (F09-06). 비어 있어도 [+]는 보여서 첫 고정을 할 수 있다 (시안)
+  // 10개가 되면 [+]를 숨긴다 (F09-06). 비어 있어도 [+]는 보여서 첫 고정을 할 수 있다 (시안)
   if (pinned.length < DOCK_MAX) {
     if (pinned.length > 0) {
       const divider = document.createElement("span");
@@ -714,7 +714,7 @@ function openDockPicker() {
   );
   showPinPicker(candidates, {
     max: Math.max(0, DOCK_MAX - pinnedNow.size),
-    limitMessage: "고정은 8개까지 할 수 있어요",
+    limitMessage: "고정은 10개까지 할 수 있어요",
   });
 }
 

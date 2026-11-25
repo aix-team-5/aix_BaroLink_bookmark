@@ -1408,6 +1408,9 @@ a {
 
 /* #dock — 화면 아래 고정 바 (render.js가 채운다. 맨 아래에서 띄워 크롬 띠 56px를 피한다) */
 #dock {
+  /* 칸 한 개의 크기. 10개와 [+]가 가로 스크롤 없이 들어가도록 화면 너비에 맞춰 34~56px 사이에서 줄어든다 (고정 최대 10개, 크기 48px에서 키움)
+     계산: 칸 10개 x 크기 + 간격 + 여백이 (화면 너비 - 32px) 안에 들어와야 한다. 간격 8px일 때 약 119px, 640px 미만에서는 간격 4px라 약 75px를 쓴다 */
+  --dock-size: clamp(34px, calc((100vw - 160px) / 10), 56px);
   position: fixed;
   /* 화면 맨 아래에서 80px 띄운다. 크롬이 확장 프로그램 새 탭 맨 아래에 약 56px 띠를 붙이므로 72px 이상 띄워야 한다 (명세 F12, 실행 확인 v3) */
   bottom: 80px;
@@ -1437,14 +1440,21 @@ a {
   display: flex;
   align-items: center;
   justify-content: center;
-  width: 48px;
-  height: 48px;
+  width: var(--dock-size);
+  height: var(--dock-size);
   border-radius: var(--radius-lg);
   color: var(--color-on-dark);
   font-weight: var(--weight-black);
   border: 0;
   cursor: pointer;
   box-shadow: var(--shadow-sm);
+}
+
+/* 칸 안의 앱 아이콘은 칸 크기를 따라간다 (appIcon이 px를 직접 넣으므로 !important로 덮는다) */
+#dock .dock__item .app-icon {
+  width: 100% !important;
+  height: 100% !important;
+  font-size: calc(var(--dock-size) * 0.4) !important;
 }
 
 /* 독의 앱 하나와 [고정 해제] 버튼 (F08-04). 해제 버튼은 마우스를 올리거나 키보드로 가면 보인다 */
@@ -1490,7 +1500,7 @@ a {
 #dock .dock__divider {
   flex: 0 0 auto;
   width: 1px;
-  height: 32px;
+  height: calc(var(--dock-size) * 0.65);
   margin: 0 var(--space-1);
   background: var(--color-divider);
 }
@@ -1943,15 +1953,12 @@ a {
   display: none;
 }
 
-/* 640px 미만: 고정됨 8개+[+]가 가로 스크롤 없이 들어가도록 칸·간격·여백을 줄인다 (시안 size-10, gap-1, p-2) */
+/* 640px 미만: 고정됨 10개가 가로 스크롤 없이 들어가도록 간격·여백을 줄이고 칸 크기 계산을 바꾼다 (시안 gap-1, p-2) */
 @media (max-width: 639px) {
   #dock {
+    --dock-size: clamp(34px, calc((100vw - 112px) / 10), 56px);
     gap: var(--space-1);
     padding: 12px;
-  }
-  #dock .dock__item {
-    width: 40px;
-    height: 40px;
   }
 }
 
