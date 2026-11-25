@@ -2,7 +2,7 @@
 // 저장 항목을 읽고 쓰는 통로. 모든 저장은 이 파일을 거친다. 한 키는 한쪽(새 탭 또는 서비스 워커)만 쓴다.
 
 // 저장 항목 11개의 기본값. 밖으로 내보낼 때는 항상 복사본을 준다
-// 사진 두 키(profilePhoto, wallpaperPhoto)는 넣지 않는다. load()가 수백 KB 사진을 매번 읽지 않게 loadPhotos()로 따로 읽는다(N53)
+// 사진 두 키(profilePhoto, wallpaperPhoto)는 넣지 않는다. load()가 최대 약 4MB 사진을 매번 읽지 않게 loadPhotos()로 따로 읽는다(N53)
 const DEFAULTS = Object.freeze({
   pinned: [],
   lastOpenedByUs: {},
@@ -470,7 +470,7 @@ export async function setPhoto(kind, dataUrl) {
   await update(PHOTO_KEYS[kind], () => dataUrl);
 }
 
-// N53: 올린 사진 두 개를 읽는다. 사진 키는 load()에 넣지 않는다(수백 KB를 매번 읽지 않게)
+// N53: 올린 사진 두 개를 읽는다. 사진 키는 load()에 넣지 않는다(최대 약 4MB를 매번 읽지 않게)
 // render.js가 시작할 때와 사진 키가 바뀔 때(storage.onChanged)만 부른다. 없는 키는 null
 export async function loadPhotos() {
   // 같은 쪽에서 먼저 시작한 setPhoto가 저장을 끝낼 때까지 기다린다

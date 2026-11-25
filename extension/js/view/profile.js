@@ -255,15 +255,14 @@ async function shrinkProfile(file) {
 }
 
 // 배경 사진의 저장할 긴 변. 사진이 화면을 cover로 채울 때 늘어나지 않는 크기로 한다
-// 화면 실제 픽셀은 screen × devicePixelRatio. 모니터를 세로로 돌리거나 바꿔도 되도록 가로·세로 중 큰 값을 양쪽에 쓴다
-// → 사진의 짧은 변이 그 값 이상이면 어느 방향의 화면이든 늘어나지 않는다
+// 화면 실제 픽셀은 screen × devicePixelRatio. 지금 화면 방향 기준. 하한 1920은 모니터를 바꾸거나 돌려도 덜 깨지게 남긴다
 // 상한 WALLPAPER_MAX, 하한 WALLPAPER_MIN_LONG. 원래 사진보다 크게는 하지 않는다(키우지 않는다)
 function wallpaperLongSide(width, height) {
-  const long = Math.max(width, height);
   const dpr = window.devicePixelRatio || 1;
-  const screenMax = Math.max(screen.width, screen.height) * dpr;
-  const cover = Math.ceil((long * screenMax) / Math.min(width, height));
-  return Math.min(long, WALLPAPER_MAX, Math.max(WALLPAPER_MIN_LONG, cover));
+  const sw = screen.width * dpr, sh = screen.height * dpr;
+  const cover = Math.max(sw / width, sh / height); // 화면을 cover로 채우는 배율
+  const need = Math.ceil(Math.max(width, height) * cover);
+  return Math.min(Math.max(width, height), WALLPAPER_MAX, Math.max(WALLPAPER_MIN_LONG, need));
 }
 
 // 배경 사진: 화면에 맞는 크기로 줄인다 (F18-08). 작은 사진은 키우지 않는다
