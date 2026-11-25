@@ -1168,6 +1168,36 @@ a {
   gap: var(--space-6) var(--space-3);
 }
 
+/* [모든 북마크 살펴보기] / [접기] (render.js). 격자 바로 뒤, 가운데. 글자는 강조색을 따른다 (F18)
+   접혀 있을 때 숨는 칸이 없으면 숨기는 규칙은 아래 "모든 북마크: 최근 2줄만"에 폭마다 있다 */
+#all-bookmarks .all-more {
+  display: flex;
+  justify-content: center;
+  margin-top: var(--space-4);
+}
+
+#all-bookmarks .bookmark-grid.hidden + .all-more,
+#all-bookmarks .bookmark-grid:empty + .all-more {
+  display: none;
+}
+
+#all-bookmarks .all-more__btn {
+  color: var(--color-primary-text);
+}
+
+#all-bookmarks .all-more__btn:hover {
+  background: var(--color-primary-soft);
+}
+
+/* 오른쪽 화살표를 돌려 아래(접혀 있을 때) / 위(펼쳤을 때)로 쓴다 */
+#all-bookmarks .all-more__btn .icon {
+  transform: rotate(90deg);
+}
+
+#all-bookmarks .all-more__btn[aria-expanded="true"] .icon {
+  transform: rotate(-90deg);
+}
+
 .bookmark {
   position: relative; /* "새로" 표시(.bookmark__new)의 기준 */
   display: flex;
@@ -1996,6 +2026,46 @@ a {
 @media (min-width: 1280px) {
   #all-bookmarks .bookmark-grid {
     grid-template-columns: repeat(8, minmax(0, 1fr));
+  }
+}
+
+/* 모든 북마크: 접혀 있으면(.is-collapsed) 최근 2줄(열 수 × 2칸)만 보인다. 숨는 칸이 없으면 [모든 북마크 살펴보기]도 숨긴다
+   ★ 위 북마크 격자의 열 수(3·4·6·8열)를 바꾸면 여기 숫자(7·9·13·17 = 열 수 × 2 + 1)도 같이 바꾼다
+   ★ 폭 구간은 겹치지 않게 나눈다. min-width만 쓰면 좁은 폭의 n+7 규칙이 넓은 폭에서도 살아 있어 늘 6칸만 보인다.
+     max-width: 479px 대신 width < 480px로 쓴다: 화면 배율에 따라 폭이 479.5px처럼 나오면 두 구간 사이에 빠진다 */
+@media (width < 480px) {
+  #all-bookmarks .bookmark-grid.is-collapsed > :nth-child(n + 7) {
+    display: none;
+  }
+  #all-bookmarks .bookmark-grid.is-collapsed:not(:has(> :nth-child(7))) + .all-more {
+    display: none;
+  }
+}
+
+@media (480px <= width < 768px) {
+  #all-bookmarks .bookmark-grid.is-collapsed > :nth-child(n + 9) {
+    display: none;
+  }
+  #all-bookmarks .bookmark-grid.is-collapsed:not(:has(> :nth-child(9))) + .all-more {
+    display: none;
+  }
+}
+
+@media (768px <= width < 1280px) {
+  #all-bookmarks .bookmark-grid.is-collapsed > :nth-child(n + 13) {
+    display: none;
+  }
+  #all-bookmarks .bookmark-grid.is-collapsed:not(:has(> :nth-child(13))) + .all-more {
+    display: none;
+  }
+}
+
+@media (width >= 1280px) {
+  #all-bookmarks .bookmark-grid.is-collapsed > :nth-child(n + 17) {
+    display: none;
+  }
+  #all-bookmarks .bookmark-grid.is-collapsed:not(:has(> :nth-child(17))) + .all-more {
+    display: none;
   }
 }
 
