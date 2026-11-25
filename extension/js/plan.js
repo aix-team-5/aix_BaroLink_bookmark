@@ -109,7 +109,7 @@ export function makePlan(targets, categories) {
 }
 
 // 고정 후보의 최대 개수 (F09-03)
-// 독의 8개 상한은 여기서 보지 않는다. store.pin이 지킨다 (명세에 없어 정함)
+// 독의 10개 상한은 여기서 보지 않는다. store.pin이 지킨다 (명세에 없어 정함)
 const PIN_MAX = 5;
 
 // http·https 주소의 호스트(소문자, 앞의 "www." 뗌). 그 밖의 주소·해석 못 하는 주소는 null

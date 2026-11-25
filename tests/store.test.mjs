@@ -157,12 +157,22 @@ test("pin: 이미 고정돼 있으면 다시 넣지 않고 true", async () => {
   assert.deepEqual(data.pinned, ["1", "2"]);
 });
 
-test("pin: 이미 8개면 넣지 않고 false, 목록은 그대로", async () => {
-  data.pinned = ["1", "2", "3", "4", "5", "6", "7", "8"];
-  assert.equal(await store.pin("9"), false);
-  assert.deepEqual(data.pinned, ["1", "2", "3", "4", "5", "6", "7", "8"]);
-  assert.equal(await store.pin("8"), true);
-  assert.equal(data.pinned.length, 8);
+test("pin: 이미 10개면 넣지 않고 false, 목록은 그대로", async () => {
+  data.pinned = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
+  assert.equal(await store.pin("11"), false);
+  assert.deepEqual(data.pinned, ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"]);
+  assert.equal(await store.pin("10"), true);
+  assert.equal(data.pinned.length, 10);
+});
+
+test("pin: 하나씩 넣으면 9·10번째는 true, 11번째는 false (F08-06, 최대 10개)", async () => {
+  const results = [];
+  for (let i = 1; i <= 11; i++) results.push(await store.pin(`p${i}`));
+  assert.deepEqual(results.slice(0, 8), Array(8).fill(true));
+  assert.equal(results[8], true, "9번째");
+  assert.equal(results[9], true, "10번째");
+  assert.equal(results[10], false, "11번째");
+  assert.deepEqual(data.pinned, Array.from({ length: 10 }, (_, i) => `p${i + 1}`));
 });
 
 test("unpin: 그 ID를 빼고 남은 고정 목록을 돌려준다", async () => {
@@ -188,12 +198,12 @@ test("pin / unpin: 숫자 ID는 문자열로 맞춘다", async () => {
   assert.deepEqual(data.pinned, []);
 });
 
-test("pin: 동시에 10개를 넣으면 정확히 8개만 들어간다", async () => {
-  const results = await Promise.all(Array.from({ length: 10 }, (_, i) => store.pin(`b${i}`)));
-  assert.equal(results.filter((r) => r === true).length, 8);
+test("pin: 동시에 12개를 넣으면 정확히 10개만 들어간다", async () => {
+  const results = await Promise.all(Array.from({ length: 12 }, (_, i) => store.pin(`b${i}`)));
+  assert.equal(results.filter((r) => r === true).length, 10);
   assert.equal(results.filter((r) => r === false).length, 2);
-  assert.equal(data.pinned.length, 8);
-  assert.equal(new Set(data.pinned).size, 8);
+  assert.equal(data.pinned.length, 10);
+  assert.equal(new Set(data.pinned).size, 10);
 });
 
 test("pin / unpin: 서비스 워커에서 부르면 오류, 아무것도 저장 안 됨", async () => {
@@ -467,8 +477,8 @@ test("restoreStored: 고정 자리가 목록 길이보다 크면 맨 뒤", async
   assert.deepEqual(data.pinned, ["1", "1000"]);
 });
 
-test("restoreStored: 고정이 이미 8개면 고정만 되살리지 않는다 (나머지는 옮겨 적음)", async () => {
-  const full = ["1", "2", "3", "4", "5", "6", "7", "8"];
+test("restoreStored: 고정이 이미 10개면 고정만 되살리지 않는다 (나머지는 옮겨 적음)", async () => {
+  const full = ["1", "2", "3", "4", "5", "6", "7", "8", "9", "10"];
   data = { pinned: [...full] };
   await store.restoreStored("1000", { pinnedIndex: 0, lastOpened: 111, dismissedAt: 222 });
   assert.deepEqual(data.pinned, full);

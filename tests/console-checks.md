@@ -593,25 +593,25 @@ await (async () => {
     try {
       await chrome.storage.local.remove("pinned");
       const r = [];
-      for (let i = 1; i <= 9; i++) r.push(await T.store.pin("검증-p" + i));
+      for (let i = 1; i <= 11; i++) r.push(await T.store.pin("검증-p" + i));
       let p = (await T.stored()).pinned || [];
-      T.expect("8번째까지는 true", r.slice(0, 8).every((x) => x === true), r);
-      T.expect("F08-06 이미 8개면 넣지 않고 false", r[8] === false && p.length === 8, { r9: r[8], length: p.length });
-      T.expect("F08-02 고정한 순서대로 저장된다", T.same(p, Array.from({ length: 8 }, (_, i) => "검증-p" + (i + 1))), p);
+      T.expect("10번째까지는 true (9·10번째 포함)", r.slice(0, 10).every((x) => x === true), r);
+      T.expect("F08-06 이미 10개면 넣지 않고 false (11번째)", r[10] === false && p.length === 10, { r11: r[10], length: p.length });
+      T.expect("F08-02 고정한 순서대로 저장된다", T.same(p, Array.from({ length: 10 }, (_, i) => "검증-p" + (i + 1))), p);
       const u = await T.store.unpin("검증-p3");
       p = (await T.stored()).pinned || [];
-      T.expect("F08-04 unpin은 그 ID를 뺀 고정 목록을 돌려준다", T.same(u, p) && !p.includes("검증-p3") && p.length === 7, { u, p });
-      T.expect("나머지 순서는 그대로다", T.same(p, ["검증-p1", "검증-p2", "검증-p4", "검증-p5", "검증-p6", "검증-p7", "검증-p8"]), p);
+      T.expect("F08-04 unpin은 그 ID를 뺀 고정 목록을 돌려준다", T.same(u, p) && !p.includes("검증-p3") && p.length === 9, { u, p });
+      T.expect("나머지 순서는 그대로다", T.same(p, ["검증-p1", "검증-p2", "검증-p4", "검증-p5", "검증-p6", "검증-p7", "검증-p8", "검증-p9", "검증-p10"]), p);
       const again = await T.store.pin("검증-p1");
       p = (await T.stored()).pinned || [];
-      T.expect("이미 있으면 다시 넣지 않는다", p.filter((x) => x === "검증-p1").length === 1 && p.length === 7, p);
+      T.expect("이미 있으면 다시 넣지 않는다", p.filter((x) => x === "검증-p1").length === 1 && p.length === 9, p);
       T.expect("이미 있는 ID를 pin하면 true (명세 v19)", again === true, again);
     } finally {
       await T.restoreStore(saved);
     }
   })();
   ```
-- 기대 결과: 고정은 최대 8개이고 9번째는 `false`, 이미 있으면 다시 넣지 않는다. `unpin`은 고정 목록을 돌려준다. (N11, F08-06)
+- 기대 결과: 고정은 최대 10개이고 9·10번째는 `true`, 11번째는 `false`, 이미 있으면 다시 넣지 않는다. `unpin`은 고정 목록을 돌려준다. (N11, F08-06)
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:
 
 #### C-N12 dismiss / undismiss: "이제 안 봐도 됨" 기록·취소 · P1
