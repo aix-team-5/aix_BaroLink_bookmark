@@ -1636,8 +1636,8 @@ async function togglePin() {
   if (menu !== current) return;
   current.busy = false;
   if (!added) {
-    // N11은 이미 8개면 넣지 않고 false를 돌려준다. 메뉴는 닫지 않는다
-    menuMessage("고정은 8개까지 할 수 있어요");
+    // N11은 이미 10개면 넣지 않고 false를 돌려준다. 메뉴는 닫지 않는다
+    menuMessage("고정은 10개까지 할 수 있어요");
     return;
   }
   const ctx = current.container;
