@@ -16,7 +16,7 @@ const DIALOG_ID = "dialog-forgotten";
 const MAX_SHOWN = 8;
 // [이제 안 봐도 됨]의 되돌리기 안내 시간 (F04-09, v9)
 const UNDO_MS = 6000;
-// 팝업 안 안내 문구("고정은 8개까지 할 수 있어요" 등)를 보여 주는 시간
+// 팝업 안 안내 문구("고정은 10개까지 할 수 있어요" 등)를 보여 주는 시간
 const NOTICE_MS = 4000;
 const DAY = 24 * 60 * 60 * 1000;
 
@@ -361,7 +361,7 @@ function showNotice(dialog, text) {
 }
 
 // [고정하기]: 독(pinned)에 추가한다 (F04-08). 고정한 북마크는 pickForgotten이 빼므로, 저장이 바뀌면 render.js가 다시 그려 후보에서 빠진다
-// 독이 이미 8개면 pin이 false를 돌려준다. 그때는 넣지 않고 "고정은 8개까지 할 수 있어요"를 보여 준다 (F08-06)
+// 독이 이미 10개면 pin이 false를 돌려준다. 그때는 넣지 않고 "고정은 10개까지 할 수 있어요"를 보여 준다 (F08-06)
 async function pinItem(bookmark, dialog) {
   const id = String(bookmark.id);
   if (pinning.has(id)) return;
@@ -376,7 +376,7 @@ async function pinItem(bookmark, dialog) {
   } finally {
     pinning.delete(id);
   }
-  showNotice(dialog, added ? "고정됨에 추가했어요" : "고정은 8개까지 할 수 있어요");
+  showNotice(dialog, added ? "고정됨에 추가했어요" : "고정은 10개까지 할 수 있어요");
 }
 
 // [이제 안 봐도 됨]: dismissed에 기록하고, 그 줄 자리에 6초 동안 [되돌리기]를 보여 준다 (F04-09)

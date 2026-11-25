@@ -90,7 +90,7 @@ export function showFirstCard(plan, actions) {
 }
 
 // 독에 넣을 수 있는 최대 개수(store.js의 MAX_PINNED와 같다)와, 고정 제안·고르기에서 한 번에 고정하는 최대 개수 (F08-06, F09-03·05)
-const DOCK_MAX = 8;
+const DOCK_MAX = 10;
 const PIN_SUGGEST_MAX = 5;
 
 // 고정 제안 카드 (F09-01): [나중에] [고르기] [고정하기]
@@ -170,13 +170,13 @@ async function applyPinSuggestion(slot, triggerButton, requested) {
 
     const pinned = [];
     for (const bookmark of picks) {
-      // 독이 이미 8개면 pin이 false를 돌려준다. 거기서 멈춘다
+      // 독이 이미 10개면 pin이 false를 돌려준다. 거기서 멈춘다
       if (await pin(bookmark.id)) pinned.push(bookmark.id);
       else break;
     }
     if (pinned.length === 0) {
       if (triggerButton) triggerButton.disabled = false;
-      showToast("고정은 8개까지 할 수 있어요");
+      showToast("고정은 10개까지 할 수 있어요");
       return;
     }
     await finishPinSuggestion(slot);
@@ -195,7 +195,7 @@ async function openPinChoice(slot) {
     const pinnedNow = new Set((Array.isArray(stored.pinned) ? stored.pinned : []).map(String));
     const room = DOCK_MAX - pinnedNow.size;
     if (room <= 0) {
-      showToast("고정은 8개까지 할 수 있어요");
+      showToast("고정은 10개까지 할 수 있어요");
       return;
     }
     const candidates = tree.bookmarks.filter(
@@ -203,7 +203,7 @@ async function openPinChoice(slot) {
     );
     showPinPicker(candidates, {
       max: Math.min(PIN_SUGGEST_MAX, room),
-      limitMessage: room < PIN_SUGGEST_MAX ? "고정은 8개까지 할 수 있어요" : undefined,
+      limitMessage: room < PIN_SUGGEST_MAX ? "고정은 10개까지 할 수 있어요" : undefined,
       onPicked: () => finishPinSuggestion(slot),
     });
   } catch (error) {
@@ -1002,7 +1002,7 @@ async function runApplyNew(newPlan, actions, triggerButton, dialog) {
 // N31: 고정할 북마크 고르기 창 (F09-05·06, F08-06)
 // bookmarks: 고를 수 있는 북마크. 이미 고정한 북마크는 부르는 쪽이 뺀다 (file-structure.md 12번: 넘길 값은 고를 수 있는 북마크 목록)
 // options: { max, limitMessage, onPicked }
-//   max: 고를 수 있는 최대 개수 (고정 제안의 [고르기]는 5, 독의 [+]는 8에서 이미 고정한 수를 뺀 값)
+//   max: 고를 수 있는 최대 개수 (고정 제안의 [고르기]는 5, 독의 [+]는 10에서 이미 고정한 수를 뺀 값)
 //   limitMessage: 최대 개수를 넘겨 고르려 할 때 창 안에 띄울 문구
 //   onPicked(ids): 고정이 끝난 뒤 실제로 고정된 북마크 ID 배열과 함께 부른다
 // 고르고 [고정하기]를 누르면 store.js의 pin으로 독에 넣는다. 독은 저장이 바뀌면 render.js가 다시 그린다
@@ -1161,7 +1161,7 @@ export function showPinPicker(bookmarks, { max = 5, limitMessage, onPicked } = {
     let full = false;
     try {
       for (const id of selected) {
-        // 독이 이미 8개면 pin이 false를 돌려준다 (다른 탭에서 고정했을 때도 여기서 걸러진다)
+        // 독이 이미 10개면 pin이 false를 돌려준다 (다른 탭에서 고정했을 때도 여기서 걸러진다)
         if (await pin(id)) {
           pinned.push(id);
         } else {
@@ -1174,12 +1174,12 @@ export function showPinPicker(bookmarks, { max = 5, limitMessage, onPicked } = {
     }
     if (pinned.length === 0) {
       // 하나도 고정하지 못했으면 창을 닫지 않고 이유를 알린다
-      showToast(full ? "고정은 8개까지 할 수 있어요" : "고정하지 못했어요", { container: dialog });
+      showToast(full ? "고정은 10개까지 할 수 있어요" : "고정하지 못했어요", { container: dialog });
       refreshConfirm();
       return;
     }
     dialog.close();
-    showToast(full ? `${pinned.length}개만 추가했어요. 고정은 8개까지 할 수 있어요` : `${pinned.length}개를 고정됨에 추가했어요`);
+    showToast(full ? `${pinned.length}개만 추가했어요. 고정은 10개까지 할 수 있어요` : `${pinned.length}개를 고정됨에 추가했어요`);
     if (typeof onPicked === "function") onPicked(pinned);
   });
   footer.append(makeButton("취소", { variant: "btn--ghost", onClick: () => dialog.close() }), confirmButton);

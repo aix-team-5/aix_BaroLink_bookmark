@@ -27,7 +27,7 @@ const PHOTO_KEYS = { profile: "profilePhoto", wallpaper: "wallpaperPhoto" };
 const PENDING_TTL = 60000;
 
 // 고정됨(독)에 넣을 수 있는 최대 개수 (N11 pin에서 쓴다)
-const MAX_PINNED = 8;
+const MAX_PINNED = 10;
 
 // 키마다 쓰는 쪽. 두 쪽이 같은 키를 동시에 쓰면 값이 사라진다(실행 확인: 120번 중 91개만 남음)
 const WRITER = {
@@ -155,7 +155,7 @@ export async function recordOpened(id) {
   });
 }
 
-// N11: 독에 추가. 이미 있으면 다시 넣지 않고 true, 이미 8개면 넣지 않고 false
+// N11: 독에 추가. 이미 있으면 다시 넣지 않고 true, 이미 10개면 넣지 않고 false
 export async function pin(id) {
   const key = toId(id);
   let added = false;
@@ -408,7 +408,7 @@ export async function snapshotStored(id) {
 // N50: 되살린 북마크의 새 ID로 snapshotStored의 기록을 옮겨 적고 handledNew에 넣는다 (F15-07). 새 탭만 호출
 // handledNew를 가장 먼저 쓴다. 되살리는 순간 서비스 워커가 새 ID를 newBookmarks에 넣으므로 "새로"를 막는 기록을 먼저 남긴다
 // 고정은 같은 자리(목록보다 뒤면 맨 뒤)에 넣고, 이미 MAX_PINNED개면 고정만 되살리지 않는다
-// 메모: 옛 ID가 아직 pinned에 남아 있으면(cleanupMissing 전) 그것까지 세어 8개로 판정한다. 옛 ID는 입력에 없어 여기서 뺄 수 없다
+// 메모: 옛 ID가 아직 pinned에 남아 있으면(cleanupMissing 전) 그것까지 세어 10개로 판정한다. 옛 ID는 입력에 없어 여기서 뺄 수 없다
 export async function restoreStored(newId, snapshot) {
   const key = toId(newId);
   if (!snapshot || typeof snapshot !== "object") {
