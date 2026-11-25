@@ -172,6 +172,10 @@
   --color-sync-on: #10b981;   /* emerald-500 */
   --color-sync-off: #94a3b8;  /* slate-400 */
 
+  /* 창 열기·닫기 효과 (F12). 값 하나만 바꾸면 모든 창이 같이 바뀐다 */
+  --motion-dialog: 320ms;                   /* 창과 어두운 배경이 나타나고 사라지는 시간 */
+  --ease-dialog: cubic-bezier(.2, .8, .2, 1); /* 창의 위치·크기 곡선. 끝에서 부드럽게 멈춘다 */
+
   color-scheme: light;
   font-family: var(--font-system);
 }
@@ -586,6 +590,84 @@ a {
 .dialog::backdrop {
   background: rgba(2, 6, 23, 0.35);
   backdrop-filter: blur(4px);
+}
+
+/* 창 열기·닫기 효과: 투명 + 아래로 12px + 96% 크기 ↔ 불투명 + 제자리 + 100% 크기 (닫을 때는 같은 시간으로 거꾸로)
+   overlay·display를 allow-discrete로 같이 넘겨야 닫히는 동안 창이 맨 위 층(top layer)에 남아 보인다 (크롬 117 이상)
+   열린 창의 transform은 none으로 둔다. 창 안의 position: fixed 요소(우클릭 메뉴, 창 안 안내)가 창 기준으로 틀어지지 않게 한다
+   닫히는 중인 창과 배경은 클릭을 받지 않는다. 빠르게 다시 누르면 뒤의 타일이 바로 눌린다
+   창을 문서에서 떼는 일은 각 화면 파일이 닫힘 효과가 끝난 뒤에 한다 (close 이벤트에서 바로 떼면 효과가 잘린다) */
+.dialog {
+  opacity: 0;
+  transform: translateY(12px) scale(0.96);
+  transition:
+    opacity var(--motion-dialog) ease-out,
+    transform var(--motion-dialog) var(--ease-dialog),
+    overlay var(--motion-dialog) allow-discrete,
+    display var(--motion-dialog) allow-discrete;
+}
+
+.dialog[open] {
+  opacity: 1;
+  transform: none;
+}
+
+.dialog:not([open]),
+.dialog:not([open])::backdrop {
+  pointer-events: none;
+}
+
+/* 뒤 배경: 투명 → 위의 어두운 색(흐림 포함). opacity로 넘겨 색 값은 위 한 곳에만 둔다 */
+.dialog::backdrop {
+  opacity: 0;
+  transition:
+    opacity var(--motion-dialog) ease-out,
+    overlay var(--motion-dialog) allow-discrete,
+    display var(--motion-dialog) allow-discrete;
+}
+
+.dialog[open]::backdrop {
+  opacity: 1;
+}
+
+@starting-style {
+  .dialog[open] {
+    opacity: 0;
+    transform: translateY(12px) scale(0.96);
+  }
+
+  .dialog[open]::backdrop {
+    opacity: 0;
+  }
+}
+
+/* 폴더 팝업에서 하위 폴더로 들어가거나 상위로 돌아갈 때: 내용 영역만 오른쪽 12px에서 들어온다 (창 시간의 0.9배)
+   folders.js가 새 패널에 .dialog__panel--enter를 붙이고, 끝나면 뗀다. 팝업을 처음 열 때는 붙이지 않는다 */
+.dialog__panel--enter {
+  animation: dialog-panel-enter calc(var(--motion-dialog) * 0.9) var(--ease-dialog);
+}
+
+@keyframes dialog-panel-enter {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+
+  to {
+    opacity: 1;
+    transform: none;
+  }
+}
+
+/* 움직임 줄이기를 켠 사용자에게는 창 효과를 모두 끈다 (바로 나타나고 바로 사라진다)
+   화면 전체가 아니라 창 효과만 끈다. 꾸미기 전 화면 숨김(appearance-reveal)은 효과가 아니라 안전장치라서 그대로 둔다 */
+@media (prefers-reduced-motion: reduce) {
+  .dialog,
+  .dialog::backdrop,
+  .dialog__panel--enter {
+    transition: none;
+    animation: none;
+  }
 }
 
 .dialog__panel {
