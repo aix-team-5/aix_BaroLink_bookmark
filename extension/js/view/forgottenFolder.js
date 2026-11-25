@@ -215,7 +215,8 @@ async function fillList(dialog) {
   } catch (error) {
     console.warn("저장 항목을 읽지 못해 크롬 기록만으로 표시해요", error);
   }
-  if (token !== fillToken || !dialog.isConnected) return;
+  // 창은 닫힘 효과(0.32초) 동안 문서에 남아 있으므로 isConnected만으로는 닫힌 것을 알 수 없다. open을 같이 본다
+  if (token !== fillToken || !dialog.isConnected || !dialog.open) return;
 
   const list = dialog.querySelector(".list");
   if (!list) return;
@@ -405,10 +406,12 @@ async function dismissItem(bookmark, time, dialog) {
   } finally {
     dismissing.delete(id);
   }
-  if (!dialog.isConnected) return;
+  // 저장(dismissed)은 그대로 두고, 그사이 창이 닫혔으면(닫히는 중 포함) 되돌리기 줄을 만들지 않는다
+  // 닫힌 뒤에 만들면 close 이벤트의 clearUndoRows 뒤라 지워지지 않고, 곧바로 다시 연 창에 지난 줄이 보인다
+  if (!dialog.isConnected || !dialog.open) return;
   const timer = setTimeout(() => {
     undoRows.delete(id);
-    if (dialog.isConnected) fillList(dialog);
+    if (dialog.isConnected && dialog.open) fillList(dialog);
   }, UNDO_MS);
   undoRows.set(id, { time, above, timer });
   fillList(dialog);
@@ -425,7 +428,7 @@ async function undoDismiss(id, dialog) {
   } catch (error) {
     console.warn("되돌리지 못했어요", error);
   }
-  if (dialog.isConnected) fillList(dialog);
+  if (dialog.isConnected && dialog.open) fillList(dialog);
 }
 
 // [어디 있는지 보기]: 이 팝업을 닫고, 그 북마크가 들어 있는 폴더의 팝업을 연다 (F04-10)

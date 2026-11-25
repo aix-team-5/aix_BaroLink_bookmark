@@ -987,10 +987,15 @@ export function openFolderPopup(folderId) {
 // 동기 함수다. 부른 직후 메뉴가 화면에 있다. 이미 열려 있으면 이전 메뉴를 닫고 새로 연다
 export function showContextMenu(bookmark, { x, y, container } = {}) {
   if (!bookmark?.id || !bookmark.url) return;
+  // 닫히는 중인 창(닫힘 효과 0.32초 동안 문서에 남아 있다)에는 메뉴를 열지 않는다. 마우스는 pointer-events: none으로 막히지만 메뉴 키 등으로 불릴 수 있다
+  if (container instanceof HTMLDialogElement && !container.open) return;
   closeMenu();
 
   // 팝업은 showModal()이라 팝업 밖에 붙이면 어두운 배경 뒤에 깔린다 (F15-09). 붙일 곳은 부르는 쪽이 container로 넘긴다
   const host = container?.isConnected ? container : document.body;
+  // 창이 열리는 효과 중이면 창에 transform이 걸려 있어, 창 안에 붙인 position: fixed 메뉴가 화면이 아니라 창 기준으로 놓인다
+  // 자리를 잡기 전에 그 창의 효과를 바로 끝낸다 (창 자체의 효과만 끝난다. 뒤 배경의 효과는 그대로 이어진다)
+  if (host instanceof HTMLDialogElement) host.getAnimations().forEach((animation) => animation.finish());
 
   // newtab.css에 메뉴 모양이 없어 공통 값만 인라인 (팀원 D에게 .context-menu 클래스 부탁)
   const el = document.createElement("div");
@@ -1159,7 +1164,7 @@ function moveMenuFocus(key) {
 }
 
 // 메뉴를 놓는다. 붙인 뒤 크기를 재서 화면 안에 들어오게 한다. 내용이 바뀌면 처음의 x, y 기준으로 다시 부른다
-// position fixed라 팝업(<dialog>) 안에 붙여도 화면 좌표 그대로 쓴다 (.dialog에 transform이 없다)
+// position fixed라 팝업(<dialog>) 안에 붙여도 화면 좌표 그대로 쓴다 (.dialog의 transform은 효과가 끝나면 none. 효과 중이면 showContextMenu가 먼저 끝낸다)
 function placeMenu() {
   if (!menu) return;
   const { el, x, y } = menu;

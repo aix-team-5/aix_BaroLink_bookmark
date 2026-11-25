@@ -1184,7 +1184,8 @@ export function showPinPicker(bookmarks, { max = 5, limitMessage, onPicked } = {
     }
     if (pinned.length === 0) {
       // 하나도 고정하지 못했으면 창을 닫지 않고 이유를 알린다
-      showToast(full ? "고정은 8개까지 할 수 있어요" : "고정하지 못했어요", { container: dialog });
+      // 그사이 창을 닫았으면(닫히는 중 포함) 창과 함께 사라지지 않게 #toast에 띄운다
+      showToast(full ? "고정은 8개까지 할 수 있어요" : "고정하지 못했어요", { container: dialog.open ? dialog : null });
       refreshConfirm();
       return;
     }
