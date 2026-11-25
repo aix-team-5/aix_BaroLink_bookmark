@@ -2029,7 +2029,7 @@ a {
   }
 }
 
-/* 모든 북마크: 접혀 있으면(.is-collapsed) 최근 2줄(열 수 × 2칸)만 보인다. 숨는 칸이 없으면 [모든 북마크 살펴보기]도 숨긴다
+/* 모든 북마크: 접혀 있으면(.is-collapsed) 최근 2줄(열 수 × 2칸)만 보인다. 펼쳤든 접혔든 2줄 이하면 버튼([모든 북마크 살펴보기]·[접기])을 숨긴다
    ★ 위 북마크 격자의 열 수(3·4·6·8열)를 바꾸면 여기 숫자(7·9·13·17 = 열 수 × 2 + 1)도 같이 바꾼다
    ★ 폭 구간은 겹치지 않게 나눈다. min-width만 쓰면 좁은 폭의 n+7 규칙이 넓은 폭에서도 살아 있어 늘 6칸만 보인다.
      max-width: 479px 대신 width < 480px로 쓴다: 화면 배율에 따라 폭이 479.5px처럼 나오면 두 구간 사이에 빠진다 */
@@ -2037,7 +2037,7 @@ a {
   #all-bookmarks .bookmark-grid.is-collapsed > :nth-child(n + 7) {
     display: none;
   }
-  #all-bookmarks .bookmark-grid.is-collapsed:not(:has(> :nth-child(7))) + .all-more {
+  #all-bookmarks .bookmark-grid:not(:has(> :nth-child(7))) + .all-more {
     display: none;
   }
 }
@@ -2046,7 +2046,7 @@ a {
   #all-bookmarks .bookmark-grid.is-collapsed > :nth-child(n + 9) {
     display: none;
   }
-  #all-bookmarks .bookmark-grid.is-collapsed:not(:has(> :nth-child(9))) + .all-more {
+  #all-bookmarks .bookmark-grid:not(:has(> :nth-child(9))) + .all-more {
     display: none;
   }
 }
@@ -2055,7 +2055,7 @@ a {
   #all-bookmarks .bookmark-grid.is-collapsed > :nth-child(n + 13) {
     display: none;
   }
-  #all-bookmarks .bookmark-grid.is-collapsed:not(:has(> :nth-child(13))) + .all-more {
+  #all-bookmarks .bookmark-grid:not(:has(> :nth-child(13))) + .all-more {
     display: none;
   }
 }
@@ -2064,7 +2064,7 @@ a {
   #all-bookmarks .bookmark-grid.is-collapsed > :nth-child(n + 17) {
     display: none;
   }
-  #all-bookmarks .bookmark-grid.is-collapsed:not(:has(> :nth-child(17))) + .all-more {
+  #all-bookmarks .bookmark-grid:not(:has(> :nth-child(17))) + .all-more {
     display: none;
   }
 }
