@@ -74,6 +74,65 @@ function cachedHasFavicon(url) {
   return promise;
 }
 
+// 파비콘을 쓸 최소 비율. 그림의 원래 크기가 보여 줄 크기의 이 비율보다 작으면(예: 16px짜리를 34px로 키워야 하면)
+// 흐리게 깨져 보이므로 그림을 쓰지 않고 첫 글자 타일을 그대로 둔다 (명세 N44)
+const MIN_ICON_SCALE = 0.5;
+
+// 크롬 _favicon은 저장된 그림이 요청한 크기보다 작으면 키워서 준다. 그래서 받은 그림의 naturalWidth는 늘 요청한 크기(64)다.
+// 정수배로 키울 때는 픽셀을 그대로 복제하므로(16px → 4×4 덩어리, 32px → 2×2 덩어리), 덩어리 크기로 원래 크기를 짐작한다.
+// pixels: getImageData의 RGBA 바이트, width·height: 그림 크기. 덩어리가 없으면 width를 그대로 돌려준다
+export function iconSourceSize(pixels, width, height = width) {
+  if (!(width > 0) || !(height > 0) || !pixels || pixels.length < width * height * 4) return 0;
+  for (const factor of [8, 4, 2]) {
+    if (width % factor === 0 && height % factor === 0 && isBlocky(pixels, width, height, factor)) return width / factor;
+  }
+  return width;
+}
+
+// 모든 칸이 factor×factor 덩어리의 왼쪽 위 칸과 같은 색인지
+function isBlocky(pixels, width, height, factor) {
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const at = (y * width + x) * 4;
+      const head = ((y - (y % factor)) * width + (x - (x % factor))) * 4;
+      if (at === head) continue;
+      for (let c = 0; c < 4; c++) {
+        if (pixels[at + c] !== pixels[head + c]) return false;
+      }
+    }
+  }
+  return true;
+}
+
+// 원래 크기가 sourceSize인 그림을 displaySize(px)로 보여 줘도 되는지. 원래 크기가 보여 줄 크기의 절반보다 작으면 false
+export function isIconSharp(sourceSize, displaySize) {
+  if (!(sourceSize > 0) || !(displaySize > 0)) return false;
+  return sourceSize >= displaySize * MIN_ICON_SCALE;
+}
+
+// 파비콘 주소 → 짐작한 원래 크기. 다시 그릴 때마다 그림의 픽셀을 읽지 않게 새 탭이 열려 있는 동안 기억한다
+const iconSizeCache = new Map();
+
+// 다 받은 <img>의 원래 크기를 짐작한다. _favicon은 확장 프로그램 안의 주소라 캔버스로 픽셀을 읽을 수 있다(밖으로 보내지 않음)
+function measureIcon(iconUrl, img) {
+  if (iconSizeCache.has(iconUrl)) return iconSizeCache.get(iconUrl);
+  const width = img.naturalWidth;
+  const height = img.naturalHeight;
+  let size = width;
+  try {
+    const canvas = document.createElement("canvas");
+    canvas.width = width;
+    canvas.height = height;
+    const context = canvas.getContext("2d", { willReadFrequently: true });
+    context.drawImage(img, 0, 0);
+    size = iconSourceSize(context.getImageData(0, 0, width, height).data, width, height);
+  } catch {
+    // 픽셀을 읽지 못하면 받은 그림의 크기로만 판단한다
+  }
+  iconSizeCache.set(iconUrl, size);
+  return size;
+}
+
 // N46: 선으로 그린 공통 아이콘을 만든다. 없는 이름이면 빈 <svg>
 export function icon(name, size = 20) {
   const svg = document.createElementNS(SVG_NS, "svg");
@@ -99,8 +158,8 @@ export function icon(name, size = 20) {
   return svg;
 }
 
-// N44: 색 타일 위에 파비콘을 올린 앱 아이콘을 만든다. 파비콘이 없으면 제목의 첫 글자를 넣는다
-// 요소를 바로 돌려줘야 하므로(동기), 먼저 첫 글자 타일을 만들고 파비콘은 async로 확인해 있으면 교체한다.
+// N44: 색 타일 위에 파비콘을 올린 앱 아이콘을 만든다. 파비콘이 없거나 보여 줄 크기에 비해 너무 작으면 제목의 첫 글자를 넣는다
+// 요소를 바로 돌려줘야 하므로(동기), 먼저 첫 글자 타일을 만들고 파비콘은 async로 확인해, 다 받은 뒤 충분히 크면 교체한다.
 // 모양은 newtab.css의 .app-icon 클래스를 쓰고, 크기처럼 입력으로 바뀌는 값만 인라인으로 둔다.
 export function appIcon(bookmark = {}, size = 56) {
   const { title = "", url = "" } = bookmark;
@@ -116,30 +175,28 @@ export function appIcon(bookmark = {}, size = 56) {
   // 먼저 첫 글자로 채운다 (파비콘이 없거나 아직 확인 전인 기본 모양)
   tile.textContent = firstLetter(title);
 
-  // http(s) 주소만 파비콘을 확인한다. 확인되면 첫 글자를 지우고 파비콘으로 바꾼다
+  // http(s) 주소만 파비콘을 확인한다. 그림을 다 받은 뒤(load) 원래 크기가 충분하면 첫 글자를 지우고 파비콘으로 바꾼다
+  // 그림을 받지 못했거나(error) 너무 작으면 첫 글자 타일을 그대로 둔다
   if (typeof url === "string" && /^https?:/i.test(url)) {
+    const inner = Math.round(size * 0.6); // 파비콘을 보여 줄 크기 (newtab.css .app-icon__img의 60%)
     cachedHasFavicon(url).then((iconUrl) => {
       if (!iconUrl) return; // 파비콘이 없으면 첫 글자 그대로 둔다
+      if (iconSizeCache.has(iconUrl) && !isIconSharp(iconSizeCache.get(iconUrl), inner)) return; // 이미 작다고 안 그림은 다시 받지 않는다
       const img = document.createElement("img");
-      img.src = iconUrl;
       img.alt = "";
       img.setAttribute("aria-hidden", "true");
       img.className = "app-icon__img";
-      const inner = Math.round(size * 0.6);
       img.width = inner;
       img.height = inner;
-      // 파비콘 로딩이 실패하면 첫 글자로 되돌린다
-      img.addEventListener("error", () => {
-        img.remove();
-        tile.classList.remove("app-icon--favicon");
-        tile.style.backgroundColor = tileColor;
-        tile.textContent = firstLetter(title);
-      });
-      // 파비콘이 있으면 색 타일이 뒤에 비치지 않게 인라인 배경색을 지우고 중립 배경 클래스를 붙인다
-      tile.style.backgroundColor = "";
-      tile.classList.add("app-icon--favicon");
-      tile.textContent = "";
-      tile.appendChild(img);
+      img.addEventListener("load", () => {
+        if (!isIconSharp(measureIcon(iconUrl, img), inner)) return; // 작은 그림을 키우면 깨져 보이므로 첫 글자 타일 그대로
+        // 파비콘이 있으면 색 타일이 뒤에 비치지 않게 인라인 배경색을 지우고 중립 배경 클래스를 붙인다
+        tile.style.backgroundColor = "";
+        tile.classList.add("app-icon--favicon");
+        tile.textContent = "";
+        tile.appendChild(img);
+      }, { once: true });
+      img.src = iconUrl;
     });
   }
 
