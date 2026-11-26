@@ -195,8 +195,10 @@ function renderHeader(stored) {
   const toFolders = makeHeaderButton("내 폴더", "folder", "hide-below-md", () => {
     document.getElementById("my-folders")?.scrollIntoView({ behavior: "smooth", block: "start" });
   });
+  // 모든 북마크는 최근 2줄만 보이므로, 이 버튼으로 갈 때는 펼친 뒤 내려간다
   const toAll = makeHeaderButton("모든 북마크", "grid", "hide-below-md", () => {
-    document.getElementById("all-bookmarks")?.scrollIntoView({ behavior: "smooth", block: "start" });
+    setAllExpanded(true);
+    document.getElementById("all-bookmarks")?.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
   });
 
   // [정리하기 · N] — 정리 안 된 새 북마크 수 (F10-02). '그대로 두기'로 둔 것은 빼고 센다 (F10-05)
@@ -446,6 +448,15 @@ function startClockTimer() {
 // 북마크 검색(F14)이 찾는 북마크 목록. 다시 그릴 때마다 최신 목록으로 바꾼다
 let searchPool = [];
 
+// 모든 북마크를 펼쳤는지. 새 탭을 열 때마다 접힌 채(최근 2줄만) 시작하고, 저장하지 않는다.
+// 다시 그려도(renderAll) 그 탭 안에서는 사용자가 펼쳐 둔 상태를 지킨다. 몇 칸을 숨길지는 newtab.css가 폭마다 정한다
+let allExpanded = false;
+
+// 움직임 줄이기 설정이면 부드럽게 내려가지 않고 바로 간다
+function scrollBehavior() {
+  return window.matchMedia?.("(prefers-reduced-motion: reduce)").matches ? "auto" : "smooth";
+}
+
 // 모든 북마크는 최근 저장한 것부터 보인다. 받은 배열은 독·내 폴더·잊고 있던 북마크도 쓰므로 복사해서 정렬한다
 // dateAdded가 없거나 숫자가 아니면 맨 뒤로 보내고, 같으면 원래(트리) 순서를 지킨다(sort는 안정 정렬)
 function sortNewestFirst(bookmarks) {
@@ -475,6 +486,7 @@ function renderAllBookmarks(bookmarks, stored) {
   for (const bookmark of sorted) {
     grid.appendChild(renderBookmarkTile(bookmark, newIds.has(String(bookmark.id))));
   }
+  applyAllExpanded(section);
 
   // 결과 리스트는 다시 그린 북마크 목록으로 새로 찾는다 (검색 중에 북마크가 바뀌어도 맞게)
   updateBookmarkSearch(section);
@@ -517,14 +529,50 @@ function buildAllBookmarks(section) {
   section.append(results);
 
   const grid = document.createElement("div");
-  grid.className = "bookmark-grid";
+  grid.className = "bookmark-grid is-collapsed";
   section.append(grid);
+
+  // [모든 북마크 살펴보기] / [접기]. 격자 바로 뒤에 둔다: 숨는 칸이 없으면 newtab.css가 격자를 보고(+ 선택자) 이 칸을 숨긴다
+  const more = document.createElement("div");
+  more.className = "all-more";
+  const moreBtn = document.createElement("button");
+  moreBtn.type = "button";
+  moreBtn.className = "btn btn--ghost all-more__btn";
+  moreBtn.addEventListener("click", () => {
+    setAllExpanded(!allExpanded);
+    // 접으면 격자가 짧아지므로, 모든 북마크의 제목이 화면 위로 지나갔으면 그 자리로 올라간다
+    if (!allExpanded && section.getBoundingClientRect().top < 0) {
+      section.scrollIntoView({ behavior: scrollBehavior(), block: "start" });
+    }
+  });
+  more.append(moreBtn);
+  section.append(more);
 
   // 북마크가 없으면 보이는 안내 문구 (F01-05)
   const empty = document.createElement("p");
   empty.className = "empty-note all-empty hidden";
   empty.textContent = "아직 북마크가 없어요. 주소창의 별 버튼으로 저장해 보세요";
   section.append(empty);
+}
+
+// 펼침 상태를 바꾸고 격자와 버튼을 맞춘다
+function setAllExpanded(expanded) {
+  allExpanded = expanded;
+  const section = document.getElementById("all-bookmarks");
+  if (section) applyAllExpanded(section);
+}
+
+// 격자의 접힘 클래스와 버튼 문구를 allExpanded대로 맞춘다. 격자를 새로 만들었어도 그릴 때마다 다시 맞추므로 깨지지 않는다
+function applyAllExpanded(section) {
+  const grid = section.querySelector(".bookmark-grid");
+  const button = section.querySelector(".all-more__btn");
+  if (!grid || !button) return;
+  grid.classList.toggle("is-collapsed", !allExpanded);
+  button.setAttribute("aria-expanded", String(allExpanded));
+  const label = document.createElement("span");
+  label.textContent = allExpanded ? "접기" : `모든 북마크 살펴보기 (${searchPool.length}개)`;
+  // 아래 화살표(접혀 있을 때) / 위 화살표(펼쳤을 때). 오른쪽 화살표(chevron)를 newtab.css가 돌린다
+  button.replaceChildren(label, icon("chevron", 16));
 }
 
 // 검색창의 글자에 맞춰 결과 리스트와 격자를 바꾼다

@@ -11,8 +11,10 @@ const ROOT_TYPES = {
   managed: "managed",
 };
 
-// 파비콘 비교에 쓰는 크기와, 파비콘이 있을 수 없는 주소 (기본 그림을 받는 데 씀)
-const FAVICON_SIZE = 32;
+// 파비콘을 받는 크기와, 파비콘이 있을 수 없는 주소 (기본 그림을 받는 데 씀)
+// 앱 아이콘(ui.js appIcon)이 타일의 0.6배(56px 타일이면 약 34px)로 보여 주므로, 고해상도 화면에서도 흐리지 않게 64로 받는다.
+// 기본 그림과 비교할 때도 이 크기로 받는다 (바이트 비교는 같은 크기끼리 해야 맞다)
+const FAVICON_SIZE = 64;
 const NO_FAVICON_PAGE = "https://no-favicon.invalid/";
 
 // 별(☆) 창의 기본 폴더를 북마크바로 되돌릴 때 잠깐 만들었다 지우는 임시 북마크의 주소와 제목
