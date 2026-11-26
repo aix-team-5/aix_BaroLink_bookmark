@@ -2316,6 +2316,53 @@ await (async () => {
 - 되돌리는 법: 정리 기록에서 되돌리기. ③에서 저장한 북마크는 지운다.
 - 결과: 통과 / 실패 / 보류   확인자:   날짜:   크롬 버전:
 
+#### C-MOTION 창 열기·닫기 효과 (함수 없음) · P3
+- 구현 상태: 구현됨 (`feat/dialog-motion`). 명세에 아직 줄이 없다(F12에 넣을 문구 제안은 그 PR 설명에 있다)
+- 파일·담당: newtab.css · 팀원 D (창을 닫힘 효과 뒤에 떼는 곳: view/cards.js D · view/folders.js C · view/forgottenFolder.js B · view/profile.js B · view/history.js A)
+- 관련 요구사항: F12 (창 공통 모양), F03-08 (하위 폴더 들어가기·돌아가기)
+- 안전 등급: 화면 · 저장 항목을 바꿈 · ⚠ 크롬 북마크를 바꿈 (9단계는 꾸미기 설정(강조색·글꼴), 10단계는 크롬 북마크 순서, 13단계는 `dismissed`를 잠깐 바꾼다. 아래 되돌리는 법으로 되돌림. 정리 창은 열고 [취소]로 닫는다)
+- 정한 값: 시간 320ms(`--motion-dialog`), 창은 투명 + 아래로 12px + 96% 크기 ↔ 불투명 + 제자리 + 100% 크기, 위치·크기 곡선 `cubic-bezier(.2,.8,.2,1)`(`--ease-dialog`), 투명도 `ease-out`, 뒤 배경은 투명 ↔ 어두운 색. 하위 폴더 전환은 내용만 오른쪽 12px에서 약 290ms
+- 사전 조건: 1장의 테스트용 프로필에 `sample-100.html`을 가져온 상태(하위 폴더가 있는 폴더가 하나 이상 있어야 한다. sample-100을 가져오면 북마크바 끝 "가져온 북마크" 폴더 안에 `자취템`이 있으니 4·10단계는 이 폴더를 쓴다). 2장은 실행하지 않아도 된다. **시작 전에 지금 강조색·글꼴과, 10단계에서 옮길 폴더의 앱 순서를 적어 둔다** (강조색·글꼴은 내 정보 창에서 보거나 콘솔에서 `(await chrome.storage.local.get("appearance")).appearance`)
+- 붙여 넣을 코드 (새 탭 콘솔. 창을 연 상태에서 ①을, 닫은 직후에 ②를 붙여 넣는다):
+  ```js
+  // C-MOTION ①: 열린 창의 효과 값 (창을 하나 연 뒤에 붙여 넣는다)
+  (() => {
+    const d = document.querySelector("#dialogs dialog[open]");
+    if (!d) return console.log("열린 창이 없다. 창을 먼저 연다");
+    const s = getComputedStyle(d), b = getComputedStyle(d, "::backdrop");
+    console.table({
+      창: { transition: s.transitionProperty, 시간: s.transitionDuration, 곡선: s.transitionTimingFunction, transform: s.transform, opacity: s.opacity },
+      배경: { transition: b.transitionProperty, 시간: b.transitionDuration, 곡선: b.transitionTimingFunction, transform: "", opacity: b.opacity },
+    });
+    console.log("움직임 줄이기 켜짐:", matchMedia("(prefers-reduced-motion: reduce)").matches);
+  })();
+  ```
+  ```js
+  // C-MOTION ②: Esc로 창을 닫은 직후 0.1초 안에 붙여 넣는다. 닫히는 중인 창이 남아 있고, 0.5초 뒤에는 없어야 한다
+  (() => {
+    const fading = [...document.querySelectorAll("#dialogs dialog:not([open])")];
+    console.log("닫히는 중인 창:", fading.map((d) => d.id), "클릭 받음:", fading.map((d) => getComputedStyle(d).pointerEvents));
+    setTimeout(() => console.log("0.5초 뒤 #dialogs 안 창(0개여야 함):", document.querySelectorAll("#dialogs dialog").length), 500);
+  })();
+  ```
+- 순서와 기대 결과:
+  1. 내 폴더 줄의 폴더 하나를 누른다. 창이 아래에서 살짝 올라오며 커지고, 뒤가 서서히 어두워진다(약 0.3초). 툭 나타나지 않는다. ①의 표에서 창의 `transition`에 `opacity, transform, overlay, display`, 시간이 모두 `0.32s`, 곡선이 `ease-out, cubic-bezier(0.2, 0.8, 0.2, 1), ...`, `transform`이 `none`, `opacity`가 `1`이다. 배경의 `opacity`가 `1`이다.
+  2. Esc로 닫는다. 창이 아래로 살짝 내려가며 작아지고 흐려지며, 뒤의 어두움도 같이 걷힌다(약 0.3초). 바로 ②를 붙여 넣으면 닫히는 중인 창이 `dialog-folder`이고 클릭 받음이 `none`, 0.5초 뒤 창이 0개다.
+  3. 같은 폴더를 다시 열고 바깥(어두운 곳)을 눌러 닫는다. 2와 같다. 다시 열고 머리말의 X를 눌러 닫는다. 2와 같다.
+  4. 하위 폴더가 있는 폴더를 연다. 하위 폴더 타일을 누르면 창은 그대로 있고 내용만 오른쪽에서 살짝 들어오며 나타난다(약 0.3초). 위의 [← 상위 폴더 이름]을 누르면 같은 효과로 돌아온다. 창 자체(테두리·그림자)는 다시 튀어나오지 않는다.
+  5. 폴더 팝업을 처음 열 때는 4의 옆에서 들어오는 효과가 없다(1처럼 창 전체만 나타난다).
+  6. 폴더 팝업을 연 채로 다른 창(크롬 북마크 관리자 `chrome://bookmarks`)에서 그 폴더의 북마크 이름을 바꾸고 돌아온다. 팝업 내용이 새 이름으로 바뀌지만 창이 다시 나타나는 효과도, 옆에서 들어오는 효과도 돌지 않는다(render.js의 다시 그리기).
+  7. 정리 창: 첫 정리 카드나 새 북마크 정리 버튼에서 자세히 보기 창을 열고 [취소]·Esc·바깥 클릭으로 닫는다. 1~3과 같다. 고정할 북마크 고르기 창(독의 [+])도 같다.
+  8. 내 정보 창(헤더 오른쪽 동그라미), 정리 기록 창(헤더의 정리 기록 버튼), 잊고 있던 북마크 창도 1~3과 같다.
+  9. 강조색을 다른 색으로, 글꼴을 다른 글꼴로 바꾼 뒤 1~3을 다시 한다. 창의 모양(둥글기·그림자·크기·가운데 자리)과 효과가 그대로다. 끝나면 원래 색·글꼴로 되돌린다. (F18-06·11)
+  10. 폴더 팝업 안의 앱 하나를 끌어 다른 앱 사이에 놓는다. 끄는 동안 세로 막대와 강조 테두리가 보이고, 놓으면 순서가 바뀐다. 하위 폴더로 들어간 직후(0.3초 안)에 끌어도 막대가 앱 사이에 바르게 보인다. (F17)
+  11. 폴더 팝업 안에서 앱 하나를 우클릭한다. 메뉴가 누른 자리 옆에 뜬다(창 효과 때문에 자리가 틀어지지 않는다). 창을 연 직후(0.3초 안) 바로 우클릭해도 메뉴가 누른 자리 옆에 뜬다(그때는 창이 효과 없이 바로 제자리로 온다). (F15)
+  12. 빠르게 여닫기: 폴더 하나를 열고 바로 Esc → 바로 다시 같은 폴더(또는 다른 폴더)를 누르기를 10번쯤 빠르게 한다. 창이 반쯤 투명한 채로 남거나, 닫힌 뒤 화면 클릭이 막히지 않는다. 마지막에 Esc로 닫고 0.5초 뒤 `document.querySelectorAll("#dialogs dialog").length`가 `0`이다. 열린 채로 끝나면 `1`이다.
+  13. 잊고 있던 북마크 창을 열고 한 줄의 [이제 안 봐도 됨]을 누르자마자 Esc로 닫고, 바로(0.3초 안) 다시 연다. 다시 연 창에 지난 [되돌리기] 줄이 없고, 뺀 북마크는 목록에 없다(빼기는 저장됐다). 6초를 기다려도 화면이 바뀌지 않는다. (F04-09)
+  14. 움직임 줄이기: 개발자 도구 → 오른쪽 위 ⋮ → More tools → Rendering → "Emulate CSS media feature prefers-reduced-motion"을 `reduce`로 한다(또는 윈도우 설정 → 접근성 → 시각 효과 → 애니메이션 효과 끄기 뒤 새 탭을 새로 연다). ①의 "움직임 줄이기 켜짐"이 `true`이고 창의 시간이 `0s`다. 1~4를 다시 하면 창·배경·하위 폴더 내용이 효과 없이 바로 나타나고 바로 사라진다. ②의 "닫히는 중인 창"이 빈 배열이다. 끝나면 Rendering 설정을 `No emulation`으로 돌린다.
+- 되돌리는 법: 9에서 바꾼 강조색·글꼴을 원래대로 고른다. 10에서 옮긴 앱은 원래 자리로 끌어 놓는다. 13에서 뺀 북마크는 창을 닫기 전에 [되돌리기]를 눌러 되살리거나, 놓쳤으면 콘솔에서 `const { undismiss } = await import("/js/store.js"); await undismiss("북마크 ID")`(ID는 `(await chrome.storage.local.get("dismissed")).dismissed`에서 찾는다).
+- 결과: 통과 / 실패 / 보류   확인자:   날짜:   크롬 버전:
+
 ---
 
 ## 4장. 아직 없는 것 · 명세와 다른 것
