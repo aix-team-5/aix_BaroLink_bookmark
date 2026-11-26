@@ -113,7 +113,7 @@ aix_BaroLink_bookmark/
 | `js/search.js` | 웹 검색(위쪽 검색창. 주소면 이동, 아니면 기본 검색엔진)과 북마크 검색(모든 북마크 영역의 검색창. 제목·주소 부분 일치). 두 검색창은 연동하지 않음 | searchBookmarks, isUrlLike, runWebSearch (N27–N29) | search, tabs (C17, C18) | D |
 | `js/dnd.js` | 앱만 끈다. 모든 북마크 → 앱 폴더에 넣기, 폴더 팝업 안 순서 바꾸기·하위 폴더에 넣기. 크롬 기본 끌어 놓기로 만들고 놓을 곳을 표시 | makeDraggable, makeDropTarget, makeSortable (N36) | bookmarks.js 경유 | D (놓는 쪽 부르기는 C) |
 | `data/categories.json` | 카테고리 9개의 사이트 분류표, 주소 끝 규칙, 제목 키워드, 분류하지 않는 사이트. 내용의 기준은 `docs/category-definitions.md` 10번 | — | — | B |
-| `newtab.html` / `newtab.css` | 화면 뼈대와 모양. 스크립트는 모두 `.js` 파일에 두고 `addEventListener`로 연결 (MV3 제한). `newtab.css` 맨 위에 공통 값(색, 간격, 글자 크기, 둥글기)과 공통 모양(팝업 틀, 버튼, 목록 줄)을 둔다 | — | — | D |
+| `newtab.html` / `newtab.css` | 화면 뼈대와 모양. 스크립트는 모두 `.js` 파일에 두고 `addEventListener`로 연결 (MV3 제한). `newtab.css` 맨 위에 공통 값(색, 간격, 글자 크기, 둥글기)과 공통 모양(팝업 틀, 버튼, 목록 줄)을 둔다. 창 열기·닫기 효과(변수 `--motion-dialog`)도 공통 팝업 틀에 둔다 | — | — | D |
 
 ---
 
